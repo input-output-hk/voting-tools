@@ -1,3 +1,5 @@
 dist-newstyle/
 dist/
-result
+result*
+*.local
+*.local~

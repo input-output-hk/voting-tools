@@ -162,6 +162,7 @@ package zip
 package cardano-crypto-praos
   tests: False
   benchmarks: False
+  flags: -external-libsodium-vrf
 
 package byron-spec-ledger
   tests: False
