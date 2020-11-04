@@ -17,7 +17,7 @@ library
   hs-source-dirs: src
   build-depends:       base
 
-executable vote-registration
+executable voter-registration
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:

@@ -21,9 +21,11 @@ let
        ps.voter-registration
     ];
 
+    tools = { cabal = "3.2.0.0"; hlint = "2.2.11"; };
+
     # These programs will be available inside the nix-shell.
     buildInputs = (with pkgs; [
-      cabal-install
+      # cabal-install
       ghcid
       git
       hlint
