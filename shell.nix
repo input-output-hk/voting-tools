@@ -8,7 +8,7 @@
   }
 }:
 
-with pkgs;
+with pkgs; with commonLib;
 let
   # This provides a development environment that can be used with nix-shell or
   # lorri. See https://input-output-hk.github.io/haskell.nix/user-guide/development/
@@ -20,8 +20,9 @@ let
     packages = ps: with ps; [
        ps.voter-registration
     ];
+    # packags = ps: pkgs.lib.attrValues (selectProjectPackages ps);
 
-    tools = { cabal = "3.2.0.0"; hlint = "2.2.11"; };
+    tools = { cabal = "3.2.0.0"; };
 
     # These programs will be available inside the nix-shell.
     buildInputs = (with pkgs; [
