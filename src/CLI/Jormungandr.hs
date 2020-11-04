@@ -26,3 +26,11 @@ jcliSign stake_sk vote_pk_bytes = (`runContT` pure) $ do
   skFile     <- withTextAsFile stake_sk
   votePkFile <- withTextAsFile vote_pk_bytes
   liftIO $ jcliCmd ["key", "sign", "--secret-key", T.pack skFile, T.pack votePkFile] mempty
+
+jcliKeyAddress networkId key prefix = do
+  let
+    args  = ["address", "account", key, "--prefix", prefix]
+    -- args' = if networkId /= Mainnet
+    --         then args <> ["--testing"]
+    --         else args
+  jcliCmd args mempty
