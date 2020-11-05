@@ -115,20 +115,28 @@ data VoterRegistrationError
   -- different era.
   | VoterFileError !(FileError InputDecodeError)
   -- ^ Errors reading from a file
-  | VoterWrongSigningKeyType !SomeSigningKey
+  | VoterNotStakeSigningKey !SomeSigningKey
+  -- ^ User provided stake signing key is not a "StakeSigningKey" but some other signing key
 
 all :: Protocol -> NetworkId -> Set (Address Shelley) -> SigningKeyFile -> ExceptT VoterRegistrationError IO (Ledger.UTxO StandardShelley)
 all protocol network as skf = do
   SocketPath sockPath <- firstExceptT VoterEnvSocketError readEnvSocketPath
   withlocalNodeConnectInfo protocol network sockPath $ \connectInfo -> do
-    tip       <- liftIO $ getLocalTip connectInfo
-    utxos     <- queryUTxOFromLocalState connectInfo tip (FilterByAddress as)
-    ssk       <- firstExceptT VoterFileError $ readSigningKeyFile skf
-    (stkSign, stkVerify) <- case ssk of
-      AStakeSigningKey sk -> pure $ (sk, getVerificationKey sk)
-      sk                  -> throwError $ VoterWrongSigningKeyType sk
+    tip     <- liftIO $ getLocalTip connectInfo
+    utxos   <- queryUTxOFromLocalState connectInfo tip (FilterByAddress as)
+    stkSign <- readStakeSigningKey skf
+    let stkVerify = getVerificationKey stkSign
+    
+    -- meta      <- generateMeta stkVerify votePkBytes hexSig
 
     pure utxos
+
+readStakeSigningKey :: SigningKeyFile -> ExceptT VoterRegistrationError IO (SigningKey StakeKey)
+readStakeSigningKey skf = do
+  ssk       <- firstExceptT VoterFileError $ readSigningKeyFile skf
+  case ssk of
+    AStakeSigningKey sk -> pure sk
+    sk                  -> throwError $ VoterNotStakeSigningKey sk
 
 queryUTxOFromLocalState
   :: LocalNodeConnectInfo mode block
