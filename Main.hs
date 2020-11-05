@@ -43,10 +43,10 @@ import qualified Control.Exception as E
 -- let txouts = [(paymentAddress, value)]
 
 -- let meta = TxMetaMap [( TxMetaNumber 1, TxMetaMap
---                         [ (TxMetaText "purpose", TxMetaText "voting_registration")
---                         , (TxMetaText "voting_key", TxMetaText "0x{vote}")
---                         , (TxMetaText "stake_pub",  TxMetaText "0x{stake}")
---                         , (TxMetaText "signature", TxMetaText "0x{sig}")
+--                         [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
+--                         , ( TxMetaText "voting_key" , TxMetaText "0x" <> vote          )
+--                         , ( TxMetaText "stake_pub"  , TxMetaText "0x" <> stake         )
+--                         , ( TxMetaText "signature"  , TxMetaText "0x" <> sig           )
 --                         ]
 --                       )
 --                      ]

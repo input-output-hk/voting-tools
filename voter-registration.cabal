@@ -18,6 +18,7 @@ library
 
   exposed-modules:     CLI.Interop
                      , CLI.Jormungandr
+                     , Extern
 
   build-depends:       base
                      , safe-exceptions
@@ -25,9 +26,17 @@ library
                      , mtl
                      , text
                      , turtle
+                     , containers
 
                      , transformers-except
+                     , cardano-api
+                     , ouroboros-network
+                     , ouroboros-consensus
+                     , ouroboros-consensus-shelley
                      , cardano-node
+                     , shelley-spec-ledger
+                     , cardano-cli
+                     , ouroboros-consensus-cardano
 
 executable voter-registration
   main-is:             Main.hs

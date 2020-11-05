@@ -30,7 +30,12 @@ jcliSign stake_sk vote_pk_bytes = (`runContT` pure) $ do
 jcliKeyAddress networkId key prefix = do
   let
     args  = ["address", "account", key, "--prefix", prefix]
-    -- args' = if networkId /= Mainnet
-    --         then args <> ["--testing"]
-    --         else args
-  jcliCmd args mempty
+    mAddTesting = id
+    -- mAddTesting = if networkId /= Mainnet then (<> ["--testing"]) else id
+  jcliCmd (mAddTesting args) mempty
+
+jcliKeyPublic skey = jcliCmd ["key", "to-public"] (pure skey)
+
+jcliKeyToBytes key = jcliCmd ["key", "to-bytes"] (pure key)
+
+
