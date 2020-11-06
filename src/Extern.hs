@@ -6,11 +6,13 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Extern where
 
 import Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, left, newExceptT, handleIOExceptT)
-import Control.Monad.Except (ExceptT, throwError, MonadError)
+import Control.Monad.Except (ExceptT, throwError, MonadError, runExceptT)
+import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Set (Set)
 import qualified Data.Map.Strict as M
@@ -28,9 +30,9 @@ import Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import Cardano.CLI.Shelley.Run.Key (SomeSigningKey(..))
 import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
-import Cardano.Api.Typed (FileError, LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText))
+import Cardano.Api.Typed (FileError, LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal)
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
-import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata)
+import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty)
 import Cardano.CLI.Environment ( EnvSocketError(..) , readEnvSocketPath)
 import Cardano.Api.LocalChainSync ( getLocalTip )
 import Ouroboros.Network.Block (Tip, getTipPoint)
@@ -47,16 +49,35 @@ import Encoding
 
 data Bech32HumanReadablePartError = Bech32HumanReadablePartError !(Bech32.HumanReadablePartError)
 
+-- | An error that can occur while querying a node's local state.
+data ShelleyQueryCmdLocalStateQueryError
+  = AcquireFailureError !LocalStateQuery.AcquireFailure
+  | EraMismatchError !EraMismatch
+  -- ^ A query from a certain era was applied to a ledger from a different
+  -- era.
+  | ByronProtocolNotSupportedError
+  -- ^ The query does not support the Byron protocol.
+  deriving (Eq, Show)
+
+data NotStakeSigningKeyError = NotStakeSigningKey !SomeSigningKey
+
 makeClassyPrisms ''FileError
 makeClassyPrisms ''Bech32DecodeError
 makeClassyPrisms ''Bech32HumanReadablePartError
+makeClassyPrisms ''EnvSocketError
+makeClassyPrisms ''ShelleyQueryCmdLocalStateQueryError
+makeClassyPrisms ''NotStakeSigningKeyError
 
 readSigningKeyFile
-  :: SigningKeyFile
-  -> ExceptT (FileError InputDecodeError) IO SomeSigningKey
-readSigningKeyFile skFile =
-    newExceptT $
-      readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e InputDecodeError
+     )
+  => SigningKeyFile
+  -> m SomeSigningKey
+readSigningKeyFile skFile = do
+    result <- liftIO $ readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
+    either (throwError . (__FileError #)) pure result
   where
     textEnvFileTypes =
       [ FromSomeType (AsSigningKey AsByronKey)
@@ -126,33 +147,57 @@ withSomeSigningKey ssk f =
       AVrfSigningKey             sk -> f sk
       AKesSigningKey             sk -> f sk
 
-data VoterRegistrationError
-  = VoterEnvSocketError !EnvSocketError
-  -- ^ Unable to retrieve the socket path
-  | VoterQueryAcquireFailureError !LocalStateQuery.AcquireFailure
-  -- ^ Cannot obtain the state for the requested point.
-  | VoterByronProtocolNotSupportedError
-  -- ^ Tried to use a node running in Byron mode
-  | VoterQueryEraMismatchError !EraMismatch
-  -- ^ Caused by applying a query from one era to a ledger from a
-  -- different era.
-  | VoterFileError !(FileError InputDecodeError)
-  -- ^ Errors reading from a file
-  | VoterNotStakeSigningKey !SomeSigningKey
-  -- ^ User provided stake signing key is not a "StakeSigningKey" but some other signing key
+liftExceptT :: (MonadError e' m, MonadIO m) => (e -> e') -> ExceptT e IO a -> m a
+liftExceptT handler action = do
+  result <- liftIO $ runExceptT action
+  case result of
+    Left err -> throwError $ handler err
+    Right x  -> pure x
 
-all :: Protocol -> NetworkId -> Set (Address Shelley) -> SigningKeyFile -> FilePath -> ExceptT VoterRegistrationError IO (Ledger.UTxO StandardShelley)
+all
+  :: ( MonadIO m
+     , MonadError e m
+     , MonadFail m
+     , AsEnvSocketError e
+     , AsShelleyQueryCmdLocalStateQueryError e
+     , AsFileError e InputDecodeError
+     , AsNotStakeSigningKeyError e
+     , AsDecodeError e
+     , AsBech32DecodeError e
+     , AsBech32HumanReadablePartError e
+     )
+  => Protocol
+  -> NetworkId
+  -> Set (Address Shelley)
+  -> SigningKeyFile
+  -> FilePath
+  -> m (Ledger.UTxO StandardShelley)
 all protocol network as skf votekf = do
-  SocketPath sockPath <- firstExceptT VoterEnvSocketError readEnvSocketPath
+  SocketPath sockPath <- liftExceptT (_EnvSocketError #) $ readEnvSocketPath
   withlocalNodeConnectInfo protocol network sockPath $ \connectInfo -> do
     tip     <- liftIO $ getLocalTip connectInfo
     utxos   <- queryUTxOFromLocalState connectInfo tip (FilterByAddress as)
     stkSign <- readStakeSigningKey skf
     let stkVerify = getVerificationKey stkSign
     
-    -- meta      <- generateVoteMetadata stkSign stkVerify votekf
+    meta      <- generateVoteMetadata stkSign stkVerify votekf
 
-    pure utxos
+    let txBody = makeShelleyTransaction
+                   txExtraContentEmpty {
+                     txCertificates   = [],
+                     txWithdrawals    = [],
+                     txMetadata       = Just meta,
+                     txUpdateProposal = Nothing
+                   }
+                   ttl
+                   0 
+                   txins
+                   txouts
+    undefined
+
+  --   pure utxos
+
+
 
 generateVoteMetadata
   :: ( MonadIO m
@@ -224,36 +269,46 @@ readVotePublicKey path = do
   result <- liftIO . try $ TIO.readFile path
   either (\e -> throwError . (_FileIOError #) $ (path, e)) pure result
 
-readStakeSigningKey :: SigningKeyFile -> ExceptT VoterRegistrationError IO (SigningKey StakeKey)
+readStakeSigningKey
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e InputDecodeError
+     , AsNotStakeSigningKeyError e
+     )
+  => SigningKeyFile
+  -> m (SigningKey StakeKey)
 readStakeSigningKey skf = do
-  ssk       <- firstExceptT VoterFileError $ readSigningKeyFile skf
+  ssk       <- readSigningKeyFile skf
   case ssk of
     AStakeSigningKey sk -> pure sk
-    sk                  -> throwError $ VoterNotStakeSigningKey sk
+    sk                  -> throwError $ (_NotStakeSigningKey # sk)
 
 queryUTxOFromLocalState
-  :: LocalNodeConnectInfo mode block
+  :: ( MonadIO m
+     , MonadError e m
+     , AsShelleyQueryCmdLocalStateQueryError e
+     , MonadFail m
+     )
+  => LocalNodeConnectInfo mode block
   -> Tip block
   -> QueryFilter
-  -> ExceptT VoterRegistrationError IO (Ledger.UTxO StandardShelley)
+  -> m (Ledger.UTxO StandardShelley)
 queryUTxOFromLocalState connectInfo@LocalNodeConnectInfo{localNodeConsensusMode} tip qFilter =
   case localNodeConsensusMode of
-    ByronMode{} -> throwError VoterByronProtocolNotSupportedError
+    ByronMode{} -> throwError (_ByronProtocolNotSupportedError # ())
 
     ShelleyMode{} -> do
-      DegenQueryResult result <- firstExceptT VoterQueryAcquireFailureError . newExceptT $
-        queryNodeLocalState
-          connectInfo
-          (getTipPoint tip, DegenQuery (applyUTxOFilter qFilter))
+      DegenQueryResult result <- do
+        x <- liftIO $ queryNodeLocalState connectInfo (getTipPoint tip, DegenQuery (applyUTxOFilter qFilter))
+        either (throwError . (_AcquireFailureError #)) pure x
       return result
 
     CardanoMode{} -> do
-      result <- firstExceptT VoterQueryAcquireFailureError . newExceptT $
-        queryNodeLocalState
-          connectInfo
-          (getTipPoint tip, QueryIfCurrentShelley (applyUTxOFilter qFilter))
+      result <- do
+        x <- liftIO $ queryNodeLocalState connectInfo (getTipPoint tip, QueryIfCurrentShelley (applyUTxOFilter qFilter))
+        either (throwError . (_AcquireFailureError #)) pure x
       case result of
-        QueryResultEraMismatch err -> throwError (VoterQueryEraMismatchError err)
+        QueryResultEraMismatch err -> throwError (_EraMismatchError # err)
         QueryResultSuccess utxo -> return utxo
   where
     applyUTxOFilter (FilterByAddress as) = GetFilteredUTxO (toShelleyAddrs as)
