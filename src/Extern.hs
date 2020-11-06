@@ -30,19 +30,24 @@ import Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import Cardano.CLI.Shelley.Run.Key (SomeSigningKey(..))
 import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
-import Cardano.Api.Typed (FileError, LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal)
+import Cardano.Api.Typed (FileError, LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx))
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
-import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty)
+import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn))
 import Cardano.CLI.Environment ( EnvSocketError(..) , readEnvSocketPath)
 import Cardano.Api.LocalChainSync ( getLocalTip )
-import Ouroboros.Network.Block (Tip, getTipPoint)
+import Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 import           Ouroboros.Consensus.Cardano.Block (EraMismatch (..), Either(QueryResultSuccess, QueryResultEraMismatch), Query(QueryIfCurrentShelley), EraMismatch (..))
 import Ouroboros.Consensus.Shelley.Ledger.Query (Query(..))
+import Ouroboros.Network.Point (fromWithOrigin)
 import           Ouroboros.Consensus.HardFork.Combinator.Degenerate (Either (DegenQueryResult),
                      Query (DegenQuery))
 import qualified Shelley.Spec.Ledger.Address as Ledger
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
+import qualified Shelley.Spec.Ledger.Tx as Ledger
+import qualified Shelley.Spec.Ledger.Coin as Ledger
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery (AcquireFailure (..))
+
+import qualified Cardano.Crypto.Hash.Class as Crypto
 
 import CLI.Jormungandr
 import Encoding
@@ -61,12 +66,15 @@ data ShelleyQueryCmdLocalStateQueryError
 
 data NotStakeSigningKeyError = NotStakeSigningKey !SomeSigningKey
 
+data AddressUTxOError = AddressHasNoUTxOs (Address Shelley)
+
 makeClassyPrisms ''FileError
 makeClassyPrisms ''Bech32DecodeError
 makeClassyPrisms ''Bech32HumanReadablePartError
 makeClassyPrisms ''EnvSocketError
 makeClassyPrisms ''ShelleyQueryCmdLocalStateQueryError
 makeClassyPrisms ''NotStakeSigningKeyError
+makeClassyPrisms ''AddressUTxOError
 
 readSigningKeyFile
   :: ( MonadIO m
@@ -154,6 +162,16 @@ liftExceptT handler action = do
     Left err -> throwError $ handler err
     Right x  -> pure x
 
+
+-- TODO Rename "LEDGER" to "SHELLEY" to match existing style in cardano-api
+fromShelleyTxIn  :: Ledger.TxIn StandardShelley -> TxIn
+fromShelleyTxIn (Ledger.TxIn txid txix) =
+    TxIn (fromShelleyTxId txid) (TxIx (fromIntegral txix))
+
+fromShelleyTxId :: Ledger.TxId StandardShelley -> TxId
+fromShelleyTxId (Ledger.TxId h) =
+    TxId (Crypto.castHash h)
+
 all
   :: ( MonadIO m
      , MonadError e m
@@ -165,34 +183,41 @@ all
      , AsDecodeError e
      , AsBech32DecodeError e
      , AsBech32HumanReadablePartError e
+     , AsAddressUTxOError e
      )
   => Protocol
   -> NetworkId
-  -> Set (Address Shelley)
+  -> Address Shelley
   -> SigningKeyFile
   -> FilePath
   -> m (Ledger.UTxO StandardShelley)
-all protocol network as skf votekf = do
+all protocol network addr skf votekf = do
   SocketPath sockPath <- liftExceptT (_EnvSocketError #) $ readEnvSocketPath
   withlocalNodeConnectInfo protocol network sockPath $ \connectInfo -> do
     tip     <- liftIO $ getLocalTip connectInfo
-    utxos   <- queryUTxOFromLocalState connectInfo tip (FilterByAddress as)
+    utxos   <- queryUTxOFromLocalState connectInfo tip (FilterByAddress $ Set.singleton addr)
+    (txins, txouts) <- case M.assocs $ Ledger.unUTxO utxos of
+      []                                             -> throwError $ (_AddressHasNoUTxOs # addr)
+      (txin, (Ledger.TxOut _ (Ledger.Coin value))):_ -> pure $ ([fromShelleyTxIn txin], [TxOut addr (Lovelace value)])
+      
     stkSign <- readStakeSigningKey skf
     let stkVerify = getVerificationKey stkSign
     
     meta      <- generateVoteMetadata stkSign stkVerify votekf
 
-    let txBody = makeShelleyTransaction
-                   txExtraContentEmpty {
-                     txCertificates   = [],
-                     txWithdrawals    = [],
-                     txMetadata       = Just meta,
-                     txUpdateProposal = Nothing
-                   }
-                   ttl
-                   0 
-                   txins
-                   txouts
+    let
+      ttl    = fromWithOrigin minBound $ getTipSlotNo tip
+      txBody = makeShelleyTransaction
+                 txExtraContentEmpty {
+                   txCertificates   = [],
+                   txWithdrawals    = [],
+                   txMetadata       = Just meta,
+                   txUpdateProposal = Nothing
+                 }
+                 ttl
+                 (toEnum 0) 
+                 txins
+                 txouts
     undefined
 
   --   pure utxos

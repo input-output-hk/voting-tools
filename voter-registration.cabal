@@ -28,6 +28,7 @@ library
                      , text
                      , turtle
                      , containers
+                     , cardano-crypto-class
                      , bytestring
                      , lens
                      , bech32
