@@ -19,6 +19,7 @@ library
   exposed-modules:     CLI.Interop
                      , CLI.Jormungandr
                      , Extern
+                     , Encoding
 
   build-depends:       base
                      , safe-exceptions
@@ -27,6 +28,9 @@ library
                      , text
                      , turtle
                      , containers
+                     , bytestring
+                     , lens
+                     , bech32
 
                      , transformers-except
                      , cardano-api
