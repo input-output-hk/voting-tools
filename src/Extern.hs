@@ -15,6 +15,7 @@ import Control.Monad.Except (ExceptT, throwError, MonadError, runExceptT)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Set (Set)
+import Control.Applicative ((<|>))
 import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import qualified Data.ByteString as BS
@@ -35,9 +36,9 @@ import Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import Cardano.CLI.Shelley.Run.Key (SomeSigningKey(..))
 import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
-import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx))
+import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic))
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
-import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope)
+import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet))
 import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
 import Cardano.CLI.Environment ( EnvSocketError(..) , readEnvSocketPath)
 import Cardano.Api.LocalChainSync ( getLocalTip )
@@ -61,6 +62,7 @@ import CLI.Jormungandr
 import Encoding
 
 data Bech32HumanReadablePartError = Bech32HumanReadablePartError !(Bech32.HumanReadablePartError)
+  deriving Show
 
 -- | An error that can occur while querying a node's local state.
 data ShelleyQueryCmdLocalStateQueryError
@@ -72,9 +74,11 @@ data ShelleyQueryCmdLocalStateQueryError
   -- ^ The query does not support the Byron protocol.
   deriving (Eq, Show)
 
-data NotStakeSigningKeyError = NotStakeSigningKey !SomeSigningKey
+data NotStakeSigningKeyError = NotStakeSigningKey !SigningKeyFile
+  deriving Show
 
 data AddressUTxOError = AddressHasNoUTxOs (Address Shelley)
+  deriving Show
 
 makeClassyPrisms ''FileError
 makeClassyPrisms ''Bech32DecodeError
@@ -372,7 +376,7 @@ readStakeSigningKey skf = do
   ssk       <- readSigningKeyFile skf
   case ssk of
     AStakeSigningKey sk -> pure sk
-    sk                  -> throwError $ (_NotStakeSigningKey # sk)
+    sk                  -> throwError $ (_NotStakeSigningKey # skf)
 
 readWitnessFile
   :: ( MonadIO m
@@ -450,3 +454,23 @@ lexPlausibleAddressString =
 readerFromAttoParser :: Atto.Parser a -> Opt.ReadM a
 readerFromAttoParser p =
     Opt.eitherReader (Atto.parseOnly (p <* Atto.endOfInput) . BSC.pack)
+
+pNetworkId :: Opt.Parser NetworkId
+pNetworkId =
+  pMainnet' <|> fmap Testnet pTestnetMagic
+ where
+   pMainnet' :: Opt.Parser NetworkId
+   pMainnet' =
+    Opt.flag' Mainnet
+      (  Opt.long "mainnet"
+      <> Opt.help "Use the mainnet magic id."
+      )
+
+pTestnetMagic :: Opt.Parser NetworkMagic
+pTestnetMagic =
+  NetworkMagic <$>
+    Opt.option Opt.auto
+      (  Opt.long "testnet-magic"
+      <> Opt.metavar "NATURAL"
+      <> Opt.help "Specify a testnet magic id."
+      )
