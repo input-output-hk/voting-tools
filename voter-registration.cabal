@@ -20,6 +20,7 @@ library
                      , CLI.Jormungandr
                      , Extern
                      , Encoding
+                     , Config
 
   build-depends:       base
                      , safe-exceptions
@@ -32,6 +33,8 @@ library
                      , bytestring
                      , lens
                      , bech32
+                     , optparse-applicative
+                     , attoparsec
 
                      , transformers-except
                      , cardano-api
@@ -49,7 +52,7 @@ executable voter-registration
   -- other-extensions:
   build-depends:       base
                      , optparse-applicative
-                     -- , cardano-api
+                     , voter-registration
 
   -- hs-source-dirs:
   default-language:    Haskell2010

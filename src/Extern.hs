@@ -21,18 +21,24 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import qualified Data.Text.Encoding as T
 import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
 import Control.Exception.Safe (IOException, try)
+import qualified Data.Attoparsec.ByteString.Char8 as Atto
+import qualified Data.ByteString.Char8 as BSC
+import qualified Options.Applicative as Opt
 
+import Cardano.Api.TextView (TextViewError)
 import qualified Codec.Binary.Bech32 as Bech32
 import Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import Cardano.CLI.Shelley.Run.Key (SomeSigningKey(..))
 import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
-import Cardano.Api.Typed (FileError, LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx))
+import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx))
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
-import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction)
+import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope)
+import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
 import Cardano.CLI.Environment ( EnvSocketError(..) , readEnvSocketPath)
 import Cardano.Api.LocalChainSync ( getLocalTip )
 import Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
@@ -77,17 +83,23 @@ makeClassyPrisms ''EnvSocketError
 makeClassyPrisms ''ShelleyQueryCmdLocalStateQueryError
 makeClassyPrisms ''NotStakeSigningKeyError
 makeClassyPrisms ''AddressUTxOError
+makeClassyPrisms ''InputDecodeError
+makeClassyPrisms ''TextViewError
 
 readSigningKeyFile
   :: ( MonadIO m
      , MonadError e m
-     , AsFileError e InputDecodeError
+     , AsFileError e fileErr
+     , AsInputDecodeError fileErr
      )
   => SigningKeyFile
   -> m SomeSigningKey
 readSigningKeyFile skFile = do
     result <- liftIO $ readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
-    either (throwError . (__FileError #)) pure result
+    case result of
+      Right x                 -> pure x
+      Left (FileError fp e)   -> throwError (_FileError # (fp , _InputDecodeError # e))
+      Left (FileIOError fp e) -> throwError (_FileIOError # (fp, e))
   where
     textEnvFileTypes =
       [ FromSomeType (AsSigningKey AsByronKey)
@@ -191,16 +203,18 @@ all
   -> NetworkId
   -> Address Shelley
   -> SigningKeyFile
+  -> Witness Shelley
   -> FilePath
-  -> m (Ledger.UTxO StandardShelley)
-all protocol network addr skf votekf = do
+  -> m (Tx Shelley)
+all protocol network addr skf psk votekf = do
   SocketPath sockPath <- liftExceptT (_EnvSocketError #) $ readEnvSocketPath
   withlocalNodeConnectInfo protocol network sockPath $ \connectInfo -> do
     tip     <- liftIO $ getLocalTip connectInfo
     utxos   <- queryUTxOFromLocalState connectInfo tip (FilterByAddress $ Set.singleton addr)
-    (txins, txouts) <- case M.assocs $ Ledger.unUTxO utxos of
+    (txins, (Lovelace txOutValue)) <- case M.assocs $ Ledger.unUTxO utxos of
       []                                             -> throwError $ (_AddressHasNoUTxOs # addr)
-      (txin, (Ledger.TxOut _ (Ledger.Coin value))):_ -> pure $ ([fromShelleyTxIn txin], [TxOut addr (Lovelace value)])
+      (txin, (Ledger.TxOut _ (Ledger.Coin value))):_ -> pure $ ([fromShelleyTxIn txin], (Lovelace value))
+    let txoutsNoFee = [TxOut addr (Lovelace txOutValue)]
       
     stkSign <- readStakeSigningKey skf
     let stkVerify = getVerificationKey stkSign
@@ -219,19 +233,36 @@ all protocol network addr skf votekf = do
                  ttl
                  (toEnum 0) 
                  txins
-                 txouts
+                 txoutsNoFee
       tx = makeSignedTransaction [] txBody
 
+    -- TODO Bundle this into one, estimateTransactionFee :: ConnectInfo -> Tx -> ...
     pparams <- queryPParamsFromLocalState connectInfo tip
     let
-      fee = estimateTransactionFee (localNodeNetworkId connectInfo) (Shelley._minfeeB pparams) (Shelley._minfeeB pparams) tx (length txins) (length txouts) 0 0
+      (Lovelace fee) = estimateTransactionFee (localNodeNetworkId connectInfo) (Shelley._minfeeB pparams) (Shelley._minfeeB pparams) tx (length txins) (length txoutsNoFee) 0 0
+      txoutsWithFee = [TxOut addr (Lovelace $ txOutValue - fee)]
 
-    undefined
+      txBodyWithFee = makeShelleyTransaction
+                        txExtraContentEmpty {
+                          txCertificates   = [],
+                          txWithdrawals    = [],
+                          txMetadata       = Just meta,
+                          txUpdateProposal = Nothing
+                        }
+                        (ttl + 5000)
+                        (Lovelace fee) 
+                        txins
+                        txoutsWithFee
+
+      txWithFee = makeSignedTransaction [psk] txBodyWithFee
+
+    pure txWithFee
 
   --   pure utxos
 
 -- TODO Refactor query functions, they're very similar! queryShelley function?
 -- TODO Ask why these functions aren't exposed
+-- TODO Ask why using explicit errors and not classy errors?
 queryPParamsFromLocalState
   :: ( MonadIO m
      , MonadError e m
@@ -331,7 +362,8 @@ readVotePublicKey path = do
 readStakeSigningKey
   :: ( MonadIO m
      , MonadError e m
-     , AsFileError e InputDecodeError
+     , AsFileError e fileErr
+     , AsInputDecodeError fileErr
      , AsNotStakeSigningKeyError e
      )
   => SigningKeyFile
@@ -341,6 +373,21 @@ readStakeSigningKey skf = do
   case ssk of
     AStakeSigningKey sk -> pure sk
     sk                  -> throwError $ (_NotStakeSigningKey # sk)
+
+readWitnessFile
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e fileError
+     , AsTextViewError fileError
+     )
+  => WitnessFile
+  -> m (Witness Shelley)
+readWitnessFile (WitnessFile fp) = do
+  result <- liftIO $ readFileTextEnvelope AsShelleyWitness fp
+  case result of
+    Left (FileIOError fp e) -> throwError $ _FileIOError # (fp, e)
+    Left (FileError fp e)   -> throwError $ _FileError   # (fp, _TextViewError # e)
+    Right witness           -> pure witness
 
 queryUTxOFromLocalState
   :: ( MonadIO m
@@ -382,8 +429,24 @@ queryUTxOFromLocalState connectInfo@LocalNodeConnectInfo{localNodeConsensusMode}
     toShelleyAddr (ShelleyAddress nw pc scr) = Ledger.Addr nw pc scr
 
 
--- -- cardano.build_tx("meta.txbody", txins=txins, txouts=txouts, ttl=tip["slotNo"], metadata = meta)
--- -- fee = cardano.estimate_fee(len(txins), len(txouts), 1, txbody_file="meta.txbody")
--- -- txouts = [( arguments["--payment-address"], value - fee )]
--- -- cardano.build_tx("meta.txbody", txins=txins, txouts=txouts, ttl=tip["slotNo"] + 5000, metadata=meta, fee=fee)
--- -- cardano.sign_tx("meta.txbody", "meta.txsigned", [ arguments["--payment-signing-key"] ])
+parseAddress :: Atto.Parser (Address Shelley)
+parseAddress = do
+    str <- lexPlausibleAddressString
+    case deserialiseAddress AsShelleyAddress str of
+      Nothing   -> fail "invalid address"
+      Just addr -> pure addr
+
+lexPlausibleAddressString :: Atto.Parser Text
+lexPlausibleAddressString =
+    T.decodeLatin1 <$> Atto.takeWhile1 isPlausibleAddressChar
+  where
+    -- Covers both base58 and bech32 (with constrained prefixes)
+    isPlausibleAddressChar c =
+         (c >= 'a' && c <= 'z')
+      || (c >= 'A' && c <= 'Z')
+      || (c >= '0' && c <= '9')
+      || c == '_'
+
+readerFromAttoParser :: Atto.Parser a -> Opt.ReadM a
+readerFromAttoParser p =
+    Opt.eitherReader (Atto.parseOnly (p <* Atto.endOfInput) . BSC.pack)
