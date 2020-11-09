@@ -32,7 +32,7 @@ import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
 import Cardano.Api.Typed (FileError, LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx))
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
-import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn))
+import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction)
 import Cardano.CLI.Environment ( EnvSocketError(..) , readEnvSocketPath)
 import Cardano.Api.LocalChainSync ( getLocalTip )
 import Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
@@ -45,6 +45,8 @@ import qualified Shelley.Spec.Ledger.Address as Ledger
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
 import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.Coin as Ledger
+import           Shelley.Spec.Ledger.PParams (PParams)
+import qualified Shelley.Spec.Ledger.PParams as Shelley
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery (AcquireFailure (..))
 
 import qualified Cardano.Crypto.Hash.Class as Crypto
@@ -218,10 +220,42 @@ all protocol network addr skf votekf = do
                  (toEnum 0) 
                  txins
                  txouts
+      tx = makeSignedTransaction [] txBody
+
+    pparams <- queryPParamsFromLocalState connectInfo tip
+    let
+      fee = estimateTransactionFee (localNodeNetworkId connectInfo) (Shelley._minfeeB pparams) (Shelley._minfeeB pparams) tx (length txins) (length txouts) 0 0
+
     undefined
 
   --   pure utxos
 
+-- TODO Refactor query functions, they're very similar! queryShelley function?
+-- TODO Ask why these functions aren't exposed
+queryPParamsFromLocalState
+  :: ( MonadIO m
+     , MonadError e m
+     , AsShelleyQueryCmdLocalStateQueryError e
+     -- TODO ask why MonadFail required?
+     , MonadFail m
+     )
+  => LocalNodeConnectInfo mode block
+  -> Tip block
+  -> m (PParams StandardShelley)
+queryPParamsFromLocalState LocalNodeConnectInfo{localNodeConsensusMode = ByronMode{}} _ =
+  throwError (_ByronProtocolNotSupportedError # ())
+queryPParamsFromLocalState connectInfo@LocalNodeConnectInfo{localNodeConsensusMode = ShelleyMode} tip = do
+  DegenQueryResult result <- do
+    x <- liftIO $ queryNodeLocalState connectInfo (getTipPoint tip, DegenQuery GetCurrentPParams)
+    either (throwError . (_AcquireFailureError #)) pure x
+  return result
+queryPParamsFromLocalState connectInfo@LocalNodeConnectInfo{localNodeConsensusMode = CardanoMode{}} tip = do
+  result <- do
+    x <- liftIO $ queryNodeLocalState connectInfo (getTipPoint tip, QueryIfCurrentShelley GetCurrentPParams)
+    either (throwError . (_AcquireFailureError #)) pure x
+  case result of
+    QueryResultEraMismatch eraerr -> throwError (_EraMismatchError # eraerr)
+    QueryResultSuccess     pparams -> return pparams
 
 
 generateVoteMetadata
