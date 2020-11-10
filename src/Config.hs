@@ -15,7 +15,7 @@ import Options.Applicative
 
 import Cardano.CLI.Environment ( EnvSocketError, readEnvSocketPath)
 import qualified Cardano.API as Api
-import Cardano.API (Address, SigningKey, StakeKey, Witness, NetworkId, FileError)
+import Cardano.API (Address, SigningKey, StakeKey, Witness, NetworkId, FileError, PaymentKey)
 import Cardano.Api.Typed (Shelley)
 import Cardano.CLI.Shelley.Key (InputDecodeError)
 import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
@@ -27,7 +27,7 @@ import Extern
 data Config
   = Config { cfgPaymentAddress    :: Address Shelley
            , cfgStakeSigningKey   :: SigningKey StakeKey
-           , cfgPaymentSigningKey :: Witness Shelley
+           , cfgPaymentSigningKey :: SigningKey PaymentKey
            , cfgVotePublicKey     :: Text
            , cfgNetworkId         :: NetworkId
            }
@@ -48,6 +48,7 @@ instance AsTextViewError FileErrors where
 data ConfigError
   = ConfigFailedToReadFile (Api.FileError FileErrors)
   | ConfigNotAStakeSigningKey NotStakeSigningKeyError
+  | ConfigNotAPaymentSigningKey NotPaymentSigningKeyError
   deriving (Show)
 
 makePrisms ''ConfigError
@@ -57,6 +58,9 @@ instance AsFileError ConfigError FileErrors where
 
 instance AsNotStakeSigningKeyError ConfigError where
   _NotStakeSigningKeyError = _ConfigNotAStakeSigningKey
+
+instance AsNotPaymentSigningKeyError ConfigError where
+  _NotPaymentSigningKeyError = _ConfigNotAPaymentSigningKey
   
 mkConfig
   :: Opts
@@ -64,9 +68,9 @@ mkConfig
 mkConfig (Opts stateDir pskf addr vpkf sskf networkId) = do
   stkSign <- readStakeSigningKey (SigningKeyFile sskf)
   votepk  <- readVotePublicKey vpkf
-  witness <- readWitnessFile (WitnessFile pskf)
+  paySign <- readPaymentSigningKey (SigningKeyFile pskf)
 
-  pure $ Config addr stkSign witness votepk networkId
+  pure $ Config addr stkSign paySign votepk networkId
 
 data Opts
   = Opts { optStateDir              :: FilePath

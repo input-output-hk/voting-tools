@@ -36,9 +36,9 @@ import Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import Cardano.CLI.Shelley.Run.Key (SomeSigningKey(..))
 import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
-import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic))
+import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey(WitnessPaymentKey))
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
-import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet))
+import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet), PaymentKey, makeShelleyKeyWitness)
 import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
 import Cardano.CLI.Environment ( EnvSocketError(..) , readEnvSocketPath)
 import Cardano.Api.LocalChainSync ( getLocalTip )
@@ -77,6 +77,9 @@ data ShelleyQueryCmdLocalStateQueryError
 data NotStakeSigningKeyError = NotStakeSigningKey !SigningKeyFile
   deriving Show
 
+data NotPaymentSigningKeyError = NotPaymentSigningKey !SigningKeyFile
+  deriving Show
+
 data AddressUTxOError = AddressHasNoUTxOs (Address Shelley)
   deriving Show
 
@@ -86,6 +89,7 @@ makeClassyPrisms ''Bech32HumanReadablePartError
 makeClassyPrisms ''EnvSocketError
 makeClassyPrisms ''ShelleyQueryCmdLocalStateQueryError
 makeClassyPrisms ''NotStakeSigningKeyError
+makeClassyPrisms ''NotPaymentSigningKeyError
 makeClassyPrisms ''AddressUTxOError
 makeClassyPrisms ''InputDecodeError
 makeClassyPrisms ''TextViewError
@@ -207,7 +211,7 @@ all
   -> NetworkId
   -> Address Shelley
   -> SigningKeyFile
-  -> Witness Shelley
+  -> SigningKey PaymentKey
   -> FilePath
   -> m (Tx Shelley)
 all protocol network addr skf psk votekf = do
@@ -257,8 +261,8 @@ all protocol network addr skf psk votekf = do
                         (Lovelace fee) 
                         txins
                         txoutsWithFee
-
-      txWithFee = makeSignedTransaction [psk] txBodyWithFee
+      witness   = makeShelleyKeyWitness txBodyWithFee (WitnessPaymentKey psk)
+      txWithFee = makeSignedTransaction [witness] txBodyWithFee
 
     pure txWithFee
 
@@ -377,6 +381,21 @@ readStakeSigningKey skf = do
   case ssk of
     AStakeSigningKey sk -> pure sk
     sk                  -> throwError $ (_NotStakeSigningKey # skf)
+
+readPaymentSigningKey
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e fileErr
+     , AsInputDecodeError fileErr
+     , AsNotPaymentSigningKeyError e
+     )
+  => SigningKeyFile
+  -> m (SigningKey PaymentKey)
+readPaymentSigningKey skf = do
+  psk <- readSigningKeyFile skf
+  case psk of
+    APaymentSigningKey k -> pure k
+    sk                   -> throwError $ (_NotPaymentSigningKey # skf)
 
 readWitnessFile
   :: ( MonadIO m
