@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Config (opts, mkConfig) where
+module Config (Config(Config), opts, mkConfig) where
 
 import Data.Text (Text)
 import Control.Monad.IO.Class (MonadIO, liftIO)

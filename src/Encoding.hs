@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Encoding (DecodeError(DecodeError), decodeBytesUtf8, AsDecodeError(_DecodeError)) where
+module Encoding (DecodeError(DecodeError), decodeBytesUtf8, AsDecodeError(_DecodeError, __DecodeError)) where
 
 import Data.ByteString (ByteString)
 import Data.Text (Text)

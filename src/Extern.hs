@@ -194,14 +194,41 @@ fromShelleyTxId :: Ledger.TxId StandardShelley -> TxId
 fromShelleyTxId (Ledger.TxId h) =
     TxId (Crypto.castHash h)
 
+data AppError
+  = AppEnvSocketError !EnvSocketError
+  | AppShelleyQueryError !ShelleyQueryCmdLocalStateQueryError
+  | AppDecodeError !DecodeError
+  | AppBech32DecodeError !Bech32DecodeError
+  | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
+  | AppAddressUTxOError !AddressUTxOError
+  deriving Show
+
+makeClassyPrisms ''AppError
+
+instance AsEnvSocketError AppError where
+  _EnvSocketError = _AppEnvSocketError
+
+instance AsShelleyQueryCmdLocalStateQueryError AppError where
+  _ShelleyQueryCmdLocalStateQueryError = _AppShelleyQueryError
+
+instance AsDecodeError AppError where
+  __DecodeError = _AppDecodeError
+  
+instance AsBech32DecodeError AppError where
+  _Bech32DecodeError = _AppBech32DecodeError
+
+instance AsBech32HumanReadablePartError AppError where
+  __Bech32HumanReadablePartError = _AppBech32HumanReadablePartError
+
+instance AsAddressUTxOError AppError where
+  _AddressUTxOError = _AppAddressUTxOError
+
 all
   :: ( MonadIO m
      , MonadError e m
      , MonadFail m
      , AsEnvSocketError e
      , AsShelleyQueryCmdLocalStateQueryError e
-     , AsFileError e InputDecodeError
-     , AsNotStakeSigningKeyError e
      , AsDecodeError e
      , AsBech32DecodeError e
      , AsBech32HumanReadablePartError e
@@ -210,11 +237,11 @@ all
   => Protocol
   -> NetworkId
   -> Address Shelley
-  -> SigningKeyFile
+  -> SigningKey StakeKey 
   -> SigningKey PaymentKey
-  -> FilePath
+  -> Text
   -> m (Tx Shelley)
-all protocol network addr skf psk votekf = do
+all protocol network addr stkSign psk votepk = do
   SocketPath sockPath <- liftExceptT (_EnvSocketError #) $ readEnvSocketPath
   withlocalNodeConnectInfo protocol network sockPath $ \connectInfo -> do
     tip     <- liftIO $ getLocalTip connectInfo
@@ -224,10 +251,9 @@ all protocol network addr skf psk votekf = do
       (txin, (Ledger.TxOut _ (Ledger.Coin value))):_ -> pure $ ([fromShelleyTxIn txin], (Lovelace value))
     let txoutsNoFee = [TxOut addr (Lovelace txOutValue)]
       
-    stkSign <- readStakeSigningKey skf
     let stkVerify = getVerificationKey stkSign
     
-    meta      <- generateVoteMetadata stkSign stkVerify votekf
+    meta      <- generateVoteMetadata stkSign stkVerify votepk
 
     let
       ttl    = fromWithOrigin minBound $ getTipSlotNo tip
@@ -300,18 +326,15 @@ queryPParamsFromLocalState connectInfo@LocalNodeConnectInfo{localNodeConsensusMo
 generateVoteMetadata
   :: ( MonadIO m
      , MonadError e m
-     , AsFileError e d
-     -- TODO UTF8 DecodeError
      , AsDecodeError e
      , AsBech32DecodeError e
      , AsBech32HumanReadablePartError e
      )
   => SigningKey StakeKey
   -> VerificationKey StakeKey
-  -> FilePath
+  -> Text
   -> m TxMetadata
-generateVoteMetadata stkSign stkVerify votekf = do
-  votepk        <- readVotePublicKey votekf
+generateVoteMetadata stkSign stkVerify votepk = do
   votepkBytes   <- jcliKeyToBytes votepk
   jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytes stkSign) 
   jcliStkPublic <- jcliKeyPublic jcliStkSign
