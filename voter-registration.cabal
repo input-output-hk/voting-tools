@@ -23,6 +23,7 @@ library
                      , Config
 
   build-depends:       base
+                     , base16-bytestring
                      , safe-exceptions
                      , directory
                      , memory
@@ -60,6 +61,7 @@ executable voter-registration
 
                      , containers
                      , cardano-ledger
+                     , lens
 
   -- hs-source-dirs:
   default-language:    Haskell2010

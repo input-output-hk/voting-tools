@@ -31,8 +31,9 @@ import Control.Exception.Safe (IOException, try)
 import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import qualified Data.ByteString.Char8 as BSC
 import qualified Options.Applicative as Opt
+import qualified Data.ByteString.Base16 as Base16
 
-import Cardano.Api.TextView (TextViewError)
+import Cardano.Api.TextView (TextViewError, TextViewType(TextViewType))
 import qualified Codec.Binary.Bech32 as Bech32
 import Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import Cardano.CLI.Shelley.Run.Key (SomeSigningKey(..))
@@ -40,7 +41,7 @@ import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
 import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey(WitnessPaymentKey))
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
-import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet), PaymentKey, makeShelleyKeyWitness)
+import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet), PaymentKey, makeShelleyKeyWitness, writeFileTextEnvelope, TextEnvelopeDescr, HasTextEnvelope, readTextEnvelopeOfTypeFromFile, deserialiseFromTextEnvelope)
 import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
 import Cardano.CLI.Environment ( EnvSocketError(..) , readEnvSocketPath)
 import Cardano.Api.LocalChainSync ( getLocalTip )
@@ -205,9 +206,13 @@ data AppError
   | AppBech32DecodeError !Bech32DecodeError
   | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
   | AppAddressUTxOError !AddressUTxOError
+  | AppWriteTxError !(FileError ())
   deriving Show
 
 makeClassyPrisms ''AppError
+
+instance AsFileError AppError () where
+  __FileError = _AppWriteTxError
 
 instance AsEnvSocketError AppError where
   _EnvSocketError = _AppEnvSocketError
@@ -539,3 +544,28 @@ pTestnetMagic =
       <> Opt.metavar "NATURAL"
       <> Opt.help "Specify a testnet magic id."
       )
+
+writeFileTextEnvelope'
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e ()
+     , HasTextEnvelope a
+     )
+  => FilePath
+  -> Maybe TextEnvelopeDescr
+  -> a
+  -> m ()
+writeFileTextEnvelope' fp mDesc x = do
+  result <- liftIO $ writeFileTextEnvelope fp mDesc x
+  case result of
+    Left err -> throwError $ __FileError # err
+    Right ()  -> pure ()
+
+rTest fp = do
+  eEnvelope <- readTextEnvelopeOfTypeFromFile (TextViewType "TxSignedShelley") fp
+  case eEnvelope of
+    Left err       -> error $ show err
+    Right envelope -> case deserialiseFromTextEnvelope AsShelleyTx envelope of
+      Left err -> error $ show err
+      Right tx -> pure tx
+
