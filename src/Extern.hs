@@ -12,6 +12,7 @@ module Extern where
 
 import Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, left, newExceptT, handleIOExceptT)
 import Control.Monad.Except (ExceptT, throwError, MonadError, runExceptT)
+import qualified Data.ByteArray.Encoding as BA
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Set (Set)
@@ -60,6 +61,8 @@ import qualified Cardano.Crypto.Hash.Class as Crypto
 
 import CLI.Jormungandr
 import Encoding
+
+import Turtle (ExitCode(ExitSuccess, ExitFailure), Shell, Line, procStrictWithErr, textToLines, select, inproc, shell, stdin)
 
 data Bech32HumanReadablePartError = Bech32HumanReadablePartError !(Bech32.HumanReadablePartError)
   deriving Show
@@ -243,7 +246,9 @@ all
   -> m (Tx Shelley)
 all protocol network addr stkSign psk votepk = do
   SocketPath sockPath <- liftExceptT (_EnvSocketError #) $ readEnvSocketPath
+  liftIO $ putStrLn $ show sockPath
   withlocalNodeConnectInfo protocol network sockPath $ \connectInfo -> do
+    liftIO $ putStrLn $ "Before tip"
     tip     <- liftIO $ getLocalTip connectInfo
     utxos   <- queryUTxOFromLocalState connectInfo tip (FilterByAddress $ Set.singleton addr)
     (txins, (Lovelace txOutValue)) <- case M.assocs $ Ledger.unUTxO utxos of
@@ -253,7 +258,9 @@ all protocol network addr stkSign psk votepk = do
       
     let stkVerify = getVerificationKey stkSign
     
+    liftIO $ putStrLn $ "Before meta"
     meta      <- generateVoteMetadata stkSign stkVerify votepk
+    liftIO $ putStrLn $ show meta
 
     let
       ttl    = fromWithOrigin minBound $ getTipSlotNo tip
@@ -335,17 +342,28 @@ generateVoteMetadata
   -> Text
   -> m TxMetadata
 generateVoteMetadata stkSign stkVerify votepk = do
+  liftIO $ putStrLn "meta start"
   votepkBytes   <- jcliKeyToBytes votepk
-  jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytes stkSign) 
-  jcliStkPublic <- jcliKeyPublic jcliStkSign
+  liftIO $ TIO.putStr votepkBytes
+  liftIO $ putStrLn $ show stkSign
+  liftIO $ putStrLn $ show (serialiseToRawBytesHex stkSign)
+  liftIO $ putStrLn "toBytes done..."
+  jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytesHex stkSign) 
+  liftIO $ putStrLn "fromBytes done..."
+  liftIO $ putStrLn $ show jcliStkSign
+  -- jcliStkPublic <- jcliKeyPublic jcliStkSign
+  -- jcliStkPublic <- jcliKeyPublic "ed25519_sk1a7ea75d7u6zc4a6eyl8q7jpgu4v8dkxrzyvrr7ru5szck3f5s7f69hd"
+  liftIO $ putStrLn "key public done..."
   sig           <- jcliSign jcliStkSign votepkBytes
+  liftIO $ putStrLn $ "key sign done..." <> show sig
   hexSig        <- decodeBytesUtf8 =<< bech32SignatureToHex sig
   stkVerifyHex  <- decodeBytesUtf8 $ serialiseToRawBytesHex stkVerify
 
-  -- Verify
   x <- newPrefix "ed25519_pk" stkVerifyHex
-  y <- newPrefix "ed25519_sig" hexSig
+  y <- newPrefix "ed25519_sig" sig
+  liftIO $ putStrLn $ show "VALIDATING..."
   jcliValidateSig x y votepkBytes
+  liftIO $ putStrLn $ show "VALID"
   
   pure $ makeTransactionMetadata $ M.fromList [(1, TxMetaMap
                           [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
@@ -355,8 +373,6 @@ generateVoteMetadata stkSign stkVerify votepk = do
                           ]
                         )
                        ]
-
--- validateSig 
 
 newPrefix hrPartTxt x = do
   case Bech32.humanReadablePartFromText hrPartTxt of
@@ -374,10 +390,14 @@ bech32SignatureToHex
   => Text
   -> m BS.ByteString
 bech32SignatureToHex sig =
-  -- TODO, is this the type I want to deserialize to?
-  case deserialiseFromBech32 (AsSigningKey AsStakeKey) sig of
-    Left bech32Err -> throwError $ (_Bech32DecodeError #) bech32Err 
-    Right x -> pure $ serialiseToRawBytesHex x
+  case Bech32.decodeLenient sig of
+    Left err -> throwError (_Bech32DecodingError # err)
+    Right (_, dataPart) ->
+      case Bech32.dataPartToBytes dataPart of
+        Nothing    -> throwError $ (_Bech32DataPartToBytesError # sig) 
+        Just bytes -> do
+          let base16 = BA.convertToBase BA.Base16
+          pure $ base16 bytes
 
 readVotePublicKey
   :: ( MonadIO m

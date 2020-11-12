@@ -23,6 +23,7 @@ import Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import Cardano.Api.TextView (TextViewError)
 
 import Extern 
+import CLI.Interop (stripTrailingNewlines)
 
 data Config
   = Config { cfgPaymentAddress    :: Address Shelley
@@ -67,7 +68,7 @@ mkConfig
   -> ExceptT ConfigError IO Config
 mkConfig (Opts stateDir pskf addr vpkf sskf networkId) = do
   stkSign <- readStakeSigningKey (SigningKeyFile sskf)
-  votepk  <- readVotePublicKey vpkf
+  votepk  <- stripTrailingNewlines <$> readVotePublicKey vpkf
   paySign <- readPaymentSigningKey (SigningKeyFile pskf)
 
   pure $ Config addr stkSign paySign votepk networkId

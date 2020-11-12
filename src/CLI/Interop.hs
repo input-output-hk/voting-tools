@@ -1,6 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
 
-module CLI.Interop (withTmpFile, withTextAsFile) where
+module CLI.Interop (withTmpFile, withTextAsFile, stripTrailingNewlines) where
 
+import Data.Text (Text)
+import qualified Data.Text as T
 import System.IO as Sys
 import Control.Exception.Safe as E
 import System.Directory as Dir
@@ -29,4 +32,8 @@ withTextAsFile :: String -> ContT r IO FilePath
 withTextAsFile content = do
   (filePath, handle) <- withTmpFile
   liftIO $ Sys.hPutStr handle content
+  liftIO $ Sys.hClose handle
   pure filePath
+
+stripTrailingNewlines :: Text -> Text
+stripTrailingNewlines = T.intercalate "\n" . filter (not . T.null) . T.lines
