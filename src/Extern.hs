@@ -10,6 +10,7 @@
 
 module Extern where
 
+import Data.String (fromString)
 import Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, left, newExceptT, handleIOExceptT)
 import Control.Monad.Except (ExceptT, throwError, MonadError, runExceptT)
 import qualified Data.ByteArray.Encoding as BA
@@ -357,10 +358,12 @@ generateVoteMetadata stkSign stkVerify votepk = do
   sig           <- jcliSign jcliStkSign votepkBytes
   liftIO $ putStrLn $ "key sign done..." <> show sig
   hexSig        <- decodeBytesUtf8 =<< bech32SignatureToHex sig
+  liftIO $ putStrLn $ "decode done" <> show hexSig
   stkVerifyHex  <- decodeBytesUtf8 $ serialiseToRawBytesHex stkVerify
 
+  liftIO $ putStrLn $ show "new prefixing... | " <> show stkVerifyHex <> " | " <> show sig
   x <- newPrefix "ed25519_pk" stkVerifyHex
-  y <- newPrefix "ed25519_sig" sig
+  y <- newPrefix "ed25519_sig" hexSig
   liftIO $ putStrLn $ show "VALIDATING..."
   jcliValidateSig x y votepkBytes
   liftIO $ putStrLn $ show "VALID"
@@ -374,14 +377,14 @@ generateVoteMetadata stkSign stkVerify votepk = do
                         )
                        ]
 
-newPrefix hrPartTxt x = do
+newPrefix hrPartTxt x =
   case Bech32.humanReadablePartFromText hrPartTxt of
     Left bech32HrPartErr -> throwError $ (_Bech32HumanReadablePartError #) bech32HrPartErr
-    Right hrPart ->
-      case Bech32.decodeLenient x of
-        Left bech32DecodeErr -> throwError $ (_Bech32DecodingError #) bech32DecodeErr
-        Right (_, dataPart) -> pure $ Bech32.encodeLenient hrPart dataPart
-
+    Right hrPart -> do
+      let fromBase16 = BA.convertFromBase BA.Base16 . T.encodeUtf8
+      case Bech32.dataPartFromBytes <$> fromBase16 x of
+        Left err       -> throwError (_Bech32DeserialiseFromBytesError # fromString err)
+        Right dataPart -> pure $ Bech32.encodeLenient hrPart dataPart
 
 bech32SignatureToHex
   :: ( MonadError e m
