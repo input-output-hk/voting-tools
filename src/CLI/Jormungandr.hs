@@ -67,9 +67,9 @@ jcliKeyFromBytes
      )
   => ByteString
   -> m Text
-jcliKeyFromBytes bytes = do
-  key <- decodeBytesUtf8 bytes
-  jcliCmd [ "key", "from-bytes", "--type", "ed25519" ] (fromString $ T.unpack key)
+jcliKeyFromBytes bytes = liftIO . (`runContT` pure) $ do
+  publicKeyFile <- T.pack <$> withTextAsFile (BS.unpack bytes)
+  jcliCmd [ "key", "from-bytes", "--type", "ed25519", publicKeyFile ] mempty
 
 jcliValidateSig :: MonadIO m => Text -> Text -> VotingKeyPublic -> m ()
 jcliValidateSig publicKey sig votePub = liftIO . (`runContT` pure) $ do

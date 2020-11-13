@@ -41,7 +41,7 @@ import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
 import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText, TxMetaBytes), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey(WitnessPaymentKey))
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
-import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet), PaymentKey, makeShelleyKeyWitness, writeFileTextEnvelope, TextEnvelopeDescr, HasTextEnvelope, readTextEnvelopeOfTypeFromFile, deserialiseFromTextEnvelope)
+import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet), PaymentKey, makeShelleyKeyWitness, writeFileTextEnvelope, TextEnvelopeDescr, HasTextEnvelope, readTextEnvelopeOfTypeFromFile, deserialiseFromTextEnvelope, serialiseToBech32)
 import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
 import Cardano.CLI.Environment ( EnvSocketError(..) , readEnvSocketPath)
 import Cardano.Api.LocalChainSync ( getLocalTip )
@@ -210,7 +210,7 @@ data AppError
   | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
   | AppAddressUTxOError !AddressUTxOError
   | AppWriteTxError !(FileError ())
-  deriving Show
+  deriving (Show)
 
 makeClassyPrisms ''AppError
 
@@ -351,32 +351,13 @@ generateVoteMetadata
   -> VotingKeyPublic
   -> m TxMetadata
 generateVoteMetadata stkSign stkVerify votepub = do
-  liftIO $ putStrLn "meta start"
-  -- votepubBytes   <- jcliKeyToBytes votepub
-  -- liftIO $ TIO.putStr votepubBytes
-  liftIO $ putStrLn $ show stkSign
-  liftIO $ putStrLn $ show (serialiseToRawBytesHex stkSign)
-  liftIO $ putStrLn "toBytes done..."
   jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytesHex stkSign) 
-  liftIO $ putStrLn "fromBytes done..."
-  liftIO $ putStrLn $ show jcliStkSign
-  -- jcliStkPublic <- jcliKeyPublic jcliStkSign
-  -- jcliStkPublic <- jcliKeyPublic "ed25519_sk1a7ea75d7u6zc4a6eyl8q7jpgu4v8dkxrzyvrr7ru5szck3f5s7f69hd"
-  liftIO $ putStrLn "key public done..."
-  sig           <- jcliSign jcliStkSign votepub
-  liftIO $ putStrLn $ "key sign done..." <> show sig
-  hexSig        <- bech32SignatureToHex sig
-  liftIO $ putStrLn $ "decode done" <> show hexSig
+  hexSig        <- bech32SignatureToHex =<< jcliSign jcliStkSign votepub
   let stkVerifyHex = serialiseToRawBytes stkVerify
 
-  liftIO $ putStrLn $ show "new prefixing... | " <> show stkVerifyHex <> " | " <> show hexSig
   x <- newPrefix "ed25519_pk" stkVerifyHex
   y <- newPrefix "ed25519_sig" hexSig
-  liftIO $ putStrLn $ show x
-  liftIO $ putStrLn $ show y
-  liftIO $ putStrLn $ show "VALIDATING..."
   jcliValidateSig x y votepub
-  liftIO $ putStrLn $ show "VALID"
 
   pure $ makeTransactionMetadata $ M.fromList [(1, TxMetaMap
                           [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
