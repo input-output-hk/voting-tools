@@ -39,7 +39,7 @@ import Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import Cardano.CLI.Shelley.Run.Key (SomeSigningKey(..))
 import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
-import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey(WitnessPaymentKey))
+import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText, TxMetaBytes), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey(WitnessPaymentKey))
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
 import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet), PaymentKey, makeShelleyKeyWitness, writeFileTextEnvelope, TextEnvelopeDescr, HasTextEnvelope, readTextEnvelopeOfTypeFromFile, deserialiseFromTextEnvelope)
 import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
@@ -362,22 +362,26 @@ generateVoteMetadata stkSign stkVerify votepk = do
   liftIO $ putStrLn "key public done..."
   sig           <- jcliSign jcliStkSign votepkBytes
   liftIO $ putStrLn $ "key sign done..." <> show sig
-  hexSig        <- decodeBytesUtf8 =<< bech32SignatureToHex sig
+  hexSig        <- bech32SignatureToHex sig
   liftIO $ putStrLn $ "decode done" <> show hexSig
-  stkVerifyHex  <- decodeBytesUtf8 $ serialiseToRawBytesHex stkVerify
+  stkVerifyHex <- either error pure $ Base16.decode $ serialiseToRawBytesHex stkVerify
 
-  liftIO $ putStrLn $ show "new prefixing... | " <> show stkVerifyHex <> " | " <> show sig
+  liftIO $ putStrLn $ show "new prefixing... | " <> show stkVerifyHex <> " | " <> show hexSig
   x <- newPrefix "ed25519_pk" stkVerifyHex
   y <- newPrefix "ed25519_sig" hexSig
+  liftIO $ putStrLn $ show x
+  liftIO $ putStrLn $ show y
   liftIO $ putStrLn $ show "VALIDATING..."
   jcliValidateSig x y votepkBytes
   liftIO $ putStrLn $ show "VALID"
-  
+
+  votepkBytesHex <- either error pure . Base16.decode . T.encodeUtf8 $ votepkBytes
+
   pure $ makeTransactionMetadata $ M.fromList [(1, TxMetaMap
                           [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
-                          , ( TxMetaText "voting_key" , TxMetaText $ "0x" <> votepkBytes   )
-                          , ( TxMetaText "stake_pub"  , TxMetaText $ "0x" <> stkVerifyHex  )
-                          , ( TxMetaText "signature"  , TxMetaText $ "0x" <> hexSig        )
+                          , ( TxMetaText "voting_key" , TxMetaBytes $ votepkBytesHex )
+                          , ( TxMetaText "stake_pub"  , TxMetaBytes $ stkVerifyHex   )
+                          , ( TxMetaText "signature"  , TxMetaBytes $ hexSig         )
                           ]
                         )
                        ]
@@ -386,10 +390,7 @@ newPrefix hrPartTxt x =
   case Bech32.humanReadablePartFromText hrPartTxt of
     Left bech32HrPartErr -> throwError $ (_Bech32HumanReadablePartError #) bech32HrPartErr
     Right hrPart -> do
-      let fromBase16 = BA.convertFromBase BA.Base16 . T.encodeUtf8
-      case Bech32.dataPartFromBytes <$> fromBase16 x of
-        Left err       -> throwError (_Bech32DeserialiseFromBytesError # fromString err)
-        Right dataPart -> pure $ Bech32.encodeLenient hrPart dataPart
+      pure $ Bech32.encodeLenient hrPart (Bech32.dataPartFromBytes x)
 
 bech32SignatureToHex
   :: ( MonadError e m
@@ -403,9 +404,7 @@ bech32SignatureToHex sig =
     Right (_, dataPart) ->
       case Bech32.dataPartToBytes dataPart of
         Nothing    -> throwError $ (_Bech32DataPartToBytesError # sig) 
-        Just bytes -> do
-          let base16 = BA.convertToBase BA.Base16
-          pure $ base16 bytes
+        Just bytes -> pure bytes
 
 readVotePublicKey
   :: ( MonadIO m
