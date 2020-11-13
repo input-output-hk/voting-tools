@@ -62,7 +62,10 @@ import           Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQu
 import qualified Cardano.Crypto.Hash.Class as Crypto
 
 import CLI.Jormungandr
+import CLI.Interop (stripTrailingNewlines)
 import Encoding
+import Cardano.API.Voting (VotingKeyPublic, AsType(AsVotingKeyPublic))
+import Cardano.API.Voting as Voting
 
 import Turtle (ExitCode(ExitSuccess, ExitFailure), Shell, Line, procStrictWithErr, textToLines, select, inproc, shell, stdin)
 
@@ -248,7 +251,7 @@ all
   -> Address Shelley
   -> SigningKey StakeKey 
   -> SigningKey PaymentKey
-  -> Text
+  -> VotingKeyPublic 
   -> m (Tx Shelley)
 all protocol network addr stkSign psk votepk = do
   SocketPath sockPath <- liftExceptT (_EnvSocketError #) $ readEnvSocketPath
@@ -265,7 +268,7 @@ all protocol network addr stkSign psk votepk = do
     let stkVerify = getVerificationKey stkSign
     
     liftIO $ putStrLn $ "Before meta"
-    meta      <- generateVoteMetadata stkSign stkVerify votepk
+    meta <- generateVoteMetadata stkSign stkVerify votepk
     liftIO $ putStrLn $ show meta
 
     let
@@ -345,12 +348,12 @@ generateVoteMetadata
      )
   => SigningKey StakeKey
   -> VerificationKey StakeKey
-  -> Text
+  -> VotingKeyPublic
   -> m TxMetadata
-generateVoteMetadata stkSign stkVerify votepk = do
+generateVoteMetadata stkSign stkVerify votepub = do
   liftIO $ putStrLn "meta start"
-  votepkBytes   <- jcliKeyToBytes votepk
-  liftIO $ TIO.putStr votepkBytes
+  -- votepubBytes   <- jcliKeyToBytes votepub
+  -- liftIO $ TIO.putStr votepubBytes
   liftIO $ putStrLn $ show stkSign
   liftIO $ putStrLn $ show (serialiseToRawBytesHex stkSign)
   liftIO $ putStrLn "toBytes done..."
@@ -360,11 +363,11 @@ generateVoteMetadata stkSign stkVerify votepk = do
   -- jcliStkPublic <- jcliKeyPublic jcliStkSign
   -- jcliStkPublic <- jcliKeyPublic "ed25519_sk1a7ea75d7u6zc4a6eyl8q7jpgu4v8dkxrzyvrr7ru5szck3f5s7f69hd"
   liftIO $ putStrLn "key public done..."
-  sig           <- jcliSign jcliStkSign votepkBytes
+  sig           <- jcliSign jcliStkSign votepub
   liftIO $ putStrLn $ "key sign done..." <> show sig
   hexSig        <- bech32SignatureToHex sig
   liftIO $ putStrLn $ "decode done" <> show hexSig
-  stkVerifyHex <- either error pure $ Base16.decode $ serialiseToRawBytesHex stkVerify
+  let stkVerifyHex = serialiseToRawBytes stkVerify
 
   liftIO $ putStrLn $ show "new prefixing... | " <> show stkVerifyHex <> " | " <> show hexSig
   x <- newPrefix "ed25519_pk" stkVerifyHex
@@ -372,16 +375,14 @@ generateVoteMetadata stkSign stkVerify votepk = do
   liftIO $ putStrLn $ show x
   liftIO $ putStrLn $ show y
   liftIO $ putStrLn $ show "VALIDATING..."
-  jcliValidateSig x y votepkBytes
+  jcliValidateSig x y votepub
   liftIO $ putStrLn $ show "VALID"
-
-  votepkBytesHex <- either error pure . Base16.decode . T.encodeUtf8 $ votepkBytes
 
   pure $ makeTransactionMetadata $ M.fromList [(1, TxMetaMap
                           [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
-                          , ( TxMetaText "voting_key" , TxMetaBytes $ votepkBytesHex )
-                          , ( TxMetaText "stake_pub"  , TxMetaBytes $ stkVerifyHex   )
-                          , ( TxMetaText "signature"  , TxMetaBytes $ hexSig         )
+                          , ( TxMetaText "voting_key" , TxMetaBytes $ serialiseToRawBytes votepub )
+                          , ( TxMetaText "stake_pub"  , TxMetaBytes $ stkVerifyHex                )
+                          , ( TxMetaText "signature"  , TxMetaBytes $ hexSig                      )
                           ]
                         )
                        ]
@@ -410,12 +411,15 @@ readVotePublicKey
   :: ( MonadIO m
      , MonadError e m
      , AsFileError e d
+     , AsBech32DecodeError e
      )
   => FilePath
-  -> m Text
+  -> m VotingKeyPublic
 readVotePublicKey path = do
   result <- liftIO . try $ TIO.readFile path
-  either (\e -> throwError . (_FileIOError #) $ (path, e)) pure result
+  raw    <- either (\e -> throwError . (_FileIOError #) $ (path, e)) pure result
+  let publicKeyBech32 = stripTrailingNewlines raw
+  either (throwError . (_Bech32DecodeError #)) pure $ Voting.deserialiseFromBech32 AsVotingKeyPublic publicKeyBech32
 
 readStakeSigningKey
   :: ( MonadIO m

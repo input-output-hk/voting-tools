@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module CLI.Jormungandr where
 
@@ -8,6 +9,7 @@ import Data.Text as T
 import Data.Text.Encoding as T
 import Data.Text.IO as TIO
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BS
 import Turtle (ExitCode(ExitSuccess, ExitFailure), Shell, Line, procStrictWithErr, textToLines, select, shell, fromString)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Cont (runContT)
@@ -15,6 +17,9 @@ import Control.Monad.Except (MonadError)
 
 import CLI.Interop (withTextAsFile, stripTrailingNewlines)
 import Encoding
+
+import Cardano.API
+import Cardano.API.Voting (VotingKeyPublic, AsType(AsVotingKeyPublic))
 
 -- TODO Proper Reified errors for jclicommands, "ShellError [argv] exitcode"
 
@@ -29,10 +34,10 @@ jcliCmd args stdIn = do
       <> "stderr was: " <> T.unpack stdErr <> "\n"
       <> "stdout was: " <> T.unpack stdOut
 
-jcliSign :: MonadIO m => Text -> Text -> m Text
-jcliSign stake_sk vote_pk_bytes = liftIO . (`runContT` pure) $ do
+jcliSign :: MonadIO m => Text -> VotingKeyPublic -> m Text
+jcliSign stake_sk votePub = liftIO . (`runContT` pure) $ do
   skFile     <- withTextAsFile (T.unpack stake_sk)
-  votePkFile <- withTextAsFile (T.unpack vote_pk_bytes)
+  votePkFile <- withTextAsFile (BS.unpack $ serialiseToRawBytesHex votePub)
   jcliCmd ["key", "sign", "--secret-key", T.pack skFile, T.pack votePkFile] mempty
 
 jcliKeyAddress networkId key prefix = do
@@ -66,10 +71,10 @@ jcliKeyFromBytes bytes = do
   key <- decodeBytesUtf8 bytes
   jcliCmd [ "key", "from-bytes", "--type", "ed25519" ] (fromString $ T.unpack key)
 
-jcliValidateSig :: MonadIO m => Text -> Text -> Text -> m ()
-jcliValidateSig publicKey sig dat = liftIO . (`runContT` pure) $ do
+jcliValidateSig :: MonadIO m => Text -> Text -> VotingKeyPublic -> m ()
+jcliValidateSig publicKey sig votePub = liftIO . (`runContT` pure) $ do
   publicKeyFile <- T.pack <$> withTextAsFile (T.unpack publicKey)
   sigFile       <- T.pack <$> withTextAsFile (T.unpack sig)
-  datFile       <- T.pack <$> withTextAsFile (T.unpack dat)
+  datFile       <- T.pack <$> withTextAsFile (BS.unpack $ serialiseToRawBytesHex votePub)
   void $ jcliCmd [ "key", "verify", "--public-key", publicKeyFile, "--signature", sigFile, datFile ] mempty
 

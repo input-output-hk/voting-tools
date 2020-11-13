@@ -15,7 +15,7 @@ import Options.Applicative
 
 import Cardano.CLI.Environment ( EnvSocketError, readEnvSocketPath)
 import qualified Cardano.API as Api
-import Cardano.API (Address, SigningKey, StakeKey, Witness, NetworkId, FileError, PaymentKey)
+import Cardano.API (Address, SigningKey, StakeKey, Witness, NetworkId, FileError, PaymentKey, Bech32DecodeError)
 import Cardano.Api.Typed (Shelley)
 import Cardano.CLI.Shelley.Key (InputDecodeError)
 import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
@@ -25,11 +25,13 @@ import Cardano.Api.TextView (TextViewError)
 import Extern 
 import CLI.Interop (stripTrailingNewlines)
 
+import Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32)
+
 data Config
   = Config { cfgPaymentAddress    :: Address Shelley
            , cfgStakeSigningKey   :: SigningKey StakeKey
            , cfgPaymentSigningKey :: SigningKey PaymentKey
-           , cfgVotePublicKey     :: Text
+           , cfgVotePublicKey     :: VotingKeyPublic
            , cfgNetworkId         :: NetworkId
            }
   deriving (Show)
@@ -50,6 +52,7 @@ data ConfigError
   = ConfigFailedToReadFile (Api.FileError FileErrors)
   | ConfigNotAStakeSigningKey NotStakeSigningKeyError
   | ConfigNotAPaymentSigningKey NotPaymentSigningKeyError
+  | ConfigFailedToDecodeBech32 Bech32DecodeError
   deriving (Show)
 
 makePrisms ''ConfigError
@@ -62,13 +65,16 @@ instance AsNotStakeSigningKeyError ConfigError where
 
 instance AsNotPaymentSigningKeyError ConfigError where
   _NotPaymentSigningKeyError = _ConfigNotAPaymentSigningKey
+
+instance AsBech32DecodeError ConfigError where
+  _Bech32DecodeError = _ConfigFailedToDecodeBech32
   
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
 mkConfig (Opts stateDir pskf addr vpkf sskf networkId) = do
   stkSign <- readStakeSigningKey (SigningKeyFile sskf)
-  votepk  <- stripTrailingNewlines <$> readVotePublicKey vpkf
+  votepk  <- readVotePublicKey vpkf
   paySign <- readPaymentSigningKey (SigningKeyFile pskf)
 
   pure $ Config addr stkSign paySign votepk networkId

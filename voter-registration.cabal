@@ -21,6 +21,7 @@ library
                      , Extern
                      , Encoding
                      , Config
+                     , Cardano.API.Voting
 
   build-depends:       base
                      , base16-bytestring

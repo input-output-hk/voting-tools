@@ -28,6 +28,7 @@ main = do
   case eCfg of
     Left err  -> putStrLn $ show err
     Right (Config paymentAddr signStk signPay keyVotePublic networkId) -> do
+      putStrLn $ "Vote public key: " <> show keyVotePublic
       eResult <- runExceptT $ do
         tx <- Extern.all (CardanoProtocol $ EpochSlots 21600) networkId paymentAddr signStk signPay keyVotePublic :: ExceptT Extern.AppError IO (Tx Shelley)
         Extern.writeFileTextEnvelope' "./meta.txsigned" Nothing tx
