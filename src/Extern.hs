@@ -40,7 +40,7 @@ import Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import Cardano.CLI.Shelley.Run.Key (SomeSigningKey(..))
 import Cardano.CLI.Shelley.Run.Query (ShelleyQueryCmdError)
 import Cardano.CLI.Types (SigningKeyFile (..), VerificationKeyFile (..), SocketPath(SocketPath), QueryFilter(NoFilter, FilterByAddress))
-import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText, TxMetaBytes), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey(WitnessPaymentKey))
+import Cardano.Api.Typed (FileError(FileError, FileIOError), LocalNodeConnectInfo(..), FromSomeType(FromSomeType), AsType(..), Key, SigningKey, NetworkId, VerificationKey, StandardShelley, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley, TxMetadataValue(TxMetaMap, TxMetaNumber, TxMetaText, TxMetaBytes), txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxOut(TxOut), TxId(TxId), TxIx(TxIx), NetworkMagic(NetworkMagic), ShelleyWitnessSigningKey(WitnessPaymentKey), TTL, TxBody)
 import Cardano.Api.Protocol (withlocalNodeConnectInfo, Protocol(..))
 import Cardano.API (queryNodeLocalState, getVerificationKey, StakeKey, serialiseToRawBytes, serialiseToRawBytesHex, deserialiseFromBech32, TxMetadata, Bech32DecodeError, makeTransactionMetadata, makeShelleyTransaction, txExtraContentEmpty, Lovelace(Lovelace), TxIn(TxIn), estimateTransactionFee, makeSignedTransaction, Witness, Tx, deserialiseAddress, TextEnvelopeError, readFileTextEnvelope, NetworkMagic, NetworkId(Testnet, Mainnet), PaymentKey, makeShelleyKeyWitness, writeFileTextEnvelope, TextEnvelopeDescr, HasTextEnvelope, readTextEnvelopeOfTypeFromFile, deserialiseFromTextEnvelope, serialiseToBech32, SerialiseAsBech32)
 import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
@@ -124,7 +124,7 @@ instance AsShelleyQueryCmdLocalStateQueryError AppError where
 
 instance AsDecodeError AppError where
   __DecodeError = _AppDecodeError
-  
+
 instance AsBech32DecodeError AppError where
   _Bech32DecodeError = _AppBech32DecodeError
 
@@ -134,79 +134,87 @@ instance AsBech32HumanReadablePartError AppError where
 instance AsAddressUTxOError AppError where
   _AddressUTxOError = _AppAddressUTxOError
 
-all
+findUnspentTx
   :: ( MonadIO m
      , MonadError e m
-     , MonadFail m
-     , AsEnvSocketError e
      , AsShelleyQueryCmdLocalStateQueryError e
-     , AsDecodeError e
-     , AsBech32DecodeError e
-     , AsBech32HumanReadablePartError e
      , AsAddressUTxOError e
      )
-  => Protocol
-  -> NetworkId
+  => LocalNodeConnectInfo mode block
   -> Address Shelley
-  -> SigningKey StakeKey 
-  -> SigningKey PaymentKey
-  -> VotingKeyPublic 
-  -> m (Tx Shelley)
-all protocol network addr stkSign psk votepk = do
-  SocketPath sockPath <- readEnvSocketPath
-  liftIO $ putStrLn $ show sockPath
-  withlocalNodeConnectInfo protocol network sockPath $ \connectInfo -> do
-    utxos   <- queryUTxOFromLocalState (FilterByAddress $ Set.singleton addr) connectInfo
-    (txins, (Lovelace txOutValue)) <- case M.assocs $ Ledger.unUTxO utxos of
-      []                                             -> throwError $ (_AddressHasNoUTxOs # addr)
-      (txin, (Ledger.TxOut _ (Ledger.Coin value))):_ -> pure $ ([fromShelleyTxIn txin], (Lovelace value))
-    let txoutsNoFee = [TxOut addr (Lovelace txOutValue)]
-      
-    let stkVerify = getVerificationKey stkSign
-    
-    liftIO $ putStrLn $ "Before meta"
-    meta <- generateVoteMetadata stkSign stkVerify votepk
-    liftIO $ putStrLn $ show meta
+  -> m ([TxIn], Lovelace)
+findUnspentTx connectInfo addr = do
+  utxos <- queryUTxOFromLocalState (FilterByAddress $ Set.singleton addr) connectInfo
+  case M.assocs $ Ledger.unUTxO utxos of
+    [] ->
+      throwError (_AddressHasNoUTxOs # addr)
+    (txin, (Ledger.TxOut _ (Ledger.Coin value))):_ ->
+      pure ([fromShelleyTxIn txin], Lovelace value)
 
-    tip     <- liftIO $ getLocalTip connectInfo
-    let
-      ttl    = fromWithOrigin minBound $ getTipSlotNo tip
-      txBody = makeShelleyTransaction
-                 txExtraContentEmpty {
-                   txCertificates   = [],
-                   txWithdrawals    = [],
-                   txMetadata       = Just meta,
-                   txUpdateProposal = Nothing
-                 }
-                 ttl
-                 (toEnum 0) 
-                 txins
-                 txoutsNoFee
-      tx = makeSignedTransaction [] txBody
+voteTx
+  :: Address Shelley
+  -> ([TxIn], Lovelace)
+  -> TTL
+  -> Lovelace
+  -> TxMetadata
+  -> TxBody Shelley
+voteTx addr (txins, (Lovelace unspentAda)) ttl (Lovelace fee) meta =
+ let
+   txouts = [TxOut addr (Lovelace $ unspentAda - fee)]
+ in
+   makeShelleyTransaction txExtraContentEmpty {
+                            txCertificates   = [],
+                            txWithdrawals    = [],
+                            txMetadata       = Just meta,
+                            txUpdateProposal = Nothing
+                          }
+                          ttl
+                          (Lovelace fee)
+                          txins
+                          txouts
 
-    -- TODO Bundle this into one, estimateTransactionFee :: ConnectInfo -> Tx -> ...
-    pparams <- queryPParamsFromLocalState connectInfo
-    let
-      (Lovelace fee) = estimateTransactionFee (localNodeNetworkId connectInfo) (Shelley._minfeeB pparams) (Shelley._minfeeB pparams) tx (length txins) (length txoutsNoFee) 0 0
-      txoutsWithFee = [TxOut addr (Lovelace $ txOutValue - fee)]
+signTx :: SigningKey PaymentKey -> TxBody Shelley -> Tx Shelley
+signTx psk txbody =
+  let
+    witness = makeShelleyKeyWitness txbody (WitnessPaymentKey psk)
+  in
+    makeSignedTransaction [witness] txbody
 
-      txBodyWithFee = makeShelleyTransaction
-                        txExtraContentEmpty {
-                          txCertificates   = [],
-                          txWithdrawals    = [],
-                          txMetadata       = Just meta,
-                          txUpdateProposal = Nothing
-                        }
-                        (ttl + 5000)
-                        (Lovelace fee) 
-                        txins
-                        txoutsWithFee
-      witness   = makeShelleyKeyWitness txBodyWithFee (WitnessPaymentKey psk)
-      txWithFee = makeSignedTransaction [witness] txBodyWithFee
+estimateVoteTxFee
+  :: NetworkId
+  -> PParams StandardShelley
+  -> TTL
+  -> [TxIn]
+  -> Address Shelley
+  -> Lovelace
+  -> TxMetadata
+  -> Lovelace
+estimateVoteTxFee networkId pparams ttl txins addr txBaseValue meta =
+  let
+    txoutsNoFee = [TxOut addr txBaseValue]
+    txBody = makeShelleyTransaction
+               txExtraContentEmpty {
+                 txCertificates   = [],
+                 txWithdrawals    = [],
+                 txMetadata       = Just meta,
+                 txUpdateProposal = Nothing
+               }
+               ttl
+               (toEnum 0)
+               txins
+               txoutsNoFee
+    tx = makeSignedTransaction [] txBody
+  in
+    estimateTransactionFee
+      networkId
+      (Shelley._minfeeB pparams)
+      (Shelley._minfeeA pparams)
+      tx
+      (length txins)
+      (length txoutsNoFee)
+      0
+      0
 
-    pure txWithFee
-
-  --   pure utxos
 
 generateVoteMetadata
   :: ( MonadIO m
@@ -216,13 +224,12 @@ generateVoteMetadata
      , AsBech32HumanReadablePartError e
      )
   => SigningKey StakeKey
-  -> VerificationKey StakeKey
   -> VotingKeyPublic
   -> m TxMetadata
-generateVoteMetadata stkSign stkVerify votepub = do
-  jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytesHex stkSign) 
+generateVoteMetadata stkSign votepub = do
+  jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytesHex stkSign)
   hexSig        <- bech32SignatureToHex =<< jcliSign jcliStkSign votepub
-  let stkVerifyHex = serialiseToRawBytes stkVerify
+  let stkVerifyHex = serialiseToRawBytes (getVerificationKey stkSign)
 
   x <- newPrefix "ed25519_pk" stkVerifyHex
   y <- newPrefix "ed25519_sig" hexSig
@@ -254,7 +261,7 @@ bech32SignatureToHex sig =
     Left err -> throwError (_Bech32DecodingError # err)
     Right (_, dataPart) ->
       case Bech32.dataPartToBytes dataPart of
-        Nothing    -> throwError $ (_Bech32DataPartToBytesError # sig) 
+        Nothing    -> throwError $ (_Bech32DataPartToBytesError # sig)
         Just bytes -> pure bytes
 
 readVotePublicKey
@@ -309,4 +316,3 @@ rTest fp = do
     Right envelope -> case deserialiseFromTextEnvelope AsShelleyTx envelope of
       Left err -> error $ show err
       Right tx -> pure tx
-
