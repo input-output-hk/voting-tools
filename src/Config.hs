@@ -23,6 +23,7 @@ import Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import Cardano.Api.TextView (TextViewError)
 
 import Extern 
+import Cardano.API.Misc
 import CLI.Interop (stripTrailingNewlines)
 
 import Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32)
@@ -50,8 +51,6 @@ instance AsTextViewError FileErrors where
 
 data ConfigError
   = ConfigFailedToReadFile (Api.FileError FileErrors)
-  | ConfigNotAStakeSigningKey NotStakeSigningKeyError
-  | ConfigNotAPaymentSigningKey NotPaymentSigningKeyError
   | ConfigFailedToDecodeBech32 Bech32DecodeError
   deriving (Show)
 
@@ -60,12 +59,6 @@ makePrisms ''ConfigError
 instance AsFileError ConfigError FileErrors where
   __FileError = _ConfigFailedToReadFile
 
-instance AsNotStakeSigningKeyError ConfigError where
-  _NotStakeSigningKeyError = _ConfigNotAStakeSigningKey
-
-instance AsNotPaymentSigningKeyError ConfigError where
-  _NotPaymentSigningKeyError = _ConfigNotAPaymentSigningKey
-
 instance AsBech32DecodeError ConfigError where
   _Bech32DecodeError = _ConfigFailedToDecodeBech32
   
@@ -73,9 +66,9 @@ mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
 mkConfig (Opts stateDir pskf addr vpkf sskf networkId) = do
-  stkSign <- readStakeSigningKey (SigningKeyFile sskf)
+  stkSign <- readSigningKeyFile Api.AsStakeKey   (SigningKeyFile sskf)
+  paySign <- readSigningKeyFile Api.AsPaymentKey (SigningKeyFile pskf)
   votepk  <- readVotePublicKey vpkf
-  paySign <- readPaymentSigningKey (SigningKeyFile pskf)
 
   pure $ Config addr stkSign paySign votepk networkId
 
