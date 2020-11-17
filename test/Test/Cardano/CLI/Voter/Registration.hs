@@ -38,7 +38,7 @@ unitGenerateVoteMetadata = do
     votePub   <- either (error . show) pure $
       Voting.deserialiseFromBech32 AsVotingKeyPublic "ed25519e_sk1cpxudluugmp8wgl2jrl0hcatlgmgzhwte8cguhqjmq642gzytf3mj05q5f8etx8pv47qadxvsgxjj2pygtf4xglu3emspqt95drxpwg9wqqr4"   
 
-    generateVoteMetadata stkSign stkVerify votePub 
+    generateVoteMetadata stkSign votePub 
 
   case eMetadata of
     Left err   -> assertFailure $ show err

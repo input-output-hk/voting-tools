@@ -17,7 +17,9 @@ import qualified Data.ByteArray.Encoding as BA
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Set (Set)
+import Data.Semigroup (Sum(Sum), getSum)
 import Control.Applicative ((<|>))
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import qualified Data.ByteString as BS
@@ -33,6 +35,7 @@ import qualified Data.ByteString.Char8 as BSC
 import qualified Options.Applicative as Opt
 import qualified Data.ByteString.Base16 as Base16
 
+import qualified Cardano.Binary as CBOR
 import Cardano.API.Misc
 import Cardano.Api.TextView (TextViewError, TextViewType(TextViewType))
 import qualified Codec.Binary.Bech32 as Bech32
@@ -76,7 +79,8 @@ import Turtle (ExitCode(ExitSuccess, ExitFailure), Shell, Line, procStrictWithEr
 data Bech32HumanReadablePartError = Bech32HumanReadablePartError !(Bech32.HumanReadablePartError)
   deriving Show
 
-data AddressUTxOError = AddressHasNoUTxOs (Address Shelley)
+-- | Address doesn't have enough UTxOs to pay the requested amount.
+data AddressUTxOError = AddressNotEnoughUTxOs (Address Shelley) Lovelace
   deriving Show
 
 makeClassyPrisms ''Bech32DecodeError
@@ -84,15 +88,6 @@ makeClassyPrisms ''Bech32HumanReadablePartError
 makeClassyPrisms ''AddressUTxOError
 makeClassyPrisms ''TextViewError
 
-liftExceptT :: (MonadError e' m, MonadIO m) => (e -> e') -> ExceptT e IO a -> m a
-liftExceptT handler action = do
-  result <- liftIO $ runExceptT action
-  case result of
-    Left err -> throwError $ handler err
-    Right x  -> pure x
-
-
--- TODO Rename "LEDGER" to "SHELLEY" to match existing style in cardano-api
 fromShelleyTxIn  :: Ledger.TxIn StandardShelley -> TxIn
 fromShelleyTxIn (Ledger.TxIn txid txix) =
     TxIn (fromShelleyTxId txid) (TxIx (fromIntegral txix))
@@ -212,7 +207,7 @@ estimateVoteTxFee networkId pparams ttl txins addr txBaseValue meta =
       tx
       (length txins)
       (length txoutsNoFee)
-      0
+      1
       0
 
 
