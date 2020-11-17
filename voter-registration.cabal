@@ -63,6 +63,8 @@ executable voter-registration
                      , optparse-applicative
                      , voter-registration
                      , ouroboros-network
+                     , cardano-crypto-class
+                     , cardano-binary
 
                      , containers
                      , cardano-ledger

@@ -129,33 +129,117 @@ instance AsBech32HumanReadablePartError AppError where
 instance AsAddressUTxOError AppError where
   _AddressUTxOError = _AppAddressUTxOError
 
-findUnspentTx
-  :: ( MonadIO m
-     , MonadError e m
-     , AsShelleyQueryCmdLocalStateQueryError e
-     , AsAddressUTxOError e
-     )
-  => LocalNodeConnectInfo mode block
-  -> Address Shelley
-  -> m ([TxIn], Lovelace)
-findUnspentTx connectInfo addr = do
-  utxos <- queryUTxOFromLocalState (FilterByAddress $ Set.singleton addr) connectInfo
-  case M.assocs $ Ledger.unUTxO utxos of
-    [] ->
-      throwError (_AddressHasNoUTxOs # addr)
-    (txin, (Ledger.TxOut _ (Ledger.Coin value))):_ ->
-      pure ([fromShelleyTxIn txin], Lovelace value)
+-- | Transactions that aren't fully spent.
+type UnspentSources = [(TxIn, Lovelace)]
+
+-- | Total amount of unspent value.
+unspentValue :: UnspentSources -> Lovelace
+unspentValue =
+  foldr
+    (\(_, Lovelace unspent) (Lovelace acc) -> Lovelace $ acc + unspent)
+    (Lovelace 0)
+
+-- | All transactions that aren't fully spent.
+unspentSources :: UnspentSources -> [TxIn]
+unspentSources = foldr (\(txin, _) -> (txin:)) mempty
+
+unspentCoveringFees
+  :: Lovelace
+  -- ^ Base fee estimate
+  -> Lovelace 
+  -- ^ Estimated fee per TxIn
+  -> UnspentSources
+  -- ^ Value of UTxO for each TxIn
+  -> (Lovelace, Maybe UnspentSources)
+  -- ^ The first element is the total fee reached. The second element
+  -- is Nothing if UTxOs cannot cover fees. Otherwise, map of TxIns
+  -- used to cover the fees and their respective unspent amounts.
+unspentCoveringFees feeBase feePerTxIn utxos =
+  case takeUntilFeePaid feeBase feePerTxIn utxos of
+    (feeReached, [])   -> (feeReached, Nothing)
+    (feeSatisfied, xs) -> (feeSatisfied, Just xs)
+  
+takeUntilFeePaid :: Lovelace -> Lovelace -> [(a , Lovelace)] -> (Lovelace, [(a , Lovelace)])
+takeUntilFeePaid feeBase (Lovelace feePerTxIn) =
+  let
+    initialFeeTarget = feeBase
+  in
+    go initialFeeTarget (Lovelace 0)
+
+  where
+    go :: Lovelace -> Lovelace -> [(a, Lovelace)] -> (Lovelace, [(a, Lovelace)])
+    go (Lovelace target) (Lovelace acc) xs
+      | acc >= target = (Lovelace target, xs)
+    go target _ []
+      = (target, [])
+    go (Lovelace target) (Lovelace acc) ((a, Lovelace unspent):xs)
+      =
+      let
+        newTarget         = Lovelace $ target + feePerTxIn
+        newAcc            = Lovelace $ acc + unspent
+        (feeReached, txs) = go newTarget newAcc xs
+      in
+        (feeReached, (a, Lovelace unspent):txs)
+
+fromShelleyUTxO :: Ledger.UTxO StandardShelley -> UnspentSources
+fromShelleyUTxO = fmap convert . M.assocs . Ledger.unUTxO
+  where
+    convert :: (Ledger.TxIn StandardShelley, Ledger.TxOut StandardShelley) -> (TxIn, Lovelace)
+    convert (txin, Ledger.TxOut _ (Ledger.Coin value)) = (fromShelleyTxIn txin, Lovelace value)
+
+-- findUnspentTx
+--   :: ( MonadError e m
+--      , AsAddressUTxOError e
+--      )
+--   => Lovelace
+--   -> Lovelace
+--   -> Address Shelley
+--   -> Ledger.UTxO StandardShelley
+--   -> m ([TxIn], Lovelace)
+-- findUnspentTx (Lovelace baseFee) (Lovelace feePerTxIn) addr utxoMap = do
+--   let
+--     utxos = M.assocs $ Ledger.unUTxO utxoMap
+      
+--     convertUTxO :: (Ledger.TxIn StandardShelley, Ledger.TxOut StandardShelley) -> (TxIn, Integer)
+--     convertUTxO (txin, Ledger.TxOut _ (Ledger.Coin value)) = (fromShelleyTxIn txin, value)
+
+--     takeUntilFeePaid :: Integer -> [(a, Integer)] -> [(a, Integer)]
+--     takeUntilFeePaid target xs = go target 0 xs 
+--       where
+--         go :: Integer -> Integer -> [(a, Integer)] -> [(a, Integer)]
+--         go target acc xs
+--           | acc >= target = xs
+--         go _ _ []
+--           = []
+--         go target acc ((txin, unspent):xs)
+--           = (txin, unspent):(go (target + feePerTxIn) (acc + unspent) xs)
+
+--     sumUnspent :: [(a, Integer)] -> ([a], Integer)
+--     sumUnspent = foldr (\(a, b) (as, m) -> (a:as, b + m)) (mempty, 0)
+
+--     unspents =
+--       sumUnspent
+--       $ takeUntilFeePaid baseFee
+--       $ fmap convertUTxO utxos
+
+--   case unspents of
+--     (txins, totalUnspent)
+--       | totalUnspent < (baseFee + feePerTxIn * toInteger (length txins))
+--         -> throwError (_AddressNotEnoughUTxOs # (addr, Lovelace (baseFee + feePerTxIn * toInteger (length txins))))
+--       | otherwise
+--         -> pure $ fmap Lovelace $ unspents
 
 voteTx
   :: Address Shelley
-  -> ([TxIn], Lovelace)
+  -> [TxIn]
+  -> Lovelace
   -> TTL
   -> Lovelace
   -> TxMetadata
   -> TxBody Shelley
-voteTx addr (txins, (Lovelace unspentAda)) ttl (Lovelace fee) meta =
+voteTx addr txins (Lovelace value) ttl (Lovelace fee) meta =
  let
-   txouts = [TxOut addr (Lovelace $ unspentAda - fee)]
+   txouts = [TxOut addr (Lovelace $ value - fee)]
  in
    makeShelleyTransaction txExtraContentEmpty {
                             txCertificates   = [],
@@ -174,6 +258,23 @@ signTx psk txbody =
     witness = makeShelleyKeyWitness txbody (WitnessPaymentKey psk)
   in
     makeSignedTransaction [witness] txbody
+
+feePerTxInEstimate
+  :: NetworkId
+  -> PParams StandardShelley
+  -> TTL
+  -> Address Shelley
+  -> TxMetadata
+  -> Lovelace
+feePerTxInEstimate networkId pparams ttl addr metadata =
+  let
+    estimate txins  = estimateVoteTxFee networkId pparams ttl txins addr (Lovelace 0) metadata
+    txins0          = []
+    txins1          = [TxIn (TxId $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)]
+    (Lovelace fee0) = estimate txins0
+    (Lovelace fee1) = estimate txins1
+  in
+    Lovelace $ fee1 - fee0
 
 estimateVoteTxFee
   :: NetworkId
