@@ -55,17 +55,16 @@ main = do
             networkId  = localNodeNetworkId connectInfo
             slotTip    = fromWithOrigin minBound $ getTipSlotNo tip
             -- Start with a base estimate
-            feeBase    = estimateVoteTxFee networkId pparams slotTip [] addr (Lovelace 0) meta
+            (Lovelace feeBase)    = estimateVoteTxFee networkId pparams slotTip [] addr (Lovelace 0) meta
             -- Estimate the fee per extra txin
             mockTxIn   = TxIn (TxId $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
-            feePerTxIn =
-              estimateVoteTxFee networkId pparams slotTip [mockTxIn] addr (Lovelace 0) meta
-              - feeBase
+            (Lovelace feeWithMockTxIn) = estimateVoteTxFee networkId pparams slotTip [mockTxIn] addr (Lovelace 0) meta
+            feePerTxIn = Lovelace $ feeWithMockTxIn - feeBase
 
           -- Find some unspent funds
           utxos <- queryUTxOFromLocalState (FilterByAddress $ Set.singleton addr) connectInfo
 
-          case unspentCoveringFees feeBase feePerTxIn (fromShelleyUTxO utxos) of
+          case unspentCoveringFees (Lovelace feeBase) feePerTxIn (fromShelleyUTxO utxos) of
             (feeReached, Nothing) -> undefined
             (_, Just unspent)     -> do
               let
