@@ -77,4 +77,3 @@ jcliValidateSig publicKey sig votePub = liftIO . (`runContT` pure) $ do
   sigFile       <- T.pack <$> withTextAsFile (T.unpack sig)
   datFile       <- T.pack <$> withTextAsFile (BS.unpack $ serialiseToRawBytesHex votePub)
   void $ jcliCmd [ "key", "verify", "--public-key", publicKeyFile, "--signature", sigFile, datFile ] mempty
-

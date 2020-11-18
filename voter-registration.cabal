@@ -18,12 +18,15 @@ library
 
   exposed-modules:     CLI.Interop
                      , CLI.Jormungandr
+                     , Cardano.CLI.Voting
+                     , Cardano.CLI.Voting.Error
+                     , Cardano.CLI.Voting.Fee
+                     , Cardano.API.Extended
+                     , Cardano.API.Extended.Raw
                      , Extern
                      , Encoding
                      , Config
                      , Cardano.API.Voting
-                     , Cardano.API.Exposed
-                     , Cardano.API.Misc
 
   build-depends:       base
                      , base16-bytestring
@@ -41,6 +44,8 @@ library
                      , optparse-applicative
                      , attoparsec
                      , cardano-binary
+                     , aeson-pretty
+                     , ouroboros-network-framework
 
                      , transformers-except
                      , cardano-api
@@ -61,6 +66,7 @@ executable voter-registration
                      , cardano-cli
                      , mtl
                      , optparse-applicative
+                     , bytestring
                      , voter-registration
                      , ouroboros-network
                      , cardano-crypto-class

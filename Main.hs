@@ -18,6 +18,7 @@ import Cardano.Api.Protocol (Protocol(CardanoProtocol), withlocalNodeConnectInfo
 import Cardano.API.Misc
 import Cardano.CLI.Types (SocketPath(SocketPath), QueryFilter(FilterByAddress))
 import Cardano.Chain.Slotting (EpochSlots (..))
+import qualified Data.ByteString.Char8 as BSC
 import Cardano.API.Misc (queryPParamsFromLocalState, readEnvSocketPath)
 import Ouroboros.Network.Point (fromWithOrigin)
 import qualified Data.Set as Set
@@ -45,41 +46,15 @@ main = do
           -- (minus a fee).
 
           -- Generate vote payload (vote information is encoded as metadata).
-          meta                   <- generateVoteMetadata stkSign votePub
+          vote <- createVote stkSign votePub
 
-          tip                    <- liftIO $ getLocalTip connectInfo
+          -- Encode the vote as a transaction and sign it
+          vote <- signTx paySign <$> encodeVote connectInfo addr ttl vote
 
-          -- Estimate the fee for the transaction
-          pparams                <- queryPParamsFromLocalState connectInfo
-          let
-            networkId  = localNodeNetworkId connectInfo
-            slotTip    = fromWithOrigin minBound $ getTipSlotNo tip
-            -- Start with a base estimate
-            (Lovelace feeBase)    = estimateVoteTxFee networkId pparams slotTip [] addr (Lovelace 0) meta
-            -- Estimate the fee per extra txin
-            mockTxIn   = TxIn (TxId $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
-            (Lovelace feeWithMockTxIn) = estimateVoteTxFee networkId pparams slotTip [mockTxIn] addr (Lovelace 0) meta
-            feePerTxIn = Lovelace $ feeWithMockTxIn - feeBase
-
-          -- Find some unspent funds
-          utxos <- queryUTxOFromLocalState (FilterByAddress $ Set.singleton addr) connectInfo
-
-          case unspentCoveringFees (Lovelace feeBase) feePerTxIn (fromShelleyUTxO utxos) of
-            (feeReached, Nothing) -> undefined
-            (_, Just unspent)     -> do
-              let
-                txins = unspentSources unspent 
-                value = unspentValue   unspent
-                fee   =
-                  estimateVoteTxFee
-                    networkId pparams slotTip txins addr value meta
-
-              -- Create and sign the vote transaction
-                txBody = voteTx addr txins value (slotTip + ttl) fee meta
-                tx     = signTx paySign txBody
-
-              -- Output our transaction
-              writeFileTextEnvelope' "./meta.txsigned" Nothing tx
+          -- Output our vote transaction
+          liftIO . putStr . prettyVote $ vote
       case eResult of
         Left  (err :: AppError) -> error $ show err
         Right ()                -> pure ()
+
+

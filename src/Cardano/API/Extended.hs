@@ -1,3 +1,6 @@
+-- | Cardano.API.Extended.Raw but I've made the errors "classy". Plus
+-- some utility functions.
+
 {-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GADTs           #-}
@@ -7,19 +10,20 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Cardano.API.Misc ( queryUTxOFromLocalState
-                        , queryPParamsFromLocalState
-                        , Exposed.ShelleyQueryCmdLocalStateQueryError(..)
-                        , AsShelleyQueryCmdLocalStateQueryError(..)
-                        , readSigningKeyFile
-                        , AsFileError(..)
-                        , AsInputDecodeError(..)
-                        , AsEnvSocketError(..)
-                        , Exposed.readerFromAttoParser
-                        , Exposed.parseAddress
-                        , Exposed.pNetworkId
-                        , readEnvSocketPath
-                        ) where
+module Cardano.API.Extended ( queryUTxOFromLocalState
+                            , queryPParamsFromLocalState
+                            , Extended.ShelleyQueryCmdLocalStateQueryError(..)
+                            , AsShelleyQueryCmdLocalStateQueryError(..)
+                            , readSigningKeyFile
+                            , AsFileError(..)
+                            , AsInputDecodeError(..)
+                            , AsEnvSocketError(..)
+                            , Extended.readerFromAttoParser
+                            , Extended.parseAddress
+                            , Extended.pNetworkId
+                            , readEnvSocketPath
+                            , Extended.textEnvelopeToJSON
+                            ) where
 
 import Control.Monad.Trans.Except.Extra (firstExceptT, left, right, newExceptT)
 import qualified Data.Set as Set
@@ -41,10 +45,10 @@ import Shelley.Spec.Ledger.PParams (PParams)
 import qualified Cardano.CLI.Shelley.Key as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
 
-import qualified Cardano.API.Exposed as Exposed
+import qualified Cardano.API.Extended.Raw as Extended
 
 
-makeClassyPrisms ''Exposed.ShelleyQueryCmdLocalStateQueryError
+makeClassyPrisms ''Extended.ShelleyQueryCmdLocalStateQueryError
 makeClassyPrisms ''FileError
 makeClassyPrisms ''InputDecodeError
 makeClassyPrisms ''EnvSocketError
@@ -68,7 +72,7 @@ queryUTxOFromLocalState
   -> m (Ledger.UTxO StandardShelley)
 queryUTxOFromLocalState qf =
   liftExceptTIO (_ShelleyQueryCmdLocalStateQueryError #) .
-    Exposed.queryUTxOFromLocalState qf
+    Extended.queryUTxOFromLocalState qf
 
 queryPParamsFromLocalState
   :: ( MonadIO m
@@ -79,7 +83,7 @@ queryPParamsFromLocalState
   -> m (PParams StandardShelley)
 queryPParamsFromLocalState = 
   liftExceptTIO (_ShelleyQueryCmdLocalStateQueryError #) .
-    Exposed.queryPParamsFromLocalState
+    Extended.queryPParamsFromLocalState
 
 readSigningKeyFile
   :: forall e m fileErr keyrole.

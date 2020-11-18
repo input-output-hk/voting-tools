@@ -22,11 +22,12 @@ import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
 import Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import Cardano.Api.TextView (TextViewError)
 
-import Extern 
-import Cardano.API.Misc
+import Cardano.API.Extended (AsInputDecodeError(_InputDecodeError), AsFileError(__FileError), readSigningKeyFile, readerFromAttoParser, parseAddress, pNetworkId)
 import CLI.Interop (stripTrailingNewlines)
 
-import Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32)
+import Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32, readVotePublicKey)
+import Cardano.CLI.Voting.Error (AsTextViewError(_TextViewError))
+import Encoding (AsBech32DecodeError(_Bech32DecodeError))
 
 data Config
   = Config { cfgPaymentAddress    :: Address Shelley
