@@ -15,11 +15,12 @@ import Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 
 import Cardano.Api.Typed (Shelley, Tx, writeFileTextEnvelope, localNodeNetworkId, Lovelace(Lovelace), TxIn(TxIn), TxId(TxId), TxIx(TxIx))
 import Cardano.Api.Protocol (Protocol(CardanoProtocol), withlocalNodeConnectInfo)
-import Cardano.API.Misc
 import Cardano.CLI.Types (SocketPath(SocketPath), QueryFilter(FilterByAddress))
 import Cardano.Chain.Slotting (EpochSlots (..))
 import qualified Data.ByteString.Char8 as BSC
-import Cardano.API.Misc (queryPParamsFromLocalState, readEnvSocketPath)
+import Cardano.API.Extended (readEnvSocketPath)
+import Cardano.CLI.Voting (createVote, signTx, encodeVote, prettyTx)
+import Cardano.CLI.Voting.Error
 import Ouroboros.Network.Point (fromWithOrigin)
 import qualified Data.Set as Set
 import qualified Cardano.Crypto.Hash.Class as Crypto
@@ -49,10 +50,10 @@ main = do
           vote <- createVote stkSign votePub
 
           -- Encode the vote as a transaction and sign it
-          vote <- signTx paySign <$> encodeVote connectInfo addr ttl vote
+          voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote
 
           -- Output our vote transaction
-          liftIO . putStr . prettyVote $ vote
+          liftIO . putStr . prettyTx $ voteTx
       case eResult of
         Left  (err :: AppError) -> error $ show err
         Right ()                -> pure ()
