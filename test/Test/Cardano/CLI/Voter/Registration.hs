@@ -45,6 +45,7 @@ unitGenerateVoteMetadata = do
     Left err   -> assertFailure $ show err
     Right meta -> meta @?= (makeTransactionMetadata $ M.fromList [(1, TxMetaMap
       [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
-      , ( TxMetaText "voting_key" , TxMetaBytes "\192M\198\255\156F\194w#\234\144\254\251\227\171\250\&6\129]\203\201\240\142\\\DC2\216\&5U DZc\185>\128\162O\149\152\225e|\SO\180\204\130\r)($B\211S#\252\142w\NUL\129e\163F`\185")
+      , ( TxMetaText "signature"  , TxMetaBytes "\145\252\208QQ\244\239\178\ENQ;<\219D\167\a\144\167\201\239\225\179ln\161v\231\216\DC1\SOC{}\204\SOC\133\181\236\167\144\227H\178\&2O\193\189r\192X{\\i\151\253\168\ENQ\205\145\STXe\154.\SO")
       , ( TxMetaText "stake_pub"  , TxMetaBytes "\bPd\136\219\170\US\v)\CAN\229\215\&8^\229\208\234\203\199*~FE.,F;O\ETBj\185\152")
-      , ( TxMetaText "signature"  , TxMetaBytes "\145\252\208QQ\244\239\178\ENQ;<\219D\167\a\144\167\201\239\225\179ln\161v\231\216\DC1\SOC{}\204\SOC\133\181\236\167\144\227H\178\&2O\193\189r\192X{\\i\151\253\168\ENQ\205\145\STXe\154.\SO")])])
+      , ( TxMetaText "voting_key" , TxMetaBytes "\192M\198\255\156F\194w#\234\144\254\251\227\171\250\&6\129]\203\201\240\142\\\DC2\216\&5U DZc\185>\128\162O\149\152\225e|\SO\180\204\130\r)($B\211S#\252\142w\NUL\129e\163F`\185")
+      ])])
