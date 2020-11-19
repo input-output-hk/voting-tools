@@ -81,7 +81,8 @@ import Cardano.CLI.Voting.Error
 
 import Turtle (ExitCode(ExitSuccess, ExitFailure), Shell, Line, procStrictWithErr, textToLines, select, inproc, shell, stdin)
 
-rTest fp = do
+decodeTx :: FilePath -> IO (Tx Shelley)
+decodeTx fp = do
   eEnvelope <- readTextEnvelopeOfTypeFromFile (TextViewType "TxSignedShelley") fp
   case eEnvelope of
     Left err       -> error $ show err

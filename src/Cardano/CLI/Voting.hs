@@ -15,7 +15,7 @@ import Cardano.Api.LocalChainSync ( getLocalTip )
 import Ouroboros.Network.Point (fromWithOrigin)
 import Ouroboros.Network.Block (getTipSlotNo)
 import           Shelley.Spec.Ledger.PParams (PParams)
-import Cardano.Api.Typed (Shelley, txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxMetadataValue(TxMetaMap, TxMetaText, TxMetaBytes), StandardShelley, TxOut(TxOut), ShelleyWitnessSigningKey(WitnessPaymentKey), TxId(TxId), TxIx(TxIx), deterministicSigningKey, deterministicSigningKeySeedSize, PaymentCredential(PaymentCredentialByKey), StakeCredential(StakeCredentialByKey), StakeAddressReference(StakeAddressByValue))
+import Cardano.Api.Typed (Shelley, txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxMetadataValue(TxMetaNumber, TxMetaMap, TxMetaText, TxMetaBytes), StandardShelley, TxOut(TxOut), ShelleyWitnessSigningKey(WitnessPaymentKey), TxId(TxId), TxIx(TxIx), deterministicSigningKey, deterministicSigningKeySeedSize, PaymentCredential(PaymentCredentialByKey), StakeCredential(StakeCredentialByKey), StakeAddressReference(StakeAddressByValue))
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
 import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.Coin as Ledger
@@ -54,21 +54,52 @@ createVote
   -> m Vote
 createVote stkSign votepub = do
   jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytesHex stkSign)
-  hexSig        <- bech32SignatureToHex =<< jcliSign jcliStkSign votepub
   let stkVerifyHex = serialiseToRawBytes (getVerificationKey stkSign)
+
+  let
+    metaRaw :: Map Int (Map Int ByteString)
+    metaRaw = M.fromList [( 61284
+                          , M.fromList [ (1, serialiseToRawBytes votepub)
+                                       , (2, stkVerifyHex)
+                                       ]
+                         )]
+
+    metaRawCBOR :: ByteString
+    metaRawCBOR = CBOR.serialize' metaRaw
+
+  hexSig        <- bech32SignatureToHex =<< jcliSign jcliStkSign metaRawCBOR
 
   x <- newPrefix "ed25519_pk" stkVerifyHex
   y <- newPrefix "ed25519_sig" hexSig
+
   jcliValidateSig x y votepub
 
-  pure $ makeTransactionMetadata $ M.fromList [(1, TxMetaMap
-                          [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
-                          , ( TxMetaText "signature"  , TxMetaBytes $ hexSig                      )
-                          , ( TxMetaText "stake_pub"  , TxMetaBytes $ stkVerifyHex                )
-                          , ( TxMetaText "voting_key" , TxMetaBytes $ serialiseToRawBytes votepub )
-                          ]
-                        )
-                       ]
+  metaRawWithSig 
+
+  CBOR.serialize' $ M.fromList (61284, TxMetaMap
+            [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
+            , (TxMetaNumber 2, TxMetaBytes stkVerifyHex)
+            ])
+
+  -- pure $ makeTransactionMetadata $ M.fromList [(1, TxMetaMap
+  --                         [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
+  --                         , ( TxMetaText "signature"  , TxMetaBytes $ hexSig                      )
+  --                         , ( TxMetaText "stake_pub"  , TxMetaBytes $ stkVerifyHex                )
+  --                         , ( TxMetaText "voting_key" , TxMetaBytes $ serialiseToRawBytes votepub )
+  --                         ]
+  --                       )
+  --                      ]
+  pure
+    $ makeTransactionMetadata
+    $ M.fromList
+        [ (61284, TxMetaMap
+            [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
+            , (TxMetaNumber 2, TxMetaBytes stkVerifyHex)
+            ])
+        , (61285, TxMetaMap
+            [ (TxMetaNumber 1, TxMetaBytes hexSig)
+            ])
+        ]
 
 encodeVote
   :: ( MonadIO m

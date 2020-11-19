@@ -25,7 +25,7 @@ import Cardano.API.Voting (VotingKeyPublic, AsType(AsVotingKeyPublic))
 
 jcliCmd :: MonadIO io => [Text] -> Shell Line -> io Text
 jcliCmd args stdIn = do
-  (exitCode, stdOut, stdErr) <- procStrictWithErr "/nix/store/05vka73lmpbs9fm179812g930ijymi98-jormungandr/bin/jcli" args stdIn
+  (exitCode, stdOut, stdErr) <- procStrictWithErr "jcli" args stdIn
   case exitCode of
     ExitSuccess      -> pure (stripTrailingNewlines stdOut)
     ExitFailure code -> error $
