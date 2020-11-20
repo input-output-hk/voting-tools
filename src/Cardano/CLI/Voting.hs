@@ -13,12 +13,12 @@ import qualified Data.Set as Set
 import Data.String (fromString)
 import qualified Data.ByteString.Base16 as Base16
 
-import Cardano.API (TxMetadata, SigningKey, StakeKey, LocalNodeConnectInfo, Address, TTL, TxBody, Lovelace(Lovelace), TxIn, PaymentKey, Tx, serialiseToRawBytesHex, serialiseToRawBytes, getVerificationKey, makeTransactionMetadata, localNodeNetworkId, NetworkId, Key, AsType(AsPaymentKey, AsStakeKey), VerificationKey, PaymentCredential, StakeCredential, StakeAddressReference, makeShelleyTransaction, txExtraContentEmpty, makeShelleyKeyWitness, makeSignedTransaction, TxIn(TxIn), verificationKeyHash, makeShelleyAddress, estimateTransactionFee)
+import Cardano.API (TxMetadata, SigningKey, StakeKey, LocalNodeConnectInfo, Address, TTL, TxBody, Lovelace(Lovelace), TxIn, PaymentKey, Tx, serialiseToRawBytesHex, serialiseToRawBytes, getVerificationKey, makeTransactionMetadata, localNodeNetworkId, NetworkId, Key, AsType(AsPaymentKey, AsStakeKey), VerificationKey, PaymentCredential, StakeCredential, StakeAddressReference, makeShelleyTransaction, txExtraContentEmpty, makeShelleyKeyWitness, makeSignedTransaction, TxIn(TxIn), verificationKeyHash, makeShelleyAddress, estimateTransactionFee, deserialiseFromRawBytesHex)
 import Cardano.Api.LocalChainSync ( getLocalTip )
 import Ouroboros.Network.Point (fromWithOrigin)
 import Ouroboros.Network.Block (getTipSlotNo)
 import           Shelley.Spec.Ledger.PParams (PParams)
-import Cardano.Api.Typed (Shelley, txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxMetadataValue(TxMetaNumber, TxMetaMap, TxMetaText, TxMetaBytes), StandardShelley, TxOut(TxOut), ShelleyWitnessSigningKey(WitnessPaymentKey), TxId(TxId), TxIx(TxIx), deterministicSigningKey, deterministicSigningKeySeedSize, PaymentCredential(PaymentCredentialByKey), StakeCredential(StakeCredentialByKey), StakeAddressReference(StakeAddressByValue))
+import Cardano.Api.Typed (Shelley, txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxMetadataValue(TxMetaNumber, TxMetaMap, TxMetaText, TxMetaBytes), StandardShelley, TxOut(TxOut), ShelleyWitnessSigningKey(WitnessPaymentKey), TxId(TxId), TxIx(TxIx), deterministicSigningKey, deterministicSigningKeySeedSize, PaymentCredential(PaymentCredentialByKey), StakeCredential(StakeCredentialByKey), StakeAddressReference(StakeAddressByValue), AsType(AsSigningKey))
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
 import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.Coin as Ledger
@@ -34,16 +34,33 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Type (ShowQuery)
 
 import Cardano.API.Extended (textEnvelopeToJSON)
 import CLI.Jormungandr (jcliKeyFromBytes, jcliSign, jcliValidateSig)
-import Cardano.API.Voting (VotingKeyPublic)
+import Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32, AsType(AsVotingKeyPublic))
 import Cardano.API.Extended (AsShelleyQueryCmdLocalStateQueryError, queryPParamsFromLocalState, queryUTxOFromLocalState)
-import Encoding (AsDecodeError, AsBech32DecodeError, bech32SignatureToHex, newPrefix, AsBech32HumanReadablePartError )
+import Encoding (AsDecodeError, AsBech32DecodeError, bech32SignatureToBytes, newPrefix, AsBech32HumanReadablePartError )
 import Cardano.CLI.Voting.Error
 import Cardano.CLI.Voting.Fee
+import Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload, voteMetadata)
 
-type Vote = TxMetadata
+import Data.Word
 
 prettyTx :: Tx Shelley -> String
 prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
+
+harn
+  :: ( MonadIO m
+     , MonadError e m
+     , AsDecodeError e
+     , AsBech32DecodeError e
+     , AsBech32HumanReadablePartError e
+     )
+  => m Vote
+harn = do
+  stkSign   <- maybe (error "Failed to deserialise stake signing key") pure $
+    deserialiseFromRawBytesHex (AsSigningKey AsStakeKey) "efb3df51bee6858af75927ce0f4828e55876d8c3111831f87ca4058b7da58a69"
+  votePub   <- either (error . show) pure $
+    deserialiseFromBech32 AsVotingKeyPublic "ed25519e_sk1cpxudluugmp8wgl2jrl0hcatlgmgzhwte8cguhqjmq642gzytf3mj05q5f8etx8pv47qadxvsgxjj2pygtf4xglu3emspqt95drxpwg9wqqr4"
+
+  createVote stkSign votePub
 
 createVote
   :: ( MonadIO m
@@ -57,37 +74,20 @@ createVote
   -> m Vote
 createVote stkSign votepub = do
   jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytesHex stkSign)
-  let stkVerifyHex = serialiseToRawBytes (getVerificationKey stkSign)
+  let stkVerifyBytes = serialiseToRawBytes (getVerificationKey stkSign)
 
   let
-    metaRaw :: Map Int (Map Int ByteString)
-    metaRaw = M.fromList [( 61284
-                          , M.fromList [ (1, serialiseToRawBytes votepub)
-                                       , (2, stkVerifyHex)
-                                       ]
-                         )]
+    payload = mkVotePayload votepub (getVerificationKey stkSign)
 
-    metaRawCBOR :: ByteString
-    metaRawCBOR = CBOR.serialize' metaRaw
+    payloadCBOR = CBOR.serialize' payload
 
-  hexSig        <- bech32SignatureToHex =<< jcliSign jcliStkSign metaRawCBOR
+  sigBytes <- bech32SignatureToBytes =<< jcliSign jcliStkSign payloadCBOR
 
-  x <- newPrefix "ed25519_pk" stkVerifyHex
-  y <- newPrefix "ed25519_sig" hexSig
+  x <- newPrefix "ed25519_pk" stkVerifyBytes
+  y <- newPrefix "ed25519_sig" sigBytes
+  jcliValidateSig x y payloadCBOR
 
-  jcliValidateSig x y metaRawCBOR
-
-  pure
-    $ makeTransactionMetadata
-    $ M.fromList
-        [ (61284, TxMetaMap
-            [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
-            , (TxMetaNumber 2, TxMetaBytes stkVerifyHex)
-            ])
-        , (61285, TxMetaMap
-            [ (TxMetaNumber 1, TxMetaBytes hexSig)
-            ])
-        ]
+  pure $ signVotePayload payload sigBytes
 
 encodeVote
   :: ( MonadIO m
@@ -105,10 +105,12 @@ encodeVote
   -> TTL
   -> Vote
   -> m (TxBody Shelley)
-encodeVote connectInfo addr ttl meta = do
+encodeVote connectInfo addr ttl vote = do
   -- Get the network parameters
   pparams <- queryPParamsFromLocalState connectInfo
-  let networkId = localNodeNetworkId connectInfo
+  let
+    meta      = voteMetadata vote
+    networkId = localNodeNetworkId connectInfo
 
   -- Estimate the fee for the transaction
   let

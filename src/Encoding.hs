@@ -4,7 +4,7 @@ module Encoding ( DecodeError(DecodeError)
                 , decodeBytesUtf8
                 , AsDecodeError(_DecodeError, __DecodeError)
                 , AsBech32DecodeError(..)
-                , bech32SignatureToHex
+                , bech32SignatureToBytes
                 , newPrefix
                 , AsBech32HumanReadablePartError(..)
                 , Bech32HumanReadablePartError(Bech32HumanReadablePartError)
@@ -60,13 +60,13 @@ decodeBytesUtf8 bs = do
     Left (DecodeError desc input) -> throwError $ (_DecodeError #) (desc, input)
     Right txt                     -> pure txt
 
-bech32SignatureToHex
+bech32SignatureToBytes
   :: ( MonadError e m
      , AsBech32DecodeError e
      )
   => Text
   -> m BS.ByteString
-bech32SignatureToHex sig =
+bech32SignatureToBytes sig =
   case Bech32.decodeLenient sig of
     Left err -> throwError (_Bech32DecodingError # err)
     Right (_, dataPart) ->

@@ -18,15 +18,16 @@ library
 
   exposed-modules:     CLI.Interop
                      , CLI.Jormungandr
+                     , Cardano.API.Extended
+                     , Cardano.API.Extended.Raw
+                     , Cardano.API.Voting
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
-                     , Cardano.API.Extended
-                     , Cardano.API.Extended.Raw
-                     , Extern
-                     , Encoding
+                     , Cardano.CLI.Voting.Metadata
                      , Config
-                     , Cardano.API.Voting
+                     , Encoding
+                     , Extern
 
   build-depends:       base
                      , base16-bytestring
