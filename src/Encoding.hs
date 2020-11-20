@@ -78,7 +78,11 @@ newPrefix
   :: ( MonadError e m
      , AsBech32HumanReadablePartError e
      )
-  => Text -> ByteString -> m Text
+  => Text
+  -- ^ New prefix
+  -> ByteString
+  -- ^ Raw Bech32 bytes
+  -> m Text
 newPrefix hrPartTxt x =
   case Bech32.humanReadablePartFromText hrPartTxt of
     Left bech32HrPartErr -> throwError $ (_Bech32HumanReadablePartError #) bech32HrPartErr

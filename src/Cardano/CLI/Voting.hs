@@ -46,22 +46,6 @@ import Data.Word
 prettyTx :: Tx Shelley -> String
 prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
 
-harn
-  :: ( MonadIO m
-     , MonadError e m
-     , AsDecodeError e
-     , AsBech32DecodeError e
-     , AsBech32HumanReadablePartError e
-     )
-  => m Vote
-harn = do
-  stkSign   <- maybe (error "Failed to deserialise stake signing key") pure $
-    deserialiseFromRawBytesHex (AsSigningKey AsStakeKey) "efb3df51bee6858af75927ce0f4828e55876d8c3111831f87ca4058b7da58a69"
-  votePub   <- either (error . show) pure $
-    deserialiseFromBech32 AsVotingKeyPublic "ed25519e_sk1cpxudluugmp8wgl2jrl0hcatlgmgzhwte8cguhqjmq642gzytf3mj05q5f8etx8pv47qadxvsgxjj2pygtf4xglu3emspqt95drxpwg9wqqr4"
-
-  createVote stkSign votePub
-
 createVote
   :: ( MonadIO m
      , MonadError e m
@@ -77,8 +61,7 @@ createVote stkSign votepub = do
   let stkVerifyBytes = serialiseToRawBytes (getVerificationKey stkSign)
 
   let
-    payload = mkVotePayload votepub (getVerificationKey stkSign)
-
+    payload     = mkVotePayload votepub (getVerificationKey stkSign)
     payloadCBOR = CBOR.serialize' payload
 
   sigBytes <- bech32SignatureToBytes =<< jcliSign jcliStkSign payloadCBOR

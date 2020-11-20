@@ -40,7 +40,8 @@ instance ToCBOR TxMetadataValue where
   -- tuples, if we want to match the CBOR encoding of a traditional
   -- Map, we need to convert this list of tuples to a Map and then
   -- CBOR encode it. This means we may lose map entries if there are
-  -- duplicate keys.
+  -- duplicate keys. I've decided this is OK as the promised interface
+  -- is clearly a "Map".
   toCBOR (TxMetaMap m)      = CBOR.toCBOR (M.fromList m)
 
 instance ToCBOR VotePayload where

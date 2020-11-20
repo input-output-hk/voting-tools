@@ -22,9 +22,6 @@ import Cardano.CLI.Voting (createVote)
 import Cardano.CLI.Voting.Error (AppError)
 import qualified Cardano.API.Voting as Voting
 
---
--- The list of all tests
---
 tests :: TestTree
 tests = do
   testCase "Testing generation of vote metadata" $ do
