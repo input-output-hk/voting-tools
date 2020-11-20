@@ -29,7 +29,7 @@ library
                      , Cardano.API.Voting
 
   build-depends:       base
-                     , base16-bytestrinmpg
+                     , base16-bytestring
                      , safe-exceptions
                      , directory
                      , memory

@@ -5,10 +5,13 @@ module Cardano.CLI.Voting where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Except (MonadError)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BSC
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import Data.String (fromString)
+import qualified Data.ByteString.Base16 as Base16
 
 import Cardano.API (TxMetadata, SigningKey, StakeKey, LocalNodeConnectInfo, Address, TTL, TxBody, Lovelace(Lovelace), TxIn, PaymentKey, Tx, serialiseToRawBytesHex, serialiseToRawBytes, getVerificationKey, makeTransactionMetadata, localNodeNetworkId, NetworkId, Key, AsType(AsPaymentKey, AsStakeKey), VerificationKey, PaymentCredential, StakeCredential, StakeAddressReference, makeShelleyTransaction, txExtraContentEmpty, makeShelleyKeyWitness, makeSignedTransaction, TxIn(TxIn), verificationKeyHash, makeShelleyAddress, estimateTransactionFee)
 import Cardano.Api.LocalChainSync ( getLocalTip )
@@ -72,23 +75,8 @@ createVote stkSign votepub = do
   x <- newPrefix "ed25519_pk" stkVerifyHex
   y <- newPrefix "ed25519_sig" hexSig
 
-  jcliValidateSig x y votepub
+  jcliValidateSig x y metaRawCBOR
 
-  metaRawWithSig 
-
-  CBOR.serialize' $ M.fromList (61284, TxMetaMap
-            [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
-            , (TxMetaNumber 2, TxMetaBytes stkVerifyHex)
-            ])
-
-  -- pure $ makeTransactionMetadata $ M.fromList [(1, TxMetaMap
-  --                         [ ( TxMetaText "purpose"    , TxMetaText "voting_registration" )
-  --                         , ( TxMetaText "signature"  , TxMetaBytes $ hexSig                      )
-  --                         , ( TxMetaText "stake_pub"  , TxMetaBytes $ stkVerifyHex                )
-  --                         , ( TxMetaText "voting_key" , TxMetaBytes $ serialiseToRawBytes votepub )
-  --                         ]
-  --                       )
-  --                      ]
   pure
     $ makeTransactionMetadata
     $ M.fromList

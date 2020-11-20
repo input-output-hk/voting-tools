@@ -15,13 +15,11 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Cont (runContT)
 import Control.Monad.Except (MonadError)
 
-import CLI.Interop (withTextAsFile, stripTrailingNewlines)
+import CLI.Interop (withTextAsFile, withBinaryAsFile, stripTrailingNewlines)
 import Encoding
 
 import Cardano.API
 import Cardano.API.Voting (VotingKeyPublic, AsType(AsVotingKeyPublic))
-
--- TODO Proper Reified errors for jclicommands, "ShellError [argv] exitcode"
 
 jcliCmd :: MonadIO io => [Text] -> Shell Line -> io Text
 jcliCmd args stdIn = do
@@ -34,10 +32,10 @@ jcliCmd args stdIn = do
       <> "stderr was: " <> T.unpack stdErr <> "\n"
       <> "stdout was: " <> T.unpack stdOut
 
-jcliSign :: MonadIO m => Text -> VotingKeyPublic -> m Text
-jcliSign stake_sk votePub = liftIO . (`runContT` pure) $ do
+jcliSign :: MonadIO m => Text -> ByteString -> m Text
+jcliSign stake_sk contents = liftIO . (`runContT` pure) $ do
   skFile     <- withTextAsFile (T.unpack stake_sk)
-  votePkFile <- withTextAsFile (BS.unpack $ serialiseToRawBytesHex votePub)
+  votePkFile <- withBinaryAsFile contents 
   jcliCmd ["key", "sign", "--secret-key", T.pack skFile, T.pack votePkFile] mempty
 
 jcliKeyAddress networkId key prefix = do
@@ -71,9 +69,9 @@ jcliKeyFromBytes bytes = liftIO . (`runContT` pure) $ do
   publicKeyFile <- T.pack <$> withTextAsFile (BS.unpack bytes)
   jcliCmd [ "key", "from-bytes", "--type", "ed25519", publicKeyFile ] mempty
 
-jcliValidateSig :: MonadIO m => Text -> Text -> VotingKeyPublic -> m ()
-jcliValidateSig publicKey sig votePub = liftIO . (`runContT` pure) $ do
+jcliValidateSig :: MonadIO m => Text -> Text -> ByteString -> m ()
+jcliValidateSig publicKey sig contents = liftIO . (`runContT` pure) $ do
   publicKeyFile <- T.pack <$> withTextAsFile (T.unpack publicKey)
   sigFile       <- T.pack <$> withTextAsFile (T.unpack sig)
-  datFile       <- T.pack <$> withTextAsFile (BS.unpack $ serialiseToRawBytesHex votePub)
+  datFile       <- T.pack <$> withBinaryAsFile contents
   void $ jcliCmd [ "key", "verify", "--public-key", publicKeyFile, "--signature", sigFile, datFile ] mempty
