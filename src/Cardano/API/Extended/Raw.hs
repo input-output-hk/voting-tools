@@ -1,7 +1,11 @@
+-- | Parts of the cardano-api that I need exposed but which aren't so
+-- I've replicated them here.
+
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
 
-module Cardano.API.Exposed where
+module Cardano.API.Extended.Raw where
 
 import Control.Monad.Trans.Except.Extra (firstExceptT, left, right, newExceptT)
 import Control.Applicative ((<|>))
@@ -17,10 +21,13 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Options.Applicative as Opt
 import qualified Data.ByteString.Char8 as BSC
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Aeson.Encode.Pretty
+                   (Config (..), encodePretty', defConfig, keyOrder)
 
 import Cardano.CLI.Types (QueryFilter(FilterByAddress, NoFilter))
 import Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
-import Cardano.API (queryNodeLocalState, NetworkId(Testnet, Mainnet), deserialiseAddress, AsType(AsShelleyAddress))
+import Cardano.API (queryNodeLocalState, NetworkId(Testnet, Mainnet), deserialiseAddress, AsType(AsShelleyAddress), HasTextEnvelope, TextEnvelopeDescr, serialiseToTextEnvelope)
 import Cardano.Api.Typed (LocalNodeConnectInfo, NetworkMagic(NetworkMagic))
 import Cardano.Api.LocalChainSync ( getLocalTip )
 import           Cardano.Api.Typed (StandardShelley, LocalNodeConnectInfo(LocalNodeConnectInfo), localNodeConsensusMode, NodeConsensusMode(ByronMode, ShelleyMode, CardanoMode), Address(ShelleyAddress, ByronAddress), Shelley)
@@ -170,3 +177,15 @@ pTestnetMagic =
       <> Opt.metavar "NATURAL"
       <> Opt.help "Specify a testnet magic id."
       )
+
+textEnvelopeJSONConfig :: Config
+textEnvelopeJSONConfig = defConfig { confCompare = textEnvelopeJSONKeyOrder }
+
+textEnvelopeToJSON :: HasTextEnvelope a =>  Maybe TextEnvelopeDescr -> a -> BSC.ByteString
+textEnvelopeToJSON mbDescr a  =
+  LBS.toStrict $ encodePretty' textEnvelopeJSONConfig
+                               (serialiseToTextEnvelope mbDescr a)
+              <> "\n"
+
+textEnvelopeJSONKeyOrder :: Text -> Text -> Ordering
+textEnvelopeJSONKeyOrder = keyOrder ["type", "description", "cborHex"]

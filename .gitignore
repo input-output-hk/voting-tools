@@ -3,3 +3,4 @@ dist/
 result*
 *.local
 *.local~
+TAGS

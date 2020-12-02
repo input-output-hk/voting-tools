@@ -6,16 +6,30 @@
 -- contents of the voting key are correct. It does whoever provide the
 -- standard interfaces for serialising and deserialising voting keys.
 
-module Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32, AsType(AsVotingKeyPublic)) where
+module Cardano.API.Voting ( VotingKeyPublic
+                          , deserialiseFromBech32
+                          , AsType(AsVotingKeyPublic)
+                          , readVotePublicKey
+                          ) where
 
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.Except (MonadError, throwError)
+import           Control.Exception.Safe (try)
 import           Data.ByteString (ByteString)
 import           Data.Text (Text)
+import qualified Data.Text.IO as TIO
 import qualified Codec.Binary.Bech32 as Bech32
 import Control.Monad (guard)
 import qualified Data.Set as Set
 import           Data.Set (Set)
+import           Control.Lens ((#))
 
 import           Cardano.Api.Typed (HasTypeProxy(proxyToAsType), AsType, SerialiseAsRawBytes(serialiseToRawBytes, deserialiseFromRawBytes), Bech32DecodeError(Bech32DecodingError, Bech32UnexpectedPrefix, Bech32DataPartToBytesError, Bech32DeserialiseFromBytesError, Bech32WrongPrefix))
+
+import           Cardano.API.Extended (AsFileError(_FileIOError))
+import           Encoding (AsBech32DecodeError(_Bech32DecodeError))
+import           CLI.Interop (stripTrailingNewlines)
+
 
 data VotingKeyPublic = VotingKeyPublic { votingKeyPublicRawBytes :: ByteString }
   deriving (Eq, Show)
@@ -81,3 +95,17 @@ serialiseToBech32 a =
         Left err -> error $ "serialiseToBech32: invalid prefix "
                          ++ show votingPublicKeyBech32Prefix
                          ++ ", " ++ show err
+
+readVotePublicKey
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e d
+     , AsBech32DecodeError e
+     )
+  => FilePath
+  -> m VotingKeyPublic
+readVotePublicKey path = do
+  result <- liftIO . try $ TIO.readFile path
+  raw    <- either (\e -> throwError . (_FileIOError #) $ (path, e)) pure result
+  let publicKeyBech32 = stripTrailingNewlines raw
+  either (throwError . (_Bech32DecodeError #)) pure $ deserialiseFromBech32 AsVotingKeyPublic publicKeyBech32

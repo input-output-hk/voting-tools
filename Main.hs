@@ -13,12 +13,18 @@ import Control.Monad.IO.Class (liftIO)
 import Cardano.Api.LocalChainSync ( getLocalTip )
 import Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 
-import Cardano.Api.Typed (Shelley, Tx, writeFileTextEnvelope, localNodeNetworkId)
+import Cardano.Api.Typed (Shelley, Tx, writeFileTextEnvelope, localNodeNetworkId, Lovelace(Lovelace), TxIn(TxIn), TxId(TxId), TxIx(TxIx))
 import Cardano.Api.Protocol (Protocol(CardanoProtocol), withlocalNodeConnectInfo)
-import Cardano.CLI.Types (SocketPath(SocketPath))
+import Cardano.CLI.Types (SocketPath(SocketPath), QueryFilter(FilterByAddress))
 import Cardano.Chain.Slotting (EpochSlots (..))
-import Cardano.API.Misc (queryPParamsFromLocalState, readEnvSocketPath)
+import qualified Data.ByteString.Char8 as BSC
+import Cardano.API.Extended (readEnvSocketPath)
+import Cardano.CLI.Voting (createVote, signTx, encodeVote, prettyTx)
+import Cardano.CLI.Voting.Error
 import Ouroboros.Network.Point (fromWithOrigin)
+import qualified Data.Set as Set
+import qualified Cardano.Crypto.Hash.Class as Crypto
+import qualified Cardano.Binary as CBOR
 
 import Control.Lens ((#))
 
@@ -32,7 +38,7 @@ main = do
   eCfg  <- runExceptT $ mkConfig opts
   case eCfg of
     Left err  -> putStrLn $ show err
-    Right (Config addr stkSign paySign votePub networkId) -> do
+    Right (Config addr stkSign paySign votePub networkId ttl) -> do
       eResult <- runExceptT $ do
         SocketPath sockPath <- readEnvSocketPath
         withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
@@ -41,27 +47,15 @@ main = do
           -- (minus a fee).
 
           -- Generate vote payload (vote information is encoded as metadata).
-          meta                   <- generateVoteMetadata stkSign votePub
+          let vote = createVote stkSign votePub
 
-          -- Find some unspent funds
-          unspent@(txins, value) <- findUnspentTx connectInfo addr
+          -- Encode the vote as a transaction and sign it
+          voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote
 
-          tip                    <- liftIO $ getLocalTip connectInfo
-
-          -- Estimate the fee for the transaction
-          pparams                <- queryPParamsFromLocalState connectInfo
-          let
-            networkId = localNodeNetworkId connectInfo
-            slotTip   = fromWithOrigin minBound $ getTipSlotNo tip
-            fee       = estimateVoteTxFee networkId pparams slotTip txins addr value meta
-
-          -- Create and sign the vote transaction
-          let
-            txBody = voteTx addr unspent (slotTip + 5000) fee meta
-            tx     = signTx paySign txBody
-
-          -- Output our transaction
-          writeFileTextEnvelope' "./meta.txsigned" Nothing tx
+          -- Output our vote transaction
+          liftIO . putStr . prettyTx $ voteTx
       case eResult of
         Left  (err :: AppError) -> error $ show err
         Right ()                -> pure ()
+
+

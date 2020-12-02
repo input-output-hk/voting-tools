@@ -9,7 +9,7 @@ license-file:        LICENSE
 author:              Samuel Evans-Powell
 maintainer:          mail@sevanspowell.net
 -- copyright:
--- category:
+-- cate gory:
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
@@ -17,13 +17,16 @@ library
   hs-source-dirs:      src
 
   exposed-modules:     CLI.Interop
-                     , CLI.Jormungandr
-                     , Extern
-                     , Encoding
-                     , Config
+                     , Cardano.API.Extended
+                     , Cardano.API.Extended.Raw
                      , Cardano.API.Voting
-                     , Cardano.API.Exposed
-                     , Cardano.API.Misc
+                     , Cardano.CLI.Voting
+                     , Cardano.CLI.Voting.Error
+                     , Cardano.CLI.Voting.Fee
+                     , Cardano.CLI.Voting.Metadata
+                     , Config
+                     , Encoding
+                     , Extern
 
   build-depends:       base
                      , base16-bytestring
@@ -40,6 +43,11 @@ library
                      , bech32
                      , optparse-applicative
                      , attoparsec
+                     , cardano-binary
+                     , aeson-pretty
+                     , ouroboros-network-framework
+
+                     , cborg
 
                      , transformers-except
                      , cardano-api
@@ -60,8 +68,11 @@ executable voter-registration
                      , cardano-cli
                      , mtl
                      , optparse-applicative
+                     , bytestring
                      , voter-registration
                      , ouroboros-network
+                     , cardano-crypto-class
+                     , cardano-binary
 
                      , containers
                      , cardano-ledger
@@ -70,27 +81,27 @@ executable voter-registration
   -- hs-source-dirs:
   default-language:    Haskell2010
 
-test-suite voter-registration-test
-  hs-source-dirs: test
-  main-is: Main.hs
-  type:                 exitcode-stdio-1.0
+-- test-suite voter-registration-test
+--   hs-source-dirs: test
+--   main-is: Main.hs
+--   type:                 exitcode-stdio-1.0
 
-  build-depends:
-                        base >=4.12 && <5
-                      , voter-registration
-                      , aeson
-                      , hspec
-                      , hedgehog
-                      , QuickCheck
-                      , tasty
-                      , mtl
-                      , tasty-hedgehog
-                      , tasty-quickcheck
-                      , tasty-hspec
-                      , unordered-containers
-                      , tasty-hunit
-                      , HUnit
-                      , containers
-                      , cardano-api
+--   build-depends:
+--                         base >=4.12 && <5
+--                       , voter-registration
+--                       , aeson
+--                       , hspec
+--                       , hedgehog
+--                       , QuickCheck
+--                       , tasty
+--                       , mtl
+--                       , tasty-hedgehog
+--                       , tasty-quickcheck
+--                       , tasty-hspec
+--                       , unordered-containers
+--                       , tasty-hunit
+--                       , HUnit
+--                       , containers
+--                       , cardano-api
 
-  other-modules:      Test.Cardano.CLI.Voter.Registration  
+--   other-modules:      Test.Cardano.CLI.Voter.Registration  
