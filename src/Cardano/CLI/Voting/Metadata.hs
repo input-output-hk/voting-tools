@@ -16,6 +16,7 @@ import Cardano.Binary (ToCBOR)
 import qualified Cardano.Binary as CBOR
 import qualified Data.Map.Strict as M
 import Data.ByteString (ByteString)
+import qualified Cardano.Crypto.DSIGN.Class as Crypto
 
 import Cardano.API.Voting (VotingKeyPublic)
 
@@ -66,16 +67,17 @@ mkVotePayload votepub stkVerify =
         ])]
 
 signVotePayload
-  :: VotePayload
+  :: Crypto.DSIGNAlgorithm alg
+  => VotePayload
   -- ^ Vote payload
-  -> ByteString
-  -- ^ Raw signature bytes
+  -> Crypto.SigDSIGN alg
+  -- ^ Signature
   -> Vote
   -- ^ Signed vote
 signVotePayload (VotePayload votePayload) sig =
   let
     sigMetadata = makeTransactionMetadata (M.fromList [
-        (61285, TxMetaMap [(TxMetaNumber 1, TxMetaBytes sig)])
+        (61285, TxMetaMap [(TxMetaNumber 1, TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig)])
       ])
   in
     Vote $ votePayload <> sigMetadata

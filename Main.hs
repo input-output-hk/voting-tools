@@ -47,7 +47,7 @@ main = do
           -- (minus a fee).
 
           -- Generate vote payload (vote information is encoded as metadata).
-          vote <- createVote stkSign votePub
+          let vote = createVote stkSign votePub
 
           -- Encode the vote as a transaction and sign it
           voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote

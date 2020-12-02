@@ -72,7 +72,6 @@ import qualified Cardano.Crypto.Seed as Crypto
 import qualified Cardano.CLI.Shelley.Key as Key
 
 
-import CLI.Jormungandr
 import CLI.Interop (stripTrailingNewlines)
 import Encoding
 import Cardano.API.Voting (VotingKeyPublic, AsType(AsVotingKeyPublic))

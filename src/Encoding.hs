@@ -5,7 +5,6 @@ module Encoding ( DecodeError(DecodeError)
                 , AsDecodeError(_DecodeError, __DecodeError)
                 , AsBech32DecodeError(..)
                 , bech32SignatureToBytes
-                , newPrefix
                 , AsBech32HumanReadablePartError(..)
                 , Bech32HumanReadablePartError(Bech32HumanReadablePartError)
                 ) where
@@ -73,18 +72,3 @@ bech32SignatureToBytes sig =
       case Bech32.dataPartToBytes dataPart of
         Nothing    -> throwError $ (_Bech32DataPartToBytesError # sig)
         Just bytes -> pure bytes
-
-newPrefix
-  :: ( MonadError e m
-     , AsBech32HumanReadablePartError e
-     )
-  => Text
-  -- ^ New prefix
-  -> ByteString
-  -- ^ Raw Bech32 bytes
-  -> m Text
-newPrefix hrPartTxt x =
-  case Bech32.humanReadablePartFromText hrPartTxt of
-    Left bech32HrPartErr -> throwError $ (_Bech32HumanReadablePartError #) bech32HrPartErr
-    Right hrPart -> do
-      pure $ Bech32.encodeLenient hrPart (Bech32.dataPartFromBytes x)

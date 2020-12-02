@@ -8,17 +8,21 @@ import Control.Monad.Except (MonadError)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BSC
 import Data.Map.Strict (Map)
+import Data.Text (Text)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import Data.String (fromString)
 import qualified Data.ByteString.Base16 as Base16
 
-import Cardano.API (TxMetadata, SigningKey, StakeKey, LocalNodeConnectInfo, Address, TTL, TxBody, Lovelace(Lovelace), TxIn, PaymentKey, Tx, serialiseToRawBytesHex, serialiseToRawBytes, getVerificationKey, makeTransactionMetadata, localNodeNetworkId, NetworkId, Key, AsType(AsPaymentKey, AsStakeKey), VerificationKey, PaymentCredential, StakeCredential, StakeAddressReference, makeShelleyTransaction, txExtraContentEmpty, makeShelleyKeyWitness, makeSignedTransaction, TxIn(TxIn), verificationKeyHash, makeShelleyAddress, estimateTransactionFee, deserialiseFromRawBytesHex)
+import qualified Codec.Binary.Bech32 as Bech32
+import Cardano.Crypto.DSIGN.Class
+import qualified Cardano.Crypto.DSIGN.Class as Crypto
+import Cardano.API (TxMetadata, SigningKey, StakeKey, LocalNodeConnectInfo, Address, TTL, TxBody, Lovelace(Lovelace), TxIn, PaymentKey, Tx, serialiseToRawBytesHex, serialiseToRawBytes, getVerificationKey, makeTransactionMetadata, localNodeNetworkId, NetworkId, Key, AsType(AsPaymentKey, AsStakeKey), VerificationKey, PaymentCredential, StakeCredential, StakeAddressReference, makeShelleyTransaction, txExtraContentEmpty, makeShelleyKeyWitness, makeSignedTransaction, TxIn(TxIn), verificationKeyHash, makeShelleyAddress, estimateTransactionFee, deserialiseFromRawBytesHex, serialiseToBech32)
 import Cardano.Api.LocalChainSync ( getLocalTip )
 import Ouroboros.Network.Point (fromWithOrigin)
 import Ouroboros.Network.Block (getTipSlotNo)
 import           Shelley.Spec.Ledger.PParams (PParams)
-import Cardano.Api.Typed (Shelley, txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxMetadataValue(TxMetaNumber, TxMetaMap, TxMetaText, TxMetaBytes), StandardShelley, TxOut(TxOut), ShelleyWitnessSigningKey(WitnessPaymentKey), TxId(TxId), TxIx(TxIx), deterministicSigningKey, deterministicSigningKeySeedSize, PaymentCredential(PaymentCredentialByKey), StakeCredential(StakeCredentialByKey), StakeAddressReference(StakeAddressByValue), AsType(AsSigningKey))
+import Cardano.Api.Typed (Shelley, txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxMetadataValue(TxMetaNumber, TxMetaMap, TxMetaText, TxMetaBytes), StandardShelley, TxOut(TxOut), ShelleyWitnessSigningKey(WitnessPaymentKey), TxId(TxId), TxIx(TxIx), deterministicSigningKey, deterministicSigningKeySeedSize, PaymentCredential(PaymentCredentialByKey), StakeCredential(StakeCredentialByKey), StakeAddressReference(StakeAddressByValue), AsType(AsSigningKey), SigningKey(StakeSigningKey), VerificationKey(StakeVerificationKey))
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
 import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.Coin as Ledger
@@ -31,12 +35,12 @@ import qualified Cardano.Crypto.Hash.Class as Crypto
 import qualified Cardano.Crypto.Seed as Crypto
 import qualified Cardano.Binary as CBOR
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (ShowQuery)
+import qualified Shelley.Spec.Ledger.Keys as Shelley
 
 import Cardano.API.Extended (textEnvelopeToJSON)
-import CLI.Jormungandr (jcliKeyFromBytes, jcliSign, jcliValidateSig)
 import Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32, AsType(AsVotingKeyPublic))
 import Cardano.API.Extended (AsShelleyQueryCmdLocalStateQueryError, queryPParamsFromLocalState, queryUTxOFromLocalState)
-import Encoding (AsDecodeError, AsBech32DecodeError, bech32SignatureToBytes, newPrefix, AsBech32HumanReadablePartError )
+import Encoding (AsDecodeError, AsBech32DecodeError, bech32SignatureToBytes, AsBech32HumanReadablePartError)
 import Cardano.CLI.Voting.Error
 import Cardano.CLI.Voting.Fee
 import Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload, voteMetadata)
@@ -47,30 +51,23 @@ prettyTx :: Tx Shelley -> String
 prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
 
 createVote
-  :: ( MonadIO m
-     , MonadError e m
-     , AsDecodeError e
-     , AsBech32DecodeError e
-     , AsBech32HumanReadablePartError e
-     )
-  => SigningKey StakeKey
+  :: SigningKey StakeKey
   -> VotingKeyPublic
-  -> m Vote
-createVote stkSign votepub = do
-  jcliStkSign   <- jcliKeyFromBytes (serialiseToRawBytesHex stkSign)
-  let stkVerifyBytes = serialiseToRawBytes (getVerificationKey stkSign)
-
+  -> Vote
+createVote stkSign@(StakeSigningKey skey) votepub =
   let
-    payload     = mkVotePayload votepub (getVerificationKey stkSign)
+    stkVerify@(StakeVerificationKey (Shelley.VKey vkey)) = getVerificationKey stkSign
+
+    payload     = mkVotePayload votepub stkVerify
     payloadCBOR = CBOR.serialize' payload
+    payloadSig  = signDSIGN () payloadCBOR skey
 
-  sigBytes <- bech32SignatureToBytes =<< jcliSign jcliStkSign payloadCBOR
-
-  x <- newPrefix "ed25519_pk" stkVerifyBytes
-  y <- newPrefix "ed25519_sig" sigBytes
-  jcliValidateSig x y payloadCBOR
-
-  pure $ signVotePayload payload sigBytes
+  in
+    case verifyDSIGN () vkey payloadCBOR payloadSig of
+      Left err ->
+        error $ "Failed to validate vote payload: " <> show err
+      Right () ->
+        signVotePayload payload payloadSig
 
 encodeVote
   :: ( MonadIO m
