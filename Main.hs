@@ -1,34 +1,35 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
+import           Cardano.Api.LocalChainSync (getLocalTip)
+import           Control.Monad.Except (ExceptT, runExceptT, throwError)
+import           Control.Monad.IO.Class (liftIO)
 import qualified Options.Applicative as Opt
-import Control.Monad.Except (runExceptT, ExceptT, throwError)
-import Control.Monad.IO.Class (liftIO)
-import Cardano.Api.LocalChainSync ( getLocalTip )
-import Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
+import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 
-import Cardano.Api.Typed (Shelley, Tx, writeFileTextEnvelope, localNodeNetworkId, Lovelace(Lovelace), TxIn(TxIn), TxId(TxId), TxIx(TxIx))
-import Cardano.Api.Protocol (Protocol(CardanoProtocol), withlocalNodeConnectInfo)
-import Cardano.CLI.Types (SocketPath(SocketPath), QueryFilter(FilterByAddress))
-import Cardano.Chain.Slotting (EpochSlots (..))
-import qualified Data.ByteString.Char8 as BSC
-import Cardano.API.Extended (readEnvSocketPath)
-import Cardano.CLI.Voting (createVote, signTx, encodeVote, prettyTx)
-import Cardano.CLI.Voting.Error
-import Ouroboros.Network.Point (fromWithOrigin)
-import qualified Data.Set as Set
-import qualified Cardano.Crypto.Hash.Class as Crypto
+import           Cardano.API.Extended (readEnvSocketPath)
+import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
+import           Cardano.Api.Typed (Lovelace (Lovelace), Shelley, Tx, TxId (TxId), TxIn (TxIn),
+                     TxIx (TxIx), localNodeNetworkId, writeFileTextEnvelope)
 import qualified Cardano.Binary as CBOR
+import           Cardano.Chain.Slotting (EpochSlots (..))
+import           Cardano.CLI.Types (QueryFilter (FilterByAddress), SocketPath (SocketPath))
+import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
+import           Cardano.CLI.Voting.Error
+import qualified Cardano.Crypto.Hash.Class as Crypto
+import qualified Data.ByteString.Char8 as BSC
+import qualified Data.Set as Set
+import           Ouroboros.Network.Point (fromWithOrigin)
 
-import Control.Lens ((#))
+import           Control.Lens (( # ))
 
-import Config
+import           Config
 
 main :: IO ()
 main = do
@@ -39,7 +40,7 @@ main = do
     Left err  -> putStrLn $ show err
     Right (Config addr stkSign paySign votePub networkId ttl) -> do
       eResult <- runExceptT $ do
-        SocketPath sockPath <- readEnvSocketPath
+        SocketPath sockPath <-  readEnvSocketPath
         withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
           -- Create a transaction, encoding our vote as transaction
           -- metadata. The transaction sends some unspent ADA back to us

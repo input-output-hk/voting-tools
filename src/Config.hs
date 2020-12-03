@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- | Handles configuration, which involves parsing command line
@@ -9,42 +9,47 @@
 
 module Config (Config(Config), opts, mkConfig) where
 
-import Data.Text (Text)
+import           Control.Exception.Safe (try)
+import           Control.Lens (( # ))
+import           Control.Lens.TH
+import           Control.Monad.Except (ExceptT, MonadError, catchError, throwError)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Except (MonadError, ExceptT, throwError, catchError)
-import Control.Lens ((#))
-import Control.Lens.TH
-import Control.Exception.Safe (try)
 
-import Options.Applicative
+import           Options.Applicative
 
-import Cardano.CLI.Environment ( EnvSocketError, readEnvSocketPath)
+import           Cardano.API (Address, Bech32DecodeError, FileError, NetworkId, PaymentKey,
+                     SigningKey, StakeKey, Witness)
 import qualified Cardano.API as Api
-import Cardano.API (Address, SigningKey, StakeKey, Witness, NetworkId, FileError, PaymentKey, Bech32DecodeError)
-import Cardano.Api.Typed (Shelley, TTL, SlotNo(SlotNo))
-import Cardano.CLI.Shelley.Key (InputDecodeError)
-import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
-import Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
-import Cardano.Api.TextView (TextViewError)
+import           Cardano.Api.TextView (TextViewError)
+import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TTL)
+import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
+import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
+import           Cardano.CLI.Shelley.Key (InputDecodeError)
+import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 
-import Cardano.API.Extended (AsInputDecodeError(_InputDecodeError), AsFileError(__FileError, _FileIOError), readSigningKeyFile, readerFromAttoParser, parseAddress, pNetworkId, AsBech32DecodeError(_Bech32DecodeError), VotingKeyPublic, deserialiseFromBech32, AsType(AsVotingKeyPublic))
-import Cardano.CLI.Voting.Error (AsTextViewError(_TextViewError))
+import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
+                     AsFileError (_FileIOError, __FileError),
+                     AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
+                     VotingKeyPublic, deserialiseFromBech32, pNetworkId, parseAddress,
+                     readSigningKeyFile, readerFromAttoParser)
+import           Cardano.CLI.Voting.Error (AsTextViewError (_TextViewError))
 
-data Config
-  = Config { cfgPaymentAddress    :: Address Shelley
-           , cfgStakeSigningKey   :: SigningKey StakeKey
-           , cfgPaymentSigningKey :: SigningKey PaymentKey
-           , cfgVotePublicKey     :: VotingKeyPublic
-           , cfgNetworkId         :: NetworkId
-           , cfgTTL               :: TTL
-           }
-  deriving (Show)
+data Config = Config
+    { cfgPaymentAddress    :: Address Shelley
+    , cfgStakeSigningKey   :: SigningKey StakeKey
+    , cfgPaymentSigningKey :: SigningKey PaymentKey
+    , cfgVotePublicKey     :: VotingKeyPublic
+    , cfgNetworkId         :: NetworkId
+    , cfgTTL               :: TTL
+    }
+    deriving (Show)
 
 data FileErrors = FileErrorInputDecode InputDecodeError
-                | FileErrorTextView TextViewError
-  deriving (Show)
+    | FileErrorTextView TextViewError
+    deriving (Show)
 
 makePrisms ''FileErrors
 
@@ -54,10 +59,9 @@ instance AsInputDecodeError FileErrors where
 instance AsTextViewError FileErrors where
   _TextViewError = _FileErrorTextView
 
-data ConfigError
-  = ConfigFailedToReadFile (Api.FileError FileErrors)
-  | ConfigFailedToDecodeBech32 Bech32DecodeError
-  deriving (Show)
+data ConfigError = ConfigFailedToReadFile (Api.FileError FileErrors)
+    | ConfigFailedToDecodeBech32 Bech32DecodeError
+    deriving (Show)
 
 makePrisms ''ConfigError
 
@@ -66,7 +70,7 @@ instance AsFileError ConfigError FileErrors where
 
 instance AsBech32DecodeError ConfigError where
   _Bech32DecodeError = _ConfigFailedToDecodeBech32
-  
+
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
@@ -77,16 +81,16 @@ mkConfig (Opts stateDir pskf addr vpkf sskf networkId ttl) = do
 
   pure $ Config addr stkSign paySign votepk networkId ttl
 
-data Opts
-  = Opts { optStateDir              :: FilePath
-         , optPaymentSigningKeyFile :: FilePath
-         , optPaymentAddress        :: Address Shelley
-         , optVotePublicKeyFile     :: FilePath
-         , optStakeSigningKeyFile   :: FilePath
-         , optNetworkId             :: NetworkId
-         , optTTL                   :: TTL
-         }
-  deriving (Eq, Show)
+data Opts = Opts
+    { optStateDir              :: FilePath
+    , optPaymentSigningKeyFile :: FilePath
+    , optPaymentAddress        :: Address Shelley
+    , optVotePublicKeyFile     :: FilePath
+    , optStakeSigningKeyFile   :: FilePath
+    , optNetworkId             :: NetworkId
+    , optTTL                   :: TTL
+    }
+    deriving (Eq, Show)
 
 parseOpts :: Parser Opts
 parseOpts = Opts

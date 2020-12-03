@@ -4,3 +4,8 @@ steps:
       - 'nix-build'
     agents:
       system: x86_64-linux
+
+  - label: 'style'
+    command: nix-shell --pure --run 'find . -type f -name "*.hs" -not -path ".git" -not -path "*.stack-work*" -print0 | xargs -0 stylish-haskell -i && git diff --exit-code'
+    agents:
+      system: x86_64-linux

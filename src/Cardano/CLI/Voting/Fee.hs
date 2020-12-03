@@ -18,24 +18,37 @@
 
 module Cardano.CLI.Voting.Fee where
 
-import Data.String (fromString)
+import           Data.String (fromString)
 
-import Cardano.API (TxMetadata, SigningKey, StakeKey, LocalNodeConnectInfo, Address, TTL, TxBody, Lovelace(Lovelace), TxIn, PaymentKey, Tx, serialiseToRawBytesHex, serialiseToRawBytes, getVerificationKey, makeTransactionMetadata, localNodeNetworkId, NetworkId, Key, AsType(AsPaymentKey, AsStakeKey), VerificationKey, PaymentCredential, StakeCredential, StakeAddressReference, makeShelleyTransaction, txExtraContentEmpty, makeShelleyKeyWitness, makeSignedTransaction, TxIn(TxIn), verificationKeyHash, makeShelleyAddress, estimateTransactionFee)
-import Cardano.Api.Typed (Shelley, txCertificates, txWithdrawals, txMetadata, txUpdateProposal, TxMetadataValue(TxMetaMap, TxMetaText, TxMetaBytes), StandardShelley, TxOut(TxOut), ShelleyWitnessSigningKey(WitnessPaymentKey), TxId(TxId), TxIx(TxIx), deterministicSigningKey, deterministicSigningKeySeedSize, PaymentCredential(PaymentCredentialByKey), StakeCredential(StakeCredentialByKey), StakeAddressReference(StakeAddressByValue))
-import qualified Shelley.Spec.Ledger.PParams as Shelley
-import Shelley.Spec.Ledger.PParams (PParams)
-import Cardano.Api.Typed (StandardShelley, Shelley)
+import           Cardano.API (Address, AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
+                     Lovelace (Lovelace), NetworkId, PaymentCredential, PaymentKey, SigningKey,
+                     StakeAddressReference, StakeCredential, StakeKey, TTL, Tx, TxBody,
+                     TxIn (TxIn), TxMetadata, VerificationKey, estimateTransactionFee,
+                     getVerificationKey, localNodeNetworkId, makeShelleyAddress,
+                     makeShelleyKeyWitness, makeShelleyTransaction, makeSignedTransaction,
+                     makeTransactionMetadata, serialiseToRawBytes, serialiseToRawBytesHex,
+                     txExtraContentEmpty, verificationKeyHash)
+import           Cardano.Api.Typed (PaymentCredential (PaymentCredentialByKey), Shelley,
+                     ShelleyWitnessSigningKey (WitnessPaymentKey),
+                     StakeAddressReference (StakeAddressByValue),
+                     StakeCredential (StakeCredentialByKey), StandardShelley, TxId (TxId),
+                     TxIx (TxIx), TxMetadataValue (TxMetaBytes, TxMetaMap, TxMetaText),
+                     TxOut (TxOut), deterministicSigningKey, deterministicSigningKeySeedSize,
+                     txCertificates, txMetadata, txUpdateProposal, txWithdrawals)
+import           Cardano.Api.Typed (Shelley, StandardShelley)
+import qualified Cardano.Binary as CBOR
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import qualified Cardano.Crypto.Seed as Crypto
-import qualified Cardano.Binary as CBOR
+import           Shelley.Spec.Ledger.PParams (PParams)
+import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 -- | Fee characteristics of a transaction
-data FeeParams
-  = FeeParams { feeBase    :: Lovelace
-              -- ^ The fee of a vote transaction with no TxIns
-              , feePerTxIn :: Lovelace
-              -- ^ The increase in fees for adding a TxIn
-              }
+data FeeParams = FeeParams
+    { feeBase    :: Lovelace
+    -- ^ The fee of a vote transaction with no TxIns
+    , feePerTxIn :: Lovelace
+    -- ^ The increase in fees for adding a TxIn
+    }
 
 -- | Transactions that aren't fully spent.
 type UnspentSources
@@ -146,7 +159,7 @@ findUnspent feeParams utxos =
   case takeUntilFeePaid feeParams utxos of
     [] -> Nothing
     xs -> Just xs
-  
+
 takeUntilFeePaid :: FeeParams -> [(a , Lovelace)] -> [(a , Lovelace)]
 takeUntilFeePaid (FeeParams feeBase (Lovelace feePerTxIn)) =
   let
