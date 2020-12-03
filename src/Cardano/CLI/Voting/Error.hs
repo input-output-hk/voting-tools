@@ -10,8 +10,7 @@ import Cardano.Api.Typed (Shelley)
 import qualified Codec.Binary.Bech32 as Bech32
 import Control.Lens.TH (makeClassyPrisms)
 
-import Cardano.API.Extended (ShelleyQueryCmdLocalStateQueryError, AsFileError(__FileError), AsEnvSocketError(_EnvSocketError), AsShelleyQueryCmdLocalStateQueryError(_ShelleyQueryCmdLocalStateQueryError))
-import Encoding (DecodeError, AsDecodeError(__DecodeError), AsBech32DecodeError(_Bech32DecodeError), Bech32HumanReadablePartError, AsBech32HumanReadablePartError(__Bech32HumanReadablePartError))
+import Cardano.API.Extended (ShelleyQueryCmdLocalStateQueryError, AsFileError(__FileError), AsEnvSocketError(_EnvSocketError), AsShelleyQueryCmdLocalStateQueryError(_ShelleyQueryCmdLocalStateQueryError), AsBech32DecodeError(_Bech32DecodeError), Bech32HumanReadablePartError, AsBech32HumanReadablePartError(__Bech32HumanReadablePartError))
 
 -- | Address doesn't have enough UTxOs to pay the requested amount.
 data AddressUTxOError = AddressNotEnoughUTxOs (Address Shelley) Lovelace
@@ -23,7 +22,6 @@ makeClassyPrisms ''TextViewError
 data AppError
   = AppEnvSocketError !EnvSocketError
   | AppShelleyQueryError !ShelleyQueryCmdLocalStateQueryError
-  | AppDecodeError !DecodeError
   | AppBech32DecodeError !Bech32DecodeError
   | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
   | AppAddressUTxOError !AddressUTxOError
@@ -40,9 +38,6 @@ instance AsEnvSocketError AppError where
 
 instance AsShelleyQueryCmdLocalStateQueryError AppError where
   _ShelleyQueryCmdLocalStateQueryError = _AppShelleyQueryError
-
-instance AsDecodeError AppError where
-  __DecodeError = _AppDecodeError
 
 instance AsBech32DecodeError AppError where
   _Bech32DecodeError = _AppBech32DecodeError

@@ -18,7 +18,7 @@ import qualified Data.Map.Strict as M
 import Data.ByteString (ByteString)
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 
-import Cardano.API.Voting (VotingKeyPublic)
+import Cardano.API.Extended (VotingKeyPublic)
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).

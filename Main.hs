@@ -29,7 +29,6 @@ import qualified Cardano.Binary as CBOR
 import Control.Lens ((#))
 
 import Config
-import Extern
 
 main :: IO ()
 main = do

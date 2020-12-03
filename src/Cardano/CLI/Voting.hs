@@ -38,17 +38,12 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Type (ShowQuery)
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 
 import Cardano.API.Extended (textEnvelopeToJSON)
-import Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32, AsType(AsVotingKeyPublic))
-import Cardano.API.Extended (AsShelleyQueryCmdLocalStateQueryError, queryPParamsFromLocalState, queryUTxOFromLocalState)
-import Encoding (AsDecodeError, AsBech32DecodeError, bech32SignatureToBytes, AsBech32HumanReadablePartError)
+import Cardano.API.Extended (AsShelleyQueryCmdLocalStateQueryError, queryPParamsFromLocalState, queryUTxOFromLocalState, AsBech32DecodeError, AsBech32HumanReadablePartError, VotingKeyPublic, deserialiseFromBech32, AsType(AsVotingKeyPublic))
 import Cardano.CLI.Voting.Error
 import Cardano.CLI.Voting.Fee
 import Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload, voteMetadata)
 
 import Data.Word
-
-prettyTx :: Tx Shelley -> String
-prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
 
 createVote
   :: SigningKey StakeKey
@@ -61,7 +56,6 @@ createVote stkSign@(StakeSigningKey skey) votepub =
     payload     = mkVotePayload votepub stkVerify
     payloadCBOR = CBOR.serialize' payload
     payloadSig  = signDSIGN () payloadCBOR skey
-
   in
     case verifyDSIGN () vkey payloadCBOR payloadSig of
       Left err ->
@@ -156,3 +150,6 @@ fromShelleyTxIn (Ledger.TxIn txid txix) =
 fromShelleyTxId :: Ledger.TxId StandardShelley -> TxId
 fromShelleyTxId (Ledger.TxId h) =
     TxId (Crypto.castHash h)
+
+prettyTx :: Tx Shelley -> String
+prettyTx = BSC.unpack . textEnvelopeToJSON Nothing

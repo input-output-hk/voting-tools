@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -6,10 +7,13 @@
 module Config (Config(Config), opts, mkConfig) where
 
 import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Except (MonadError, ExceptT, throwError, catchError)
 import Control.Lens ((#))
 import Control.Lens.TH
+import Control.Exception.Safe (try)
 
 import Options.Applicative
 
@@ -22,12 +26,8 @@ import Cardano.CLI.Shelley.Commands (WitnessFile(WitnessFile))
 import Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import Cardano.Api.TextView (TextViewError)
 
-import Cardano.API.Extended (AsInputDecodeError(_InputDecodeError), AsFileError(__FileError), readSigningKeyFile, readerFromAttoParser, parseAddress, pNetworkId)
-import CLI.Interop (stripTrailingNewlines)
-
-import Cardano.API.Voting (VotingKeyPublic, deserialiseFromBech32, readVotePublicKey)
+import Cardano.API.Extended (AsInputDecodeError(_InputDecodeError), AsFileError(__FileError, _FileIOError), readSigningKeyFile, readerFromAttoParser, parseAddress, pNetworkId, AsBech32DecodeError(_Bech32DecodeError), VotingKeyPublic, deserialiseFromBech32, AsType(AsVotingKeyPublic))
 import Cardano.CLI.Voting.Error (AsTextViewError(_TextViewError))
-import Encoding (AsBech32DecodeError(_Bech32DecodeError))
 
 data Config
   = Config { cfgPaymentAddress    :: Address Shelley
@@ -111,3 +111,20 @@ pTTL = SlotNo
           <> help "The number of slots from the current slot at which the vote transaction times out."
           <> showDefault <> value 5000
           )
+
+stripTrailingNewlines :: Text -> Text
+stripTrailingNewlines = T.intercalate "\n" . filter (not . T.null) . T.lines
+
+readVotePublicKey
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e d
+     , AsBech32DecodeError e
+     )
+  => FilePath
+  -> m VotingKeyPublic
+readVotePublicKey path = do
+  result <- liftIO . try $ TIO.readFile path
+  raw    <- either (\e -> throwError . (_FileIOError #) $ (path, e)) pure result
+  let publicKeyBech32 = stripTrailingNewlines raw
+  either (throwError . (_Bech32DecodeError #)) pure $ deserialiseFromBech32 AsVotingKeyPublic publicKeyBech32
