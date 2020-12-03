@@ -1,6 +1,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | Performs the bulk of the work creating the vote registration
+-- transaction.
+
 module Cardano.CLI.Voting where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -43,8 +46,7 @@ import Cardano.CLI.Voting.Error
 import Cardano.CLI.Voting.Fee
 import Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload, voteMetadata)
 
-import Data.Word
-
+-- | Create a vote registration payload.
 createVote
   :: SigningKey StakeKey
   -> VotingKeyPublic
@@ -59,10 +61,14 @@ createVote stkSign@(StakeSigningKey skey) votepub =
   in
     case verifyDSIGN () vkey payloadCBOR payloadSig of
       Left err ->
+        -- This is an error because there should be no reason the
+        -- verification fails, given that our verification key is
+        -- derived from the signing key.
         error $ "Failed to validate vote payload: " <> show err
       Right () ->
         signVotePayload payload payloadSig
 
+-- | Encode the vote registration payload as a transaction body.
 encodeVote
   :: ( MonadIO m
      , MonadError e m
@@ -107,6 +113,7 @@ encodeVote connectInfo addr ttl vote = do
       -- Create the vote transaction
       pure $ voteTx addr txins (Lovelace $ value - fee) (slotTip + ttl) (Lovelace fee) meta
 
+-- | Helper for creating a transaction body.
 voteTx
   :: Address Shelley
   -> [TxIn]
@@ -130,12 +137,17 @@ voteTx addr txins (Lovelace value) ttl (Lovelace fee) meta =
                           txins
                           txouts
 
+-- | Sign a transaction body to create a transaction.
 signTx :: SigningKey PaymentKey -> TxBody Shelley -> Tx Shelley
 signTx psk txbody =
   let
     witness = makeShelleyKeyWitness txbody (WitnessPaymentKey psk)
   in
     makeSignedTransaction [witness] txbody
+
+-- | Pretty print a transaction.
+prettyTx :: Tx Shelley -> String
+prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
 
 fromShelleyUTxO :: Ledger.UTxO StandardShelley -> UnspentSources
 fromShelleyUTxO = fmap convert . M.assocs . Ledger.unUTxO
@@ -150,6 +162,3 @@ fromShelleyTxIn (Ledger.TxIn txid txix) =
 fromShelleyTxId :: Ledger.TxId StandardShelley -> TxId
 fromShelleyTxId (Ledger.TxId h) =
     TxId (Crypto.castHash h)
-
-prettyTx :: Tx Shelley -> String
-prettyTx = BSC.unpack . textEnvelopeToJSON Nothing

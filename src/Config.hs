@@ -4,6 +4,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | Handles configuration, which involves parsing command line
+-- arguments and reading key files.
+
 module Config (Config(Config), opts, mkConfig) where
 
 import Data.Text (Text)

@@ -1,6 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
+-- | Application error type and instances.
+
 module Cardano.CLI.Voting.Error where
 
 import Cardano.Api.TextView (TextViewError)
