@@ -1,5 +1,10 @@
 # Catalyst Voting Tools
 
+The goal of the tool is to aid the user in registering to vote. The
+process for doing so is to create a transaction, with the vote
+registration encoded as transaction metadata, and then to give this
+transaction to the user, so they can submit it to the chain.
+
 ## Running
 
 ```

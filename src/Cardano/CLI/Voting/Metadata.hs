@@ -10,15 +10,16 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , voteMetadata
                                    ) where
 
-import Cardano.API (TxMetadata(TxMetadata), VerificationKey, StakeKey, makeTransactionMetadata, serialiseToRawBytes)
-import Cardano.Api.Typed (TxMetadataValue(TxMetaNumber, TxMetaBytes, TxMetaText, TxMetaList, TxMetaMap))
-import Cardano.Binary (ToCBOR)
+import           Cardano.API (StakeKey, TxMetadata (TxMetadata), VerificationKey,
+                     makeTransactionMetadata, serialiseToRawBytes)
+import           Cardano.Api.Typed (TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText))
+import           Cardano.Binary (ToCBOR)
 import qualified Cardano.Binary as CBOR
-import qualified Data.Map.Strict as M
-import Data.ByteString (ByteString)
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
+import           Data.ByteString (ByteString)
+import qualified Data.Map.Strict as M
 
-import Cardano.API.Voting (VotingKeyPublic)
+import           Cardano.API.Extended (VotingKeyPublic)
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).

@@ -8,19 +8,20 @@ where
 
 import           Control.Monad.Except
 import           Control.Monad.IO.Class
-import           Test.QuickCheck (Arbitrary (..), Gen, Property, (=/=), (===), (==>))
-import           Test.Tasty (TestTree, testGroup,)
-import           Test.Tasty.QuickCheck (testProperty)
-import           Test.Tasty.HUnit
-import Test.HUnit ()
 import qualified Data.Map.Strict as M
+import           Test.HUnit ()
+import           Test.QuickCheck (Arbitrary (..), Gen, Property, (=/=), (===), (==>))
+import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty.HUnit
+import           Test.Tasty.QuickCheck (testProperty)
 
-import Cardano.API (makeTransactionMetadata, deserialiseFromRawBytes, deserialiseFromRawBytesHex)
-import Cardano.Api.Typed
-import Cardano.API.Voting (AsType(AsVotingKeyPublic))
-import Cardano.CLI.Voting (createVote)
-import Cardano.CLI.Voting.Error (AppError)
+import           Cardano.API (deserialiseFromRawBytes, deserialiseFromRawBytesHex,
+                     makeTransactionMetadata)
+import           Cardano.Api.Typed
+import           Cardano.API.Voting (AsType (AsVotingKeyPublic))
 import qualified Cardano.API.Voting as Voting
+import           Cardano.CLI.Voting (createVote)
+import           Cardano.CLI.Voting.Error (AppError)
 
 tests :: TestTree
 tests = do

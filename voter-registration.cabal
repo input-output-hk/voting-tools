@@ -16,17 +16,13 @@ extra-source-files:  CHANGELOG.md
 library
   hs-source-dirs:      src
 
-  exposed-modules:     CLI.Interop
-                     , Cardano.API.Extended
+  exposed-modules:     Cardano.API.Extended
                      , Cardano.API.Extended.Raw
-                     , Cardano.API.Voting
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
                      , Cardano.CLI.Voting.Metadata
                      , Config
-                     , Encoding
-                     , Extern
 
   build-depends:       base
                      , base16-bytestring
