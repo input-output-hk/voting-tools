@@ -1,0 +1,6 @@
+steps:
+  - label: 'build'
+    command:
+      - 'nix-build'
+    agents:
+      system: x86_64-linux
