@@ -19,6 +19,12 @@ let
     src = ../.;
   };
 
+  projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
+    (haskell-nix.cabalProject {
+      inherit src;
+      compiler-nix-name = compiler;
+    }));
+
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
   pkgSet = haskell-nix.cabalProject (lib.optionalAttrs stdenv.hostPlatform.isWindows {
@@ -52,6 +58,26 @@ let
         # https://github.com/input-output-hk/cardano-node/pull/1934
         packages.cardano-api.doHaddock = false;
       }
+      ({ pkgs, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
+        # systemd can't be statically linked
+        packages.cardano-config.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
+        packages.cardano-node.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
+      })
+      # Musl libc fully static build
+      (lib.optionalAttrs stdenv.hostPlatform.isMusl (let
+        # Module options which adds GHC flags and libraries for a fully static build
+        fullyStaticOptions = {
+          enableShared = false;
+          enableStatic = true;
+        };
+      in
+        {
+          packages = lib.genAttrs projectPackages (name: fullyStaticOptions);
+
+          # Haddock not working and not needed for cross builds
+          doHaddock = false;
+        }
+      ))
     ];
     # TODO add flags to packages (like cs-ledger) so we can turn off tests that will
     # not build for windows on a per package bases (rather than using --disable-tests).
