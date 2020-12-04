@@ -173,7 +173,7 @@ Right x ?!. _ = Right x
 Nothing ?! e = Left e
 Just x  ?! _ = Right x
 
-votingPublicKeyBech32Prefix = "ed25519e_sk"
+votingPublicKeyBech32Prefix = "ed25519_pk"
 
 deserialiseFromBech32 :: AsType VotingKeyPublic -> Text -> Either Bech32DecodeError VotingKeyPublic
 deserialiseFromBech32 asType bech32Str = do
