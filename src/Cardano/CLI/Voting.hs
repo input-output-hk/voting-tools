@@ -145,7 +145,7 @@ voteTx
   -> TxBody Shelley
 voteTx addr txins (Lovelace value) ttl (Lovelace fee) meta =
  let
-   txouts = [TxOut addr (Lovelace $ value - fee)]
+   txouts = [TxOut addr (Lovelace value)]
  in
    makeShelleyTransaction txExtraContentEmpty {
                             txCertificates   = [],
