@@ -8,6 +8,7 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , mkVotePayload
                                    , signVotePayload
                                    , voteMetadata
+                                   , voteSignature
                                    ) where
 
 import           Cardano.API (StakeKey, TxMetadata (TxMetadata), VerificationKey,
@@ -27,7 +28,10 @@ newtype VotePayload = VotePayload TxMetadata
   deriving (Eq, Show)
 
 -- | The signed vote payload.
-newtype Vote        = Vote TxMetadata
+data Vote
+  = Vote { _voteMeta :: TxMetadata
+         , _voteSig  :: ByteString
+         }
   deriving (Eq, Show)
 
 instance ToCBOR TxMetadata where
@@ -50,7 +54,7 @@ instance ToCBOR VotePayload where
   toCBOR (VotePayload meta) = CBOR.toCBOR meta
 
 instance ToCBOR Vote where
-  toCBOR (Vote meta) = CBOR.toCBOR meta
+  toCBOR = CBOR.toCBOR . voteMetadata
 
 mkVotePayload
   :: VotingKeyPublic
@@ -77,11 +81,18 @@ signVotePayload
   -- ^ Signed vote
 signVotePayload (VotePayload votePayload) sig =
   let
-    sigMetadata = makeTransactionMetadata (M.fromList [
-        (61285, TxMetaMap [(TxMetaNumber 1, TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig)])
-      ])
+    sigBytes = Crypto.rawSerialiseSigDSIGN sig
   in
-    Vote $ votePayload <> sigMetadata
+    Vote votePayload sigBytes
 
 voteMetadata :: Vote -> TxMetadata
-voteMetadata (Vote meta) = meta
+voteMetadata (Vote payloadMeta sigBytes) =
+  let
+    sigMeta = makeTransactionMetadata (M.fromList [
+        (61285, TxMetaMap [(TxMetaNumber 1, TxMetaBytes sigBytes)])
+      ])
+  in
+    payloadMeta <> sigMeta
+
+voteSignature :: Vote -> ByteString
+voteSignature (Vote _ sig) = sig

@@ -69,10 +69,10 @@ executable voter-registration
                      , ouroboros-network
                      , cardano-crypto-class
                      , cardano-binary
-
                      , containers
                      , cardano-ledger
                      , lens
+                     , base16-bytestring
 
   -- hs-source-dirs:
   default-language:    Haskell2010

@@ -11,25 +11,24 @@ import           Cardano.Api.LocalChainSync (getLocalTip)
 import           Control.Monad.Except (ExceptT, runExceptT, throwError)
 import           Control.Monad.IO.Class (liftIO)
 import qualified Options.Applicative as Opt
+import qualified Data.ByteString.Base16 as Base16
 import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
-
-import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (Lovelace (Lovelace), Shelley, Tx, TxId (TxId), TxIn (TxIn),
-                     TxIx (TxIx), localNodeNetworkId, writeFileTextEnvelope)
+                     TxIx (TxIx), localNodeNetworkId, writeFileTextEnvelope, serialiseToRawBytesHex, getVerificationKey)
 import qualified Cardano.Binary as CBOR
 import           Cardano.Chain.Slotting (EpochSlots (..))
 import           Cardano.CLI.Types (QueryFilter (FilterByAddress), SocketPath (SocketPath))
-import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
-import           Cardano.CLI.Voting.Error
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.Set as Set
 import           Ouroboros.Network.Point (fromWithOrigin)
 
-import           Control.Lens (( # ))
-
+import           Cardano.API.Extended (readEnvSocketPath)
 import           Config
+import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
+import           Cardano.CLI.Voting.Metadata (voteSignature)
+import           Cardano.CLI.Voting.Error
 
 main :: IO ()
 main = do
@@ -51,6 +50,11 @@ main = do
 
           -- Encode the vote as a transaction and sign it
           voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote
+
+          -- Output helpful information
+          liftIO . putStrLn $ "Vote public key used (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
+          liftIO . putStrLn $ "Stake public key used (hex): " <> BSC.unpack (serialiseToRawBytesHex (getVerificationKey stkSign))
+          liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode $ voteSignature vote) 
 
           -- Output our vote transaction
           liftIO . writeFile outFile $ prettyTx voteTx
