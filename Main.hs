@@ -53,8 +53,8 @@ main = do
           voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote
 
           -- Output helpful information
-          liftIO . putStrLn $ "Vote public key used (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
-          liftIO . putStrLn $ "Stake public key used (hex): " <> BSC.unpack (serialiseToRawBytesHex (getVerificationKey stkSign))
+          liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
+          liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (serialiseToRawBytesHex (getVerificationKey stkSign))
           liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode $ voteSignature vote)
 
           -- Output our vote transaction
