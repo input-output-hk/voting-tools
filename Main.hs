@@ -38,7 +38,7 @@ main = do
   eCfg  <- runExceptT $ mkConfig opts
   case eCfg of
     Left err  -> putStrLn $ show err
-    Right (Config addr stkSign paySign votePub networkId ttl) -> do
+    Right (Config addr stkSign paySign votePub networkId ttl outFile) -> do
       eResult <- runExceptT $ do
         SocketPath sockPath <-  readEnvSocketPath
         withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
@@ -53,7 +53,7 @@ main = do
           voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote
 
           -- Output our vote transaction
-          liftIO . putStr . prettyTx $ voteTx
+          liftIO . writeFile outFile $ prettyTx voteTx
       case eResult of
         Left  (err :: AppError) -> error $ show err
         Right ()                -> pure ()
