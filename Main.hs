@@ -8,27 +8,27 @@
 module Main where
 
 import           Cardano.Api.LocalChainSync (getLocalTip)
-import           Control.Monad.Except (ExceptT, runExceptT, throwError)
-import           Control.Monad.IO.Class (liftIO)
-import qualified Options.Applicative as Opt
-import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
-
-import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (Lovelace (Lovelace), Shelley, Tx, TxId (TxId), TxIn (TxIn),
-                     TxIx (TxIx), localNodeNetworkId, writeFileTextEnvelope)
+                     TxIx (TxIx), getVerificationKey, localNodeNetworkId, serialiseToRawBytesHex,
+                     writeFileTextEnvelope)
 import qualified Cardano.Binary as CBOR
 import           Cardano.Chain.Slotting (EpochSlots (..))
 import           Cardano.CLI.Types (QueryFilter (FilterByAddress), SocketPath (SocketPath))
-import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
-import           Cardano.CLI.Voting.Error
 import qualified Cardano.Crypto.Hash.Class as Crypto
+import           Control.Monad.Except (ExceptT, runExceptT, throwError)
+import           Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.Set as Set
+import qualified Options.Applicative as Opt
+import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 import           Ouroboros.Network.Point (fromWithOrigin)
 
-import           Control.Lens (( # ))
-
+import           Cardano.API.Extended (readEnvSocketPath)
+import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
+import           Cardano.CLI.Voting.Error
+import           Cardano.CLI.Voting.Metadata (voteSignature)
 import           Config
 
 main :: IO ()
@@ -38,7 +38,7 @@ main = do
   eCfg  <- runExceptT $ mkConfig opts
   case eCfg of
     Left err  -> putStrLn $ show err
-    Right (Config addr stkSign paySign votePub networkId ttl) -> do
+    Right (Config addr stkSign paySign votePub networkId ttl outFile) -> do
       eResult <- runExceptT $ do
         SocketPath sockPath <-  readEnvSocketPath
         withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
@@ -52,8 +52,13 @@ main = do
           -- Encode the vote as a transaction and sign it
           voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote
 
+          -- Output helpful information
+          liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
+          liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (serialiseToRawBytesHex (getVerificationKey stkSign))
+          liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode $ voteSignature vote)
+
           -- Output our vote transaction
-          liftIO . putStr . prettyTx $ voteTx
+          liftIO . writeFile outFile $ prettyTx voteTx
       case eResult of
         Left  (err :: AppError) -> error $ show err
         Right ()                -> pure ()
