@@ -1,9 +1,13 @@
 index-state: 2020-10-01T00:00:00Z
 
 packages:
-  ./.
+  ./registration
+  ./fetch
 
 package voter-registration
+  tests: True
+
+package fetch-registration
   tests: True
 
 package cardano-api

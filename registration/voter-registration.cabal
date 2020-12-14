@@ -22,7 +22,6 @@ library
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
                      , Cardano.CLI.Voting.Metadata
-                     , Config
 
   build-depends:       base
                      , base16-bytestring
@@ -57,7 +56,7 @@ library
 
 executable voter-registration
   main-is:             Main.hs
-  -- other-modules:
+  other-modules:       Config
   -- other-extensions:
   build-depends:       base
                      , cardano-api
@@ -73,8 +72,10 @@ executable voter-registration
                      , cardano-ledger
                      , lens
                      , base16-bytestring
+                     , shelley-spec-ledger
+                     , ouroboros-consensus
 
-  -- hs-source-dirs:
+  hs-source-dirs:      src/
   default-language:    Haskell2010
 
 -- test-suite voter-registration-test

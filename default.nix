@@ -51,5 +51,7 @@ let
       inherit pkgs;
       withHoogle = true;
     };
+
+    integration-tests = import ./test/integration/vm.nix { inherit pkgs; };
   };
 in self
