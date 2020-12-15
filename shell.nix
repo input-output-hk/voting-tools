@@ -13,13 +13,14 @@ let
 
   # This provides a development environment that can be used with nix-shell or
   # lorri. See https://input-output-hk.github.io/haskell.nix/user-guide/development/
-  shell = voterRegistrationHaskellPackages.shellFor {
-    name = "voter-registration-shell";
+  shell = votingToolsHaskellPackages.shellFor {
+    name = "voting-tools-shell";
 
     # If shellFor local packages selection is wrong,
     # then list all local packages then include source-repository-package that cabal complains about:
     packages = ps: with ps; [
        ps.voter-registration
+       ps.fetch-registration
     ];
     # packags = ps: pkgs.lib.attrValues (selectProjectPackages ps);
 

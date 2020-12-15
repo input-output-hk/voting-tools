@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 -- | Handles configuration, which involves parsing command line
 -- arguments and reading key files.
@@ -21,7 +22,7 @@ import qualified Data.Text.IO as TIO
 import           Options.Applicative
 
 import           Cardano.API (Address, Bech32DecodeError, FileError, NetworkId, PaymentKey,
-                     SigningKey, StakeKey, Witness)
+                     SigningKey, StakeKey, Witness, Lovelace(Lovelace))
 import qualified Cardano.API as Api
 import           Cardano.Api.TextView (TextViewError)
 import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TTL)
@@ -37,49 +38,12 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      readSigningKeyFile, readerFromAttoParser)
 import           Cardano.CLI.Voting.Error (AsTextViewError (_TextViewError))
 
-type Threshold = Int
-
-data VotingFunds
-  = VotingFunds { _votingFunds :: Map VotingKeyPublic Lovelace }
-
-instance FromJSON VotingFunds where
-    parseJSON = withObject "VotingFunds" $ \v ->
-      let
-        decodeVotingKeyPublic = withText "VotingKeyPublic" $ \t ->
-          case Base16.decode t of
-            Left err    -> fail $ "key " <> show t <> " could not be interpreted as hexadecimal."
-            Right bytes ->
-              case deserialiseFromRawBytes bytes of
-                Nothing         -> fail $ "failed to deserialise VotingKeyPublic from raw bytes: " <> show bytes <> "."
-                Right votingKey -> pure votingKey
-  
-        decodeLovelace = withNumber "Lovelace" $ \n ->
-          case toBoundedInteger n of
-            Nothing  -> fail $ "failed to convert " <> show n <> " into a valid integer."
-            Just num -> pure $ Lovelace num
-  
-        kvs = HM.toList v
-
-      kvs' <- traverse ((k, v) -> (,) <$> decodeVotingKeyPublic k <*> decodeLovelace v) kvs
-      VotingFunds $ M.fromList kvs
-
-instance ToJSON VotingFunds where
-  toJSON (VotingFunds map) =
-    let 
-      kvs = M.toList map
-
-      toJSONVotingKeyPublic = T.pack . BC.unpack . Base16.encode . serialiseAsRawBytes
-      toJSONLovelace (Lovelace n) = Aeson.Number $ fromInteger n
-
-      kvs' = (\(k,v) -> (toJSONVotingKeyPublic k, toJSONLovelace v)) <$> kvs
-    in
-      Aeson.Object $ HM.fromList kvs'
-
 data DatabaseConfig
   = DatabaseConfig { _dbName       :: String
                    , _dbUser       :: String
                    , _dbSocketPath :: FilePath
                    }
+  deriving (Eq, Show)
 
 data Config = Config
     { cfgNetworkId         :: NetworkId
@@ -93,12 +57,12 @@ data Config = Config
     , cfgExtraFunds        :: VotingFunds
     -- ^ Extra funds to consider in the threshold test
     }
-    deriving (Show)
+  deriving (Eq, Show)
 
 data ConfigError = ConfigFileJSONDecodeError FilePath String
     deriving (Show)
 
-makePrisms ''ConfigError
+makeClassyPrisms ''ConfigError
 
 mkConfig
   :: Opts
@@ -106,8 +70,8 @@ mkConfig
 mkConfig (Opts networkId dbName dbUser dbSocket mExtraFundsFp mSlotNo threshold) = do
   extraFunds <-
     case mExtraFundsFp of
-      Nothing             -> mempty
-      (Just extraFundsfp) -> readExtraFundsFile extraFundsFp
+      Nothing             -> pure mempty
+      (Just extraFundsFp) -> readExtraFundsFile extraFundsFp
 
   pure $ Config networkId threshold (DatabaseConfig dbName dbUser dbSocket) mSlotNo extraFunds
 
@@ -116,7 +80,7 @@ readExtraFundsFile
      , MonadError e m
      , AsConfigError e
      )
-  => FilePath -> m FundsMap
+  => FilePath -> m VotingFunds
 readExtraFundsFile fp = do
   result <- liftIO . Aeson.eitherDecodeFileStrict' $ fp
   either (\e -> throwError . (_ConfigFileJSONDecodeError #) $ (fp, e)) pure result
@@ -135,12 +99,12 @@ data Opts = Opts
 parseOpts :: Parser Opts
 parseOpts = Opts
   <$> pNetworkId
-  <*> strOption (long "database-name" <> short "db" <> metavar "DB_NAME" <> showDefault <> value "cexplorer" <> help "Name of the cardano-db-sync database")
-  <*> strOption (long "database-user" <> short "db-user" <> metavar "DB_USER" <> showDefault <> value "cexplorer" <> help "User to connect to the cardano-db-sync database with")
-  <*> strOption (long "database-socket-file" <> short "db-sock" <> metavar "DB_SOCK" <> showDefault <> value "/run/postgresql" <> help "socket file for the cardano-db-sync database connection")
-  <*> strOption (long "extra-funds" <> metavar "FILE" <> help "File containing extra funds to include in the query (JSON)")
+  <*> strOption (long "db" <> metavar "DB_NAME" <> showDefault <> value "cexplorer" <> help "Name of the cardano-db-sync database")
+  <*> strOption (long "db-user" <> metavar "DB_USER" <> showDefault <> value "cexplorer" <> help "User to connect to the cardano-db-sync database with")
+  <*> strOption (long "db-sock" <> metavar "DB_SOCK" <> showDefault <> value "/run/postgresql" <> help "socket file for the cardano-db-sync database connection")
+  <*> option auto (long "extra-funds" <> metavar "FILE" <> help "File containing extra funds to include in the query (JSON)")
   <*> pSlotNo
-  <*> auto (long "threshold" <> metavar "WORD64" <> help "Minimum threshold of funds required to vote")
+  <*> option auto (long "threshold" <> metavar "INT64" <> help "Minimum threshold of funds required to vote (Lovelace)")
 
 opts =
   info

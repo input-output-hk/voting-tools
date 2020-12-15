@@ -60,7 +60,7 @@ import qualified Shelley.Spec.Ledger.UTxO as Ledger
 import           Cardano.API.Extended (textEnvelopeToJSON)
 import           Cardano.API.Extended (AsBech32DecodeError, AsBech32HumanReadablePartError,
                      AsShelleyQueryCmdLocalStateQueryError, AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32, queryPParamsFromLocalState,
+                     VotingKeyPublic, deserialiseFromBech32', queryPParamsFromLocalState,
                      queryUTxOFromLocalState)
 import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Fee

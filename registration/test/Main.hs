@@ -1,13 +1,13 @@
 import           Test.Tasty (TestTree, defaultMain, testGroup)
 
-import qualified Test.Cardano.CLI.Voter.Registration
+import qualified Test.Cardano.CLI.Fetching
 
 
 main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests =
-  testGroup "VoterRegistration"
-    [ Test.Cardano.CLI.Voter.Registration.tests
+tests = do
+  testGroup "Voting tools tests"
+    [ Test.Cardano.CLI.Fetching.tests
     ]

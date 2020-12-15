@@ -18,21 +18,33 @@ executable fetch-registration
   other-modules:       Config
   -- other-extensions:
   build-depends:       base
+                     , aeson
+                     , scientific
+                     , aeson-pretty
+                     , attoparsec
+                     , base16-bytestring
+                     , bech32
+                     , bytestring
                      , cardano-api
+                     , cardano-binary
                      , cardano-cli
+                     , cardano-crypto-class
+                     , cardano-ledger
+                     , containers
+                     , unordered-containers
+                     , lens
                      , mtl
                      , optparse-applicative
-                     , bytestring
-                     , voter-registration
-                     , ouroboros-network
-                     , cardano-crypto-class
-                     , cardano-binary
-                     , containers
-                     , cardano-ledger
-                     , lens
-                     , base16-bytestring
-                     , shelley-spec-ledger
                      , ouroboros-consensus
+                     , ouroboros-consensus-cardano
+                     , ouroboros-consensus-shelley
+                     , ouroboros-network
+                     , ouroboros-network-framework
+                     , safe-exceptions
+                     , shelley-spec-ledger
+                     , text
+                     , transformers-except
+                     , voter-registration
 
   hs-source-dirs:      src/
   default-language:    Haskell2010

@@ -16,6 +16,7 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , queryPParamsFromLocalState
                             , Extended.ShelleyQueryCmdLocalStateQueryError(..)
                             , AsShelleyQueryCmdLocalStateQueryError(..)
+                            , jAddrBytes
                             , readSigningKeyFile
                             , AsFileError(..)
                             , AsInputDecodeError(..)
@@ -29,8 +30,10 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , AsBech32HumanReadablePartError(..)
                             , Bech32HumanReadablePartError(Bech32HumanReadablePartError)
                             , VotingKeyPublic
-                            , deserialiseFromBech32
-                            , AsType(AsVotingKeyPublic)
+                            , deserialiseFromBech32'
+                            , serialiseToBech32'
+                            , AsType(AsVotingKeyPublic, AsJormungandrAddress)
+                            , JormungandrAddress
                             ) where
 
 import           Control.Lens (( # ))
@@ -43,6 +46,11 @@ import           Data.ByteString (ByteString)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Text (Text)
+import           Data.Aeson (FromJSON(parseJSON), ToJSON(toJSON))
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.Text as T
 
 import           Cardano.API (AsType, Bech32DecodeError, HasTextEnvelope, SerialiseAsBech32,
                      SigningKey)
@@ -146,7 +154,7 @@ readEnvSocketPath =
 data VotingKeyPublic = VotingKeyPublic
     { votingKeyPublicRawBytes :: ByteString
     }
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 instance HasTypeProxy VotingKeyPublic where
   data AsType VotingKeyPublic = AsVotingKeyPublic
@@ -155,6 +163,38 @@ instance HasTypeProxy VotingKeyPublic where
 instance SerialiseAsRawBytes VotingKeyPublic where
   serialiseToRawBytes (VotingKeyPublic raw) = raw
   deserialiseFromRawBytes AsVotingKeyPublic = Just . VotingKeyPublic
+
+instance SerialiseAsBech32' VotingKeyPublic where
+    bech32PrefixFor (VotingKeyPublic _) = "ed25519_pk"
+    bech32PrefixesPermitted AsVotingKeyPublic = ["ed25519_pk"]
+
+data JormungandrAddress = JormungandrAddress { _jAddressRawBytes :: ByteString }
+  deriving (Eq, Ord, Show)
+
+jAddrBytes :: JormungandrAddress -> ByteString
+jAddrBytes (JormungandrAddress bs) = bs
+
+instance SerialiseAsBech32' JormungandrAddress where
+    bech32PrefixFor (JormungandrAddress _) = "ca"
+    bech32PrefixesPermitted AsJormungandrAddress = ["ca"]
+
+instance HasTypeProxy JormungandrAddress where
+  data AsType JormungandrAddress = AsJormungandrAddress
+  proxyToAsType _ = AsJormungandrAddress
+
+instance SerialiseAsRawBytes JormungandrAddress where
+  serialiseToRawBytes (JormungandrAddress raw) = raw
+  deserialiseFromRawBytes AsJormungandrAddress = Just . JormungandrAddress
+
+instance FromJSON JormungandrAddress where
+  parseJSON = Aeson.withText "JormungandrAddress" $ \t ->
+    case (deserialiseFromBech32' AsJormungandrAddress t) of
+      Left err    -> fail $ "Failed to deserialise JormungandrAddress from Bech32 string: " <> show t <> "\n"
+        <> "Error was: " <> show err
+      Right addr  -> pure addr
+
+instance ToJSON JormungandrAddress where
+  toJSON = Aeson.String . serialiseToBech32'
 
 -- TODO Ask for this class to be exposed in Cardano.API...
 -- The SerialiseAsBech32 class need to be exposed from the CardanoAPI
@@ -173,15 +213,38 @@ Right x ?!. _ = Right x
 Nothing ?! e = Left e
 Just x  ?! _ = Right x
 
-votingPublicKeyBech32Prefix = "ed25519_pk"
+class (HasTypeProxy a, SerialiseAsRawBytes a) => SerialiseAsBech32' a where
 
-deserialiseFromBech32 :: AsType VotingKeyPublic -> Text -> Either Bech32DecodeError VotingKeyPublic
-deserialiseFromBech32 asType bech32Str = do
+    -- | The human readable prefix to use when encoding this value to Bech32.
+    --
+    bech32PrefixFor :: a -> Text
+
+    -- | The set of human readable prefixes that can be used for this type.
+    --
+    bech32PrefixesPermitted :: AsType a -> [Text]
+
+serialiseToBech32' :: SerialiseAsBech32' a => a -> Text
+serialiseToBech32' a =
+    Bech32.encodeLenient
+      humanReadablePart
+      (Bech32.dataPartFromBytes (serialiseToRawBytes a))
+  where
+    humanReadablePart =
+      case Bech32.humanReadablePartFromText (bech32PrefixFor a) of
+        Right p  -> p
+        Left err -> error $ "serialiseToBech32: invalid prefix "
+                         ++ show (bech32PrefixFor a)
+                         ++ ", " ++ show err
+
+
+deserialiseFromBech32' :: SerialiseAsBech32' a
+                      => AsType a -> Text -> Either Bech32DecodeError a
+deserialiseFromBech32' asType bech32Str = do
     (prefix, dataPart) <- Bech32.decodeLenient bech32Str
                             ?!. Bech32DecodingError
 
     let actualPrefix      = Bech32.humanReadablePartToText prefix
-        permittedPrefixes = [votingPublicKeyBech32Prefix]
+        permittedPrefixes = bech32PrefixesPermitted asType
     guard (actualPrefix `elem` permittedPrefixes)
       ?! Bech32UnexpectedPrefix actualPrefix (Set.fromList permittedPrefixes)
 
@@ -191,23 +254,8 @@ deserialiseFromBech32 asType bech32Str = do
     value <- deserialiseFromRawBytes asType payload
                ?! Bech32DeserialiseFromBytesError payload
 
-    let expectedPrefix = votingPublicKeyBech32Prefix
+    let expectedPrefix = bech32PrefixFor value
     guard (actualPrefix == expectedPrefix)
       ?! Bech32WrongPrefix actualPrefix expectedPrefix
 
     return value
-
-serialiseToBech32 :: VotingKeyPublic -> Text
-serialiseToBech32 a =
-    Bech32.encodeLenient
-      humanReadablePart
-      (Bech32.dataPartFromBytes (serialiseToRawBytes a))
-  where
-    humanReadablePart =
-      case Bech32.humanReadablePartFromText (votingPublicKeyBech32Prefix) of
-        Right p  -> p
-        Left err -> error $ "serialiseToBech32: invalid prefix "
-                         ++ show votingPublicKeyBech32Prefix
-                         ++ ", " ++ show err
-
--- | End voting keys

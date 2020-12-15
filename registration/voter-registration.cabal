@@ -18,87 +18,99 @@ library
 
   exposed-modules:     Cardano.API.Extended
                      , Cardano.API.Extended.Raw
+                     , Cardano.CLI.Fetching
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
                      , Cardano.CLI.Voting.Metadata
 
   build-depends:       base
+                     , aeson
+                     , aeson-pretty
+                     , attoparsec
                      , base16-bytestring
-                     , safe-exceptions
+                     , bech32
+                     , bytestring
+                     , cardano-api
+                     , cardano-binary
+                     , cardano-cli
+                     , cardano-crypto-class
+                     , cardano-node
+                     , cborg
+                     , containers
                      , directory
+                     , lens
                      , memory
                      , mtl
-                     , text
-                     , turtle
-                     , containers
-                     , cardano-crypto-class
-                     , bytestring
-                     , lens
-                     , bech32
                      , optparse-applicative
-                     , attoparsec
-                     , cardano-binary
-                     , aeson-pretty
-                     , ouroboros-network-framework
-
-                     , cborg
-
-                     , transformers-except
-                     , cardano-api
-                     , ouroboros-network
                      , ouroboros-consensus
-                     , ouroboros-consensus-shelley
-                     , cardano-node
-                     , shelley-spec-ledger
-                     , cardano-cli
                      , ouroboros-consensus-cardano
+                     , ouroboros-consensus-shelley
+                     , ouroboros-network
+                     , ouroboros-network-framework
+                     , safe-exceptions
+                     , scientific
+                     , shelley-spec-ledger
+                     , text
+                     , transformers-except
+                     , turtle
+                     , unordered-containers
 
 executable voter-registration
   main-is:             Main.hs
   other-modules:       Config
   -- other-extensions:
   build-depends:       base
+                     , aeson-pretty
+                     , attoparsec
+                     , base16-bytestring
+                     , bech32
+                     , bytestring
                      , cardano-api
+                     , cardano-binary
                      , cardano-cli
+                     , cardano-crypto-class
+                     , cardano-ledger
+                     , containers
+                     , lens
                      , mtl
                      , optparse-applicative
-                     , bytestring
-                     , voter-registration
-                     , ouroboros-network
-                     , cardano-crypto-class
-                     , cardano-binary
-                     , containers
-                     , cardano-ledger
-                     , lens
-                     , base16-bytestring
-                     , shelley-spec-ledger
                      , ouroboros-consensus
+                     , ouroboros-consensus-cardano
+                     , ouroboros-consensus-shelley
+                     , ouroboros-network
+                     , ouroboros-network-framework
+                     , safe-exceptions
+                     , shelley-spec-ledger
+                     , text
+                     , transformers-except
+                     , voter-registration
 
   hs-source-dirs:      src/
   default-language:    Haskell2010
 
--- test-suite voter-registration-test
---   hs-source-dirs: test
---   main-is: Main.hs
---   type:                 exitcode-stdio-1.0
+test-suite unit-tests
+  hs-source-dirs:       test
+  main-is:              Main.hs
+  type:                 exitcode-stdio-1.0
 
---   build-depends:
---                         base >=4.12 && <5
---                       , voter-registration
---                       , aeson
---                       , hspec
---                       , hedgehog
---                       , QuickCheck
---                       , tasty
---                       , mtl
---                       , tasty-hedgehog
---                       , tasty-quickcheck
---                       , tasty-hspec
---                       , unordered-containers
---                       , tasty-hunit
---                       , HUnit
---                       , containers
---                       , cardano-api
+  build-depends:
+                        base >=4.12 && <5
+                      , voter-registration
+                      , aeson
+                      , hspec
+                      , hedgehog
+                      , QuickCheck
+                      , tasty
+                      , mtl
+                      , tasty-hedgehog
+                      , tasty-quickcheck
+                      , tasty-hspec
+                      , unordered-containers
+                      , tasty-hunit
+                      , HUnit
+                      , containers
+                      , cardano-api
 
---   other-modules:      Test.Cardano.CLI.Voter.Registration  
+  other-modules:        Test.Cardano.CLI.Fetching
+                        Test.Generators
