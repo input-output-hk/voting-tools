@@ -22,6 +22,7 @@ library
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
                      , Cardano.CLI.Voting.Metadata
+                     , Cardano.CLI.Voting.Signing
                      , Config
 
   build-depends:       base
@@ -32,6 +33,7 @@ library
                      , mtl
                      , text
                      , turtle
+                     , cardano-crypto
                      , containers
                      , cardano-crypto-class
                      , bytestring

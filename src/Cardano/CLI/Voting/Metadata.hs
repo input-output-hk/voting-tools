@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 -- | A vote in Voltaire is encoded as transaction metadata. We
 -- distinguish two parts of the vote here: the payload, and the signed
 -- vote. The payload consists of the vote public key, and the stake
@@ -11,16 +13,21 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , voteSignature
                                    ) where
 
-import           Cardano.API (StakeKey, TxMetadata (TxMetadata), VerificationKey,
-                     makeTransactionMetadata, serialiseToRawBytes)
+import           Cardano.API (SerialiseAsRawBytes, StakeKey, TxMetadata (TxMetadata),
+                     VerificationKey, makeTransactionMetadata, serialiseToRawBytes)
 import           Cardano.Api.Typed (TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText))
 import           Cardano.Binary (ToCBOR)
 import qualified Cardano.Binary as CBOR
+import qualified Cardano.Crypto.DSIGN as DSIGN
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
+import           Cardano.Ledger.Crypto (ADDRHASH, Crypto, DSIGN, HASH, KES, VRF)
 import           Data.ByteString (ByteString)
 import qualified Data.Map.Strict as M
+import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
+import qualified Shelley.Spec.Ledger.Keys as Shelley
 
 import           Cardano.API.Extended (VotingKeyPublic)
+import           Cardano.CLI.Voting.Signing (VoteSigningKey, verificationKeyRawBytes)
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).
@@ -59,27 +66,26 @@ instance ToCBOR Vote where
 mkVotePayload
   :: VotingKeyPublic
   -- ^ Voting public key
-  -> VerificationKey StakeKey
-  -- ^ Stake verification key
+  -> VoteSigningKey
+  -- ^ Used for stake verification key
   -> VotePayload
   -- ^ Payload of the vote
-mkVotePayload votepub stkVerify =
+mkVotePayload votepub voteSign =
   VotePayload
     $ makeTransactionMetadata
     $ M.fromList [ (61284, TxMetaMap
         [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
-        , (TxMetaNumber 2, TxMetaBytes $ serialiseToRawBytes stkVerify)
+        , (TxMetaNumber 2, TxMetaBytes $ verificationKeyRawBytes voteSign)
         ])]
 
 signVotePayload
-  :: Crypto.DSIGNAlgorithm alg
-  => VotePayload
+  :: VotePayload
   -- ^ Vote payload
-  -> Crypto.SigDSIGN alg
+  -> Shelley.SignedDSIGN StandardCrypto a
   -- ^ Signature
   -> Vote
   -- ^ Signed vote
-signVotePayload (VotePayload votePayload) sig =
+signVotePayload (VotePayload votePayload) (DSIGN.SignedDSIGN sig) =
   let
     sigBytes = Crypto.rawSerialiseSigDSIGN sig
   in

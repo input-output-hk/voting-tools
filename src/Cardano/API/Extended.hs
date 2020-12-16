@@ -17,6 +17,7 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , Extended.ShelleyQueryCmdLocalStateQueryError(..)
                             , AsShelleyQueryCmdLocalStateQueryError(..)
                             , readSigningKeyFile
+                            , readSigningKeyFileAnyOf
                             , AsFileError(..)
                             , AsInputDecodeError(..)
                             , AsEnvSocketError(..)
@@ -44,8 +45,8 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Text (Text)
 
-import           Cardano.API (AsType, Bech32DecodeError, HasTextEnvelope, SerialiseAsBech32,
-                     SigningKey)
+import           Cardano.API (AsType, Bech32DecodeError, FromSomeType, HasTextEnvelope,
+                     SerialiseAsBech32, SigningKey)
 import           Cardano.Api.Typed (FileError (FileError, FileIOError))
 import           Cardano.Api.Typed (AsType, Bech32DecodeError (Bech32DataPartToBytesError, Bech32DecodingError, Bech32DeserialiseFromBytesError, Bech32UnexpectedPrefix, Bech32WrongPrefix),
                      HasTypeProxy (proxyToAsType),
@@ -123,6 +124,24 @@ readSigningKeyFile
   -> m (SigningKey keyrole)
 readSigningKeyFile role f = do
   result <- liftIO $ Shelley.readSigningKeyFile role f
+  case result of
+    Right x                 -> pure x
+    Left (FileError fp e)   -> throwError (_FileError # (fp , _InputDecodeError # e))
+    Left (FileIOError fp e) -> throwError (_FileIOError # (fp, e))
+
+readSigningKeyFileAnyOf
+  :: forall e m fileErr b.
+     ( MonadIO m
+     , MonadError e m
+     , AsFileError e fileErr
+     , AsInputDecodeError fileErr
+     )
+  => [FromSomeType SerialiseAsBech32 b]
+  -> [FromSomeType HasTextEnvelope b]
+  -> SigningKeyFile
+  -> m b
+readSigningKeyFileAnyOf bech32Types textEnvTypes f = do
+  result <- liftIO $ Shelley.readSigningKeyFileAnyOf bech32Types textEnvTypes f
   case result of
     Right x                 -> pure x
     Left (FileError fp e)   -> throwError (_FileError # (fp , _InputDecodeError # e))

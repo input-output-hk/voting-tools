@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 -- | Tools used to estimate the fee associated with a vote transaction
 -- and ensure that the unspent value of the TxIns are enough to cover
 -- the fee associated with submitting the transaction.
@@ -39,6 +40,7 @@ import           Cardano.Api.Typed (Shelley, StandardShelley)
 import qualified Cardano.Binary as CBOR
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import qualified Cardano.Crypto.Seed as Crypto
+import           Control.Lens.TH (makeClassyPrisms)
 import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 
@@ -49,6 +51,7 @@ data FeeParams = FeeParams
     , feePerTxIn :: Lovelace
     -- ^ The increase in fees for adding a TxIn
     }
+  deriving (Eq, Show)
 
 -- | Transactions that aren't fully spent.
 type UnspentSources
@@ -57,6 +60,11 @@ type UnspentSources
      , Lovelace
      -- ^ Unspent amount
      )]
+
+data NotEnoughFundsError = NotEnoughFundsToMeetFeeError !UnspentSources
+  deriving (Eq, Show)
+
+makeClassyPrisms ''NotEnoughFundsError
 
 -- | Total amount of unspent value.
 unspentValue :: UnspentSources -> Lovelace
