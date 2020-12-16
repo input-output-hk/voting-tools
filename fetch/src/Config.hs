@@ -34,7 +34,7 @@ import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32, pNetworkId, parseAddress,
+                     VotingKeyPublic, pNetworkId, parseAddress,
                      readSigningKeyFile, readerFromAttoParser)
 import           Cardano.CLI.Voting.Error (AsTextViewError (_TextViewError))
 
