@@ -57,6 +57,7 @@ let
         # Workaround until a build fix is released.
         # https://github.com/input-output-hk/cardano-node/pull/1934
         packages.cardano-api.doHaddock = false;
+        packages.esqueleto.doHaddock = false;
       }
       ({ pkgs, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
         # systemd can't be statically linked

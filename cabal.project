@@ -1,4 +1,4 @@
-index-state: 2020-10-01T00:00:00Z
+index-state: 2020-11-15T00:00:00Z
 
 packages:
   ./registration
@@ -13,7 +13,13 @@ package fetch-registration
 package cardano-api
   tests: False
 
+package streaming-bytestring
+  tests: False
+
 package cardano-node
+  tests: False
+
+package cardano-db
   tests: False
 
 package ouroboros-consensus-cardano
@@ -22,26 +28,27 @@ package ouroboros-consensus-cardano
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: acac87c7af2652b8d86d92c583b6c29234634866
-  --sha256: 1awxr663zgkn8dw13pjzzlzzz5y9y5l2fy14f87331gbrw6n2xdg
+  tag: 2574600da11065937c1f07e4b234ecb451016a2e
+  --sha256: 0nq8bpzsr3fd2i59a6s6qb6slpymjh47zv57wlifjfvhh0xlgmpx
   subdir:
     binary
     binary/test
     cardano-crypto-class
     cardano-crypto-praos
+    cardano-crypto-tests
     slotting
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-crypto
-  tag: f73079303f663e028288f9f4a9e08bcca39a923e
-  --sha256: 1n87i15x54s0cjkh3nsxs4r1x016cdw1fypwmr68936n3xxsjn6q
+  tag: 2547ad1e80aeabca2899951601079408becbc92c
+  --sha256: 1p2kg2w02q5w1cvqzhfhqmxviy4xrzada3mmb096j2n6hfr20kri
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger-specs
-  tag: d6179d72c52588460c1d57b932a2fd0724c5db32
-  --sha256: 0fwhnib6raiq2lisbabchdd45wmlj1kfd21a3zbdmgc468j16clw
+  tag: 581767d1329f3f702e332af08355e81a0f85333e
+  --sha256: 198p4v2bi36y6x512w35qycvjm7nds7jf8qh7r84pj1qsy43vf7w
   subdir:
     byron/chain/executable-spec
     byron/crypto
@@ -59,8 +66,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 72ffbe4b0e9d1955629b17f12e98d76d06b4f6c3
-  --sha256: 0y1nrar0p373b01fb3dnn2g1xvf9xynk67gzql34l1q0rl0apfxx
+  tag: 400d18092ce604352cf36fe5f105b0d7c78be074
+  --sha256: 19r4mamm9bxc1hz32qgsrfnrfxwp4pgnb4d28fzai3izznil03vi
   subdir:
     cardano-api
     cardano-config
@@ -71,8 +78,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: 58e146c14e1349553d0ed75dd5245bbe65f0533e
-  --sha256: 166rm0sxldnf0g2g9jp4k0rgd01wcbm0g54fcw3bxilzr1dvwqfi
+  tag: 742e8525b96bf4b66fb61a00c8298d75d7931d5e
+  --sha256: 1132r58bjgdcf7yz3n77nlrkanqcmpn5b5km4nw151yar2dgifsv
   subdir:
     cardano-prelude
     cardano-prelude-test
@@ -86,8 +93,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: 034962a2729e0afff82c367121c1cc9637c7f45a
-  --sha256: 0ga5j9r55r3ika48x2w39clp4qh8kjp27qanxsg1s6jrl125yjac
+  tag: 563e79f28c6da5c547463391d4c58a81442e48db
+  --sha256: 1is18h9kk8j16my89q76nihvapiiff3jl8777vk7c4wl2h4zry2w
   subdir:
     contra-tracer
     iohk-monitoring
@@ -101,23 +108,28 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: 7b02fb0db36ec9c649aecda524cc43d75a2342d5
-  --sha256: 19cfkfwgmm67hwj5ra5llmb98m37qasx2fpk4hi5yj2giwp4s2rm
+  tag: c2bd6814e231bfd48059f306ef486b830e524aa8
+  --sha256: 0sjp5i4szp5nf1dkwang5w8pydjx5p22by8wisihs1410rxgwd7n
   subdir:
-    cardano-client
     io-sim
     io-sim-classes
+    network-mux
     ouroboros-consensus
     ouroboros-consensus-byron
     ouroboros-consensus-cardano
     ouroboros-consensus-shelley
     ouroboros-network
     ouroboros-network-framework
-    ouroboros-network-testing
     typed-protocols
     typed-protocols-examples
-    network-mux
     Win32-network
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-db-sync
+  tag: 3cf868ec8c06265e4b670ac737af640d716e5ef7
+  --sha256: 152yhay3riak41saz5s5zdhlkb5c5iqpy1gw1rvwjp6rwg1mc77n
+  subdir: cardano-db
 
 
 package cardano-wallet-core

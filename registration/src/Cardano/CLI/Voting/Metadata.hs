@@ -24,13 +24,16 @@ import           Cardano.API.Extended (VotingKeyPublic)
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).
-newtype VotePayload = VotePayload TxMetadata
+newtype VotePayload
+  = VotePayload { _votePayloadVoteKey :: VotingKeyPublic
+                , _votePayloadVerificationKey :: VerificationKey StakeKey
+                }
   deriving (Eq, Show)
 
 -- | The signed vote payload.
-data Vote
-  = Vote { _voteMeta :: TxMetadata
-         , _voteSig  :: ByteString
+data Vote alg
+  = Vote { _voteMeta :: VotePayload
+         , _voteSig  :: Crypto.SigDSIGN alg
          }
   deriving (Eq, Show)
 
@@ -63,13 +66,7 @@ mkVotePayload
   -- ^ Stake verification key
   -> VotePayload
   -- ^ Payload of the vote
-mkVotePayload votepub stkVerify =
-  VotePayload
-    $ makeTransactionMetadata
-    $ M.fromList [ (61284, TxMetaMap
-        [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
-        , (TxMetaNumber 2, TxMetaBytes $ serialiseToRawBytes stkVerify)
-        ])]
+mkVotePayload votepub stkVerify = VotePayload votepub stkVerify
 
 signVotePayload
   :: Crypto.DSIGNAlgorithm alg
@@ -77,22 +74,80 @@ signVotePayload
   -- ^ Vote payload
   -> Crypto.SigDSIGN alg
   -- ^ Signature
-  -> Vote
+  -> Either String Vote
   -- ^ Signed vote
-signVotePayload (VotePayload votePayload) sig =
+signVotePayload payload@(VotePayload votePub (StakeVerificationKey (Shelley.VKey vkey))) sig =
   let
-    sigBytes = Crypto.rawSerialiseSigDSIGN sig
+    payloadCBOR = CBOR.serialize' payload
   in
-    Vote votePayload sigBytes
+    case verifyDSIGN () vkey payloadCBOR sig of
+      Left err -> Left err
+      Right () -> Right $ Vote payload sig
 
-voteMetadata :: Vote -> TxMetadata
-voteMetadata (Vote payloadMeta sigBytes) =
+toTxMetadata :: Vote -> TxMetadata
+toTxMetadata (Vote payload sig) =
   let
-    sigMeta = makeTransactionMetadata (M.fromList [
-        (61285, TxMetaMap [(TxMetaNumber 1, TxMetaBytes sigBytes)])
-      ])
+    payloadMeta = makeTransactionMetadata $ M.fromList [ (61284, TxMetaMap
+        [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
+        , (TxMetaNumber 2, TxMetaBytes $ serialiseToRawBytes stkVerify)
+        ])]
+    sigMeta = makeTransactionMetadata $ M.fromList [
+        (61285, TxMetaMap [(TxMetaNumber 1, TxMetaBytes $ Crytpo.rawSerialiseSigDSIGN sig)])
+      ]
   in
     payloadMeta <> sigMeta
 
-voteSignature :: Vote -> ByteString
+parseMetadataFromJson :: Aeson.Value -> Either String Api.TxMetadata
+parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonDetailedSchema
+
+fromTxMetadata :: TxMetadata -> Either MetadataParsingError Vote
+fromTxMetadata (TxMetadata map) = do
+  votePubRaw   <- metaKey 61284 >>= metaNum 1 >>= asBytes
+  stkVerifyRaw <- metaKey 61284 >>= metaNum 2 >>= asBytes
+  sigBytes     <- metaKey 61285 >>= metaNum 1 >>= asBytes
+  
+  sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
+    Left err -> throwError (_DeserialiseSigDSIGNFailure (err, sigBytes))
+    Right x  -> pure x
+  stkVerify <- case deserialiseFromRawBytes stkVerifyRaw of
+    Left err -> throwError (_DeserialiseVerKeyDSIGNFailure (err, stkVerifyRaw))
+    Right x  -> pure x
+  votePub   <- case deserialiseFromRawBytes votepub of
+    Left err -> throwError (_DeserialiseVotePublicKeyFailure (err, votePubRaw))
+    Right x  -> pure x
+
+  case (mkVotePayload votePub stkVerify) `signVotePayload` sig of
+    Left err   -> throwError (_MetadataSignatureInvalid # (err, sig))
+    Right vote -> pure vote
+
+  where
+    metaKey :: Word64 -> TxMetadata -> Either MetadataParsingError TxMetdataValue
+    metaKey key val@(TxMetadata map) =
+      case M.lookup key map of
+        Nothing     -> throwError (_MetadataMissingField # (val, key))
+        Just x      -> pure x
+
+    metaNum :: Integer -> TxMetadataValue -> Either MetadataParsingError TxMetadataValue
+    metaNum key val@(TxMetaMap xs) =
+      case find (\(k, v) -> k == TxMetaNumber key) xs of
+        Nothing     -> throwError (_MetadataValueMissingField # (val, key))
+        Just (_, x) -> pure x
+    metaNum key (x)            = throwError (_MetadataValueUnexpectedType # ("TxMetaMap", x))
+
+    asBytes :: TxMetadataValue -> Either MetadataParsingError ByteString
+    asBytes (TxMetaBytes bs) = pure bs
+    asBytes (x)              = throwError (_MetadataValueUnexpectedType # ("TxMetaBytes", x))
+
+voteSignature :: Vote alg -> Crypto.DSIGN alg
 voteSignature (Vote _ sig) = sig
+
+metadataMetaKey :: _
+metadataMetaKey = 61284
+
+signatureMetaKey :: _
+signatureMetaKey = 61285
+
+-- | The database JSON has the meta key stored separately to the meta
+--   value, use this function to combine them.
+withMetaKey :: Word64 -> Aeson.Value -> Aeson.Object
+withMetaKey metaKey val = HM.fromList [(T.show metaKey, val)]

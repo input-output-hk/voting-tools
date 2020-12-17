@@ -60,3 +60,4 @@ instance ToJSON VotingFunds where
       kvs' = (\(k,v) -> (TL.toStrict . TL.decodeUtf8 . Aeson.encode $ k, toJSONLovelace v)) <$> kvs
     in
       Aeson.Object $ HM.fromList kvs'
+

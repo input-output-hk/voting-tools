@@ -8,7 +8,7 @@
 -- | Handles configuration, which involves parsing command line
 -- arguments and reading key files.
 
-module Config (Config(Config), opts, mkConfig) where
+module Config (Config(Config), opts, mkConfig, DatabaseConfig(..), pgConnectionString) where
 
 import           Control.Exception.Safe (try)
 import           Control.Lens (( # ))
@@ -18,6 +18,9 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import qualified Data.Aeson as Aeson
+import Database.Persist.Postgresql (ConnectionString)
+import qualified Data.ByteString.Char8 as BC
 
 import           Options.Applicative
 
@@ -37,13 +40,17 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      VotingKeyPublic, pNetworkId, parseAddress,
                      readSigningKeyFile, readerFromAttoParser)
 import           Cardano.CLI.Voting.Error (AsTextViewError (_TextViewError))
+import           Cardano.CLI.Fetching (Threshold, VotingFunds)
 
 data DatabaseConfig
   = DatabaseConfig { _dbName       :: String
                    , _dbUser       :: String
-                   , _dbSocketPath :: FilePath
+                   , _dbHost       :: String
                    }
   deriving (Eq, Show)
+
+pgConnectionString :: DatabaseConfig -> ConnectionString
+pgConnectionString (DatabaseConfig dbName dbUser dbHost) = BC.pack $ "host=" <> dbHost <> " dbname=" <> dbName <> " user=" <> dbUser
 
 data Config = Config
     { cfgNetworkId         :: NetworkId
@@ -67,13 +74,13 @@ makeClassyPrisms ''ConfigError
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
-mkConfig (Opts networkId dbName dbUser dbSocket mExtraFundsFp mSlotNo threshold) = do
+mkConfig (Opts networkId dbName dbUser dbHost mExtraFundsFp mSlotNo threshold) = do
   extraFunds <-
     case mExtraFundsFp of
       Nothing             -> pure mempty
       (Just extraFundsFp) -> readExtraFundsFile extraFundsFp
 
-  pure $ Config networkId threshold (DatabaseConfig dbName dbUser dbSocket) mSlotNo extraFunds
+  pure $ Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo extraFunds
 
 readExtraFundsFile
   :: ( MonadIO m
@@ -89,7 +96,7 @@ data Opts = Opts
     { optNetworkId      :: NetworkId
     , optDbName         :: String
     , optDbUser         :: String
-    , optDbSocket       :: FilePath
+    , optDbHost         :: FilePath
     , optExtraFundsFile :: Maybe FilePath
     , optSlotNo         :: Maybe SlotNo
     , optThreshold      :: Threshold
@@ -101,9 +108,9 @@ parseOpts = Opts
   <$> pNetworkId
   <*> strOption (long "db" <> metavar "DB_NAME" <> showDefault <> value "cexplorer" <> help "Name of the cardano-db-sync database")
   <*> strOption (long "db-user" <> metavar "DB_USER" <> showDefault <> value "cexplorer" <> help "User to connect to the cardano-db-sync database with")
-  <*> strOption (long "db-sock" <> metavar "DB_SOCK" <> showDefault <> value "/run/postgresql" <> help "socket file for the cardano-db-sync database connection")
-  <*> option auto (long "extra-funds" <> metavar "FILE" <> help "File containing extra funds to include in the query (JSON)")
-  <*> pSlotNo
+  <*> strOption (long "db-host" <> metavar "DB_HOST" <> showDefault <> value "/run/postgresql" <> help "Host for the cardano-db-sync database connection")
+  <*> optional (strOption (long "extra-funds" <> metavar "FILE" <> help "File containing extra funds to include in the query (JSON)"))
+  <*> optional pSlotNo
   <*> option auto (long "threshold" <> metavar "INT64" <> help "Minimum threshold of funds required to vote (Lovelace)")
 
 opts =
@@ -114,8 +121,8 @@ opts =
     <> header "rego-fetch - a tool to fetch voter registrations"
     )
 
-pSlotNo :: Parser (Maybe SlotNo)
-pSlotNo = (fmap SlotNo)
+pSlotNo :: Parser SlotNo
+pSlotNo = SlotNo
     <$> option auto
           ( long "slot-no"
           <> metavar "WORD64"

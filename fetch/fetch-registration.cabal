@@ -21,7 +21,14 @@ executable fetch-registration
                      , aeson
                      , scientific
                      , aeson-pretty
+                     , persistent
+                     , cardano-db
+                     , monad-logger
+                     , persistent-postgresql
+                     , conduit
                      , attoparsec
+                     , resourcet
+                     , esqueleto
                      , base16-bytestring
                      , bech32
                      , bytestring

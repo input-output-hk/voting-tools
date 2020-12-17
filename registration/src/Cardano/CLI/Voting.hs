@@ -77,17 +77,10 @@ createVote stkSign@(StakeSigningKey skey) votepub =
     stkVerify@(StakeVerificationKey (Shelley.VKey vkey)) = getVerificationKey stkSign
 
     payload     = mkVotePayload votepub stkVerify
-    payloadCBOR = CBOR.serialize' payload
     payloadSig  = signDSIGN () payloadCBOR skey
   in
-    case verifyDSIGN () vkey payloadCBOR payloadSig of
-      Left err ->
-        -- This is an error because there should be no reason the
-        -- verification fails, given that our verification key is
-        -- derived from the signing key.
-        error $ "Failed to validate vote payload: " <> show err
-      Right () ->
-        signVotePayload payload payloadSig
+    either error id $
+      signVotePayload payload payloadSig
 
 -- | Encode the vote registration payload as a transaction body.
 encodeVote
