@@ -40,6 +40,8 @@ import qualified Cardano.Crypto.Wallet as Crypto.HD
 import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 
+import           Cardano.Ledger.Crypto (Crypto (..))
+
 data VoteSigningKey
   = AStakeSigningKey         (SigningKey StakeKey)
   | AStakeExtendedSigningKey (SigningKey StakeExtendedKey)
@@ -71,20 +73,22 @@ sign
   :: Crypto.SignableRepresentation tosign
   => tosign
   -> VoteSigningKey
-  -> Shelley.SignedDSIGN StandardCrypto tosign
+  -> Crypto.SigDSIGN (DSIGN StandardCrypto)
 sign payload vsk =
   withVoteShelleySigningKey vsk $ \skey ->
-    payload `makeShelleySignature` skey
+    let
+      (Crypto.SignedDSIGN sig) = payload `makeShelleySignature` skey
+    in sig
 
 verify
   :: Crypto.SignableRepresentation tosign
   => VoteVerificationKey
   -> tosign
-  -> Shelley.SignedDSIGN StandardCrypto tosign
+  -> Crypto.SigDSIGN (DSIGN StandardCrypto)
   -> Bool
 verify vkey payload sig =
-  withVoteVerificationKey vkey $ \(StakeVerificationKey v) ->
-    Shelley.verifySignedDSIGN v payload sig
+  withVoteVerificationKey vkey $ \(StakeVerificationKey (Shelley.VKey v)) ->
+    either (const False) (const True) $ Crypto.verifyDSIGN () v payload sig
 
 withVoteSigningKey :: VoteSigningKey
                    -> (forall keyrole. Key keyrole => SigningKey keyrole -> a)

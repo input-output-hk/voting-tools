@@ -19,16 +19,16 @@ import           Data.String (fromString)
 import           Data.Text (Text)
 
 import           Cardano.API (Address, AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
-                     Lovelace (Lovelace), NetworkId, PaymentCredential, PaymentKey, SigningKey,
-                     StakeAddressReference, StakeCredential, StakeKey, TTL, Tx, TxBody,
+                     Lovelace, NetworkId, PaymentCredential, PaymentKey, SigningKey,
+                     StakeAddressReference, StakeCredential, StakeKey, Tx, TxBody, SlotNo,
                      TxIn (TxIn), TxMetadata, VerificationKey, castVerificationKey,
                      deserialiseFromRawBytesHex, estimateTransactionFee, getVerificationKey,
                      localNodeNetworkId, makeShelleyAddress, makeShelleyKeyWitness,
-                     makeShelleyTransaction, makeSignedTransaction, makeTransactionMetadata,
+                     makeSignedTransaction, makeTransactionMetadata,
                      serialiseToBech32, serialiseToRawBytes, serialiseToRawBytesHex,
-                     txExtraContentEmpty, verificationKeyHash)
+                     verificationKeyHash, AddressAny)
 import           Cardano.Api.LocalChainSync (getLocalTip)
-import           Cardano.Api.Typed (AsType (AsSigningKey),
+import           Cardano.Api.Typed (AsType (AsSigningKey), Lovelace(Lovelace),
                      PaymentCredential (PaymentCredentialByKey), Shelley,
                      ShelleyWitnessSigningKey (WitnessPaymentKey), SigningKey (StakeSigningKey),
                      StakeAddressReference (StakeAddressByValue),
@@ -66,11 +66,10 @@ import           Cardano.API.Extended (AsBech32DecodeError, AsBech32HumanReadabl
                      queryUTxOFromLocalState)
 import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Fee
-import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload,
-                     voteMetadata)
+import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload, voteToTxMetadata)
 import           Cardano.CLI.Voting.Signing (VoteSigningKey, withVoteShelleySigningKey,
                      withVoteSigningKey)
-import           Cardano.CLI.Voting.Signing (sign, verify)
+import           Cardano.CLI.Voting.Signing (sign, verify, getVoteVerificationKey)
 
 -- | Create a vote registration payload.
 createVote
@@ -79,7 +78,7 @@ createVote
   -> Vote
 createVote skey votepub =
     let
-      payload     = mkVotePayload votepub skey
+      payload     = mkVotePayload votepub (getVoteVerificationKey skey)
       payloadCBOR = CBOR.serialize' payload
 
       payloadSig  :: Shelley.SignedDSIGN StandardCrypto ByteString
@@ -103,19 +102,19 @@ encodeVote
      )
   => LocalNodeConnectInfo mode block
   -> AddressAny
-  -> TTL
+  -> SlotNo
   -> Vote
   -> m (TxBody Shelley)
 encodeVote connectInfo addr ttl vote = do
   -- Get the network parameters
   pparams <- queryPParamsFromLocalState connectInfo
   let
-    meta      = voteMetadata vote
+    meta      = voteToTxMetadata vote
     networkId = localNodeNetworkId connectInfo
 
   -- Estimate the fee for the transaction
   let
-    feeParams = estimateVoteFeeParams networkId pparams meta
+    feeParams = estimateVoteFeeParams networkId _era pparams meta
 
   -- Find some unspent funds
   utxos <- queryUTxOFromLocalState (FilterByAddress $ Set.singleton addr) connectInfo
@@ -139,7 +138,7 @@ voteTx
   :: Address Shelley
   -> [TxIn]
   -> Lovelace
-  -> TTL
+  -> SlotNo
   -> Lovelace
   -> TxMetadata
   -> TxBody Shelley

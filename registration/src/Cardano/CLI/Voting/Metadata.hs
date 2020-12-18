@@ -13,7 +13,8 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , Vote
                                    , mkVotePayload
                                    , signVotePayload
-                                   , voteMetadata
+                                   , voteToTxMetadata
+                                   , votePayloadToTxMetadata
                                    , voteSignature
                                    ) where
 
@@ -39,6 +40,7 @@ import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
 import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 import qualified Cardano.Crypto.DSIGN as DSIGN
+import           Cardano.Ledger.Crypto (Crypto (..))
 
 import           Cardano.API.Extended (VotingKeyPublic, AsType(AsVotingKeyPublic))
 import           Cardano.CLI.Voting.Signing (VoteVerificationKey, verify, AsType(AsVoteVerificationKey))
@@ -54,7 +56,7 @@ data VotePayload
 -- | The signed vote payload.
 data Vote
   = Vote { _voteMeta :: VotePayload
-         , _voteSig  :: Shelley.SignedDSIGN StandardCrypto ByteString
+         , _voteSig  :: Crypto.SigDSIGN (DSIGN StandardCrypto)
          }
 
 data MetadataParsingError
@@ -64,7 +66,7 @@ data MetadataParsingError
   | DeserialiseSigDSIGNFailure ByteString
   | DeserialiseVerKeyDSIGNFailure ByteString
   | DeserialiseVotePublicKeyFailure ByteString
-  | MetadataSignatureInvalid VotePayload (Crypto.SignedDSIGN StandardCrypto ByteString)
+  | MetadataSignatureInvalid VotePayload (Crypto.SigDSIGN (DSIGN StandardCrypto))
 
 makeClassyPrisms ''MetadataParsingError
 
@@ -103,7 +105,7 @@ mkVotePayload votepub vkey = VotePayload votepub vkey
 signVotePayload
   :: VotePayload
   -- ^ Vote payload
-  -> Shelley.SignedDSIGN StandardCrypto ByteString
+  -> Crypto.SigDSIGN (DSIGN StandardCrypto)
   -- ^ Signature
   -> Maybe Vote
   -- ^ Signed vote
@@ -123,7 +125,7 @@ votePayloadToTxMetadata (VotePayload votepub stkVerify) =
     ])]
 
 voteToTxMetadata :: Vote -> TxMetadata
-voteToTxMetadata (Vote payload (DSIGN.SignedDSIGN sig)) =
+voteToTxMetadata (Vote payload sig) =
   let
     payloadMeta = votePayloadToTxMetadata payload
     sigMeta = makeTransactionMetadata $ M.fromList [
@@ -143,7 +145,7 @@ fromTxMetadata meta = do
   
   sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
     Nothing -> throwError (_DeserialiseSigDSIGNFailure # sigBytes)
-    Just x  -> pure $ DSIGN.SignedDSIGN x
+    Just x  -> pure x
   stkVerify <- case Api.deserialiseFromRawBytes AsVoteVerificationKey stkVerifyRaw of
     Nothing  -> throwError (_DeserialiseVerKeyDSIGNFailure # stkVerifyRaw)
     Just x   -> pure x
