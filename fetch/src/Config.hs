@@ -27,8 +27,7 @@ import           Options.Applicative
 import           Cardano.API (Address, Bech32DecodeError, FileError, NetworkId, PaymentKey,
                      SigningKey, StakeKey, Witness, Lovelace(Lovelace))
 import qualified Cardano.API as Api
-import           Cardano.Api.TextView (TextViewError)
-import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TTL)
+import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TTL, TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
 import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
 import           Cardano.CLI.Shelley.Key (InputDecodeError)

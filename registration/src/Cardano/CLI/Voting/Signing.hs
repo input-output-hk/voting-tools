@@ -39,6 +39,9 @@ data VoteSigningKey = AStakeSigningKey         (SigningKey StakeKey)
                     | AStakeExtendedSigningKey (SigningKey StakeExtendedKey)
   deriving Show
 
+-- data VoteVerificationKey
+--   = AStakeVerificationKey
+
 verificationKeyRawBytes :: VoteSigningKey -> ByteString
 verificationKeyRawBytes (AStakeSigningKey k)         = serialiseToRawBytes $ getVerificationKey k
 verificationKeyRawBytes (AStakeExtendedSigningKey k) = serialiseToRawBytes $ getVerificationKey k

@@ -2,6 +2,7 @@
 -- I've replicated them here.
 
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}

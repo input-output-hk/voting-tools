@@ -102,7 +102,7 @@ encodeVote
      , ShowQuery (Query block)
      )
   => LocalNodeConnectInfo mode block
-  -> Address Shelley
+  -> AddressAny
   -> TTL
   -> Vote
   -> m (TxBody Shelley)

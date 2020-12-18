@@ -16,13 +16,13 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
 
-import           Cardano.API (Lovelace(Lovelace))
+import           Cardano.API (Lovelace, Quantity)
 import qualified Cardano.API as Api
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32', pNetworkId, parseAddress,
+                     VotingKeyPublic, deserialiseFromBech32', pNetworkId,
                      readSigningKeyFile, readerFromAttoParser, JormungandrAddress)
 
 type Threshold = Int
@@ -43,7 +43,7 @@ instance FromJSON VotingFunds where
         decodeLovelace = Aeson.withScientific "Lovelace" $ \n ->
           case toBoundedInteger n of
             Nothing  -> fail $ "failed to convert " <> show n <> " into a valid integer."
-            Just num -> pure $ Lovelace $ toInteger (num :: Int64)
+            Just num -> pure $ fromInteger $ toInteger (num :: Int64)
   
         kvs = HM.toList v
 
@@ -55,9 +55,8 @@ instance ToJSON VotingFunds where
     let 
       kvs = M.toList map
 
-      toJSONLovelace (Lovelace n) = Aeson.Number $ fromInteger n
-
-      kvs' = (\(k,v) -> (TL.toStrict . TL.decodeUtf8 . Aeson.encode $ k, toJSONLovelace v)) <$> kvs
+      obj :: HashMap Text Aeson.Value
+      obj = HM.fromList $ fmap (\(k,v) -> (TL.toStrict . TL.decodeUtf8 . Aeson.encode $ k, Aeson.toJSON v)) kvs
     in
-      Aeson.Object $ HM.fromList kvs'
+      Aeson.Object $ obj
 

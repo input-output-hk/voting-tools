@@ -37,7 +37,7 @@ import qualified Data.Text as T
 import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
 
-import           Cardano.API.Extended (VotingKeyPublic)
+import           Cardano.API.Extended (VotingKeyPublic, AsType(AsVotingKeyPublic))
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).
@@ -141,10 +141,10 @@ fromTxMetadata meta = do
   sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
     Nothing -> throwError (_DeserialiseSigDSIGNFailure # sigBytes)
     Just x  -> pure x
-  stkVerify <- case Api.deserialiseFromRawBytes' AsVoteVerificationKey stkVerifyRaw of
+  stkVerify <- case Api.deserialiseFromRawBytes AsVoteVerificationKey stkVerifyRaw of
     Left err -> throwError (_DeserialiseVerKeyDSIGNFailure (err, stkVerifyRaw))
     Right x  -> pure x
-  votePub   <- case Api.deserialiseFromRawBytes' AsVotePublicKey votePubRaw of
+  votePub   <- case Api.deserialiseFromRawBytes AsVotingKeyPublic votePubRaw of
     Left err -> throwError (_DeserialiseVotePublicKeyFailure (err, votePubRaw))
     Right x  -> pure x
 
@@ -173,10 +173,10 @@ fromTxMetadata meta = do
 voteSignature :: Vote -> Crypto.SigDSIGN Crypto.Ed25519DSIGN
 voteSignature (Vote _ sig) = sig
 
-metadataMetaKey :: _
+metadataMetaKey :: Integer
 metadataMetaKey = 61284
 
-signatureMetaKey :: _
+signatureMetaKey :: Integer
 signatureMetaKey = 61285
 
 -- | The database JSON has the meta key stored separately to the meta

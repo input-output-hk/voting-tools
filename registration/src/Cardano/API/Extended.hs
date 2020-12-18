@@ -33,6 +33,9 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , VotingKeyPublic
                             , deserialiseFromBech32'
                             , serialiseToBech32'
+                            , liftShelleyBasedEra
+                            , liftShelleyBasedMetadata
+                            , liftShelleyBasedTxFee
                             , AsType(AsVotingKeyPublic, AsJormungandrAddress)
                             , JormungandrAddress
                             ) where
@@ -53,8 +56,8 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.Text as T
 
-import           Cardano.API (AsType, Bech32DecodeError, HasTextEnvelope, SerialiseAsBech32,
-                     SigningKey, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), cardanoEraStyle, IsShelleyBasedEra, FromSomeType)
+import           Cardano.API (TxFee, Lovelace, TxFeesExplicitInEra(TxFeesExplicitInShelleyEra, TxFeesExplicitInAllegraEra, TxFeesExplicitInMaryEra), TxFee(TxFeeExplicit), AsType, Bech32DecodeError, HasTextEnvelope, SerialiseAsBech32,
+                     SigningKey, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), cardanoEraStyle, IsShelleyBasedEra, FromSomeType, CardanoEra(ShelleyEra, AllegraEra, MaryEra), ShelleyBasedEra(ShelleyBasedEraShelley, ShelleyBasedEraAllegra, ShelleyBasedEraMary), TxMetadata, TxMetadataSupportedInEra(TxMetadataInShelleyEra, TxMetadataInAllegraEra, TxMetadataInMaryEra), TxMetadataInEra(TxMetadataInEra))
 import           Cardano.Api.Typed (FileError (FileError, FileIOError), ShelleyLedgerEra)
 import           Cardano.Api.Shelley (ShelleyBasedEra)
 import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
@@ -87,6 +90,29 @@ data Bech32HumanReadablePartError = Bech32HumanReadablePartError !(Bech32.HumanR
     deriving Show
 
 makeClassyPrisms ''Bech32HumanReadablePartError
+
+liftShelleyBasedTxFee
+  :: ShelleyBasedEra era
+  -> Lovelace
+  -> TxFee era
+liftShelleyBasedTxFee (ShelleyBasedEraShelley) = (TxFeeExplicit TxFeesExplicitInShelleyEra)
+liftShelleyBasedTxFee (ShelleyBasedEraAllegra) = (TxFeeExplicit TxFeesExplicitInAllegraEra)
+liftShelleyBasedTxFee (ShelleyBasedEraMary)    = (TxFeeExplicit TxFeesExplicitInMaryEra)
+
+liftShelleyBasedMetadata
+  :: ShelleyBasedEra era
+  -> TxMetadata
+  -> TxMetadataInEra era
+liftShelleyBasedMetadata (ShelleyBasedEraShelley) = (TxMetadataInEra TxMetadataInShelleyEra)
+liftShelleyBasedMetadata (ShelleyBasedEraAllegra) = (TxMetadataInEra TxMetadataInAllegraEra)
+liftShelleyBasedMetadata (ShelleyBasedEraMary)    = (TxMetadataInEra TxMetadataInMaryEra)
+
+liftShelleyBasedEra
+  :: ShelleyBasedEra era
+  -> CardanoEra era
+liftShelleyBasedEra (ShelleyBasedEraShelley) = ShelleyEra
+liftShelleyBasedEra (ShelleyBasedEraAllegra) = AllegraEra
+liftShelleyBasedEra (ShelleyBasedEraMary)    = MaryEra
 
 liftExceptTIO
   :: ( MonadIO m

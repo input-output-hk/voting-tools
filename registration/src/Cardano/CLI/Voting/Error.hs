@@ -5,9 +5,8 @@
 
 module Cardano.CLI.Voting.Error where
 
-import           Cardano.API (Address, Bech32DecodeError, FileError, Lovelace (Lovelace))
-import           Cardano.Api.TextView (TextViewError)
-import           Cardano.Api.Typed (Shelley)
+import           Cardano.API (Address, Bech32DecodeError, FileError, Lovelace, AddressAny)
+import           Cardano.Api.Typed (Shelley, TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError (..))
 import qualified Codec.Binary.Bech32 as Bech32
 import           Control.Lens.TH (makeClassyPrisms)
@@ -21,11 +20,11 @@ import           Cardano.CLI.Voting.Fee (AsNotEnoughFundsError (_NotEnoughFundsE
                      NotEnoughFundsError)
 
 -- | Address doesn't have enough UTxOs to pay the requested amount.
-data AddressUTxOError = AddressNotEnoughUTxOs (Address Shelley) Lovelace
+data AddressUTxOError = AddressNotEnoughUTxOs AddressAny Lovelace
     deriving Show
 
 makeClassyPrisms ''AddressUTxOError
-makeClassyPrisms ''TextViewError
+makeClassyPrisms ''TextEnvelopeError
 
 data AppError = AppEnvSocketError !EnvSocketError
     | AppShelleyQueryError !ShelleyQueryCmdLocalStateQueryError
