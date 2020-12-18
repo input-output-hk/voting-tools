@@ -27,6 +27,7 @@ import           Cardano.Binary (ToCBOR)
 import           Data.List (find)
 import qualified Cardano.Binary as CBOR
 import qualified Shelley.Spec.Ledger.Keys as Shelley
+import qualified Cardano.Crypto.Util as Crypto
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Cardano.Crypto.DSIGN as Crypto
 import           Data.ByteString (ByteString)
@@ -36,32 +37,34 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Text as T
 import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
+import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
+import qualified Cardano.Crypto.DSIGN as DSIGN
 
 import           Cardano.API.Extended (VotingKeyPublic, AsType(AsVotingKeyPublic))
+import           Cardano.CLI.Voting.Signing (VoteVerificationKey, verify, AsType(AsVoteVerificationKey))
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).
 data VotePayload
   = VotePayload { _votePayloadVoteKey :: VotingKeyPublic
-                , _votePayloadVerificationKey :: VerificationKey StakeKey
+                , _votePayloadVerificationKey :: VoteVerificationKey
                 }
   deriving (Eq, Show)
 
 -- | The signed vote payload.
 data Vote
   = Vote { _voteMeta :: VotePayload
-         , _voteSig  :: Crypto.SigDSIGN Crypto.Ed25519DSIGN
+         , _voteSig  :: Shelley.SignedDSIGN StandardCrypto ByteString
          }
-  deriving (Eq, Show)
 
 data MetadataParsingError
   = MetadataMissingField TxMetadata Word64
   | MetadataValueMissingField TxMetadataValue Integer
   | MetadataValueUnexpectedType String TxMetadataValue
   | DeserialiseSigDSIGNFailure ByteString
-  | DeserialiseVerKeyDSIGNFailure String ByteString
-  | DeserialiseVotePublicKeyFailure String ByteString
-  | MetadataSignatureInvalid String VotePayload (Crypto.SigDSIGN Crypto.Ed25519DSIGN)
+  | DeserialiseVerKeyDSIGNFailure ByteString
+  | DeserialiseVotePublicKeyFailure ByteString
+  | MetadataSignatureInvalid VotePayload (Crypto.SignedDSIGN StandardCrypto ByteString)
 
 makeClassyPrisms ''MetadataParsingError
 
@@ -91,26 +94,26 @@ instance ToCBOR Vote where
 mkVotePayload
   :: VotingKeyPublic
   -- ^ Voting public key
-  -> VerificationKey StakeKey
-  -- ^ Stake verification key
+  -> VoteVerificationKey
+  -- ^ Vote verification key
   -> VotePayload
   -- ^ Payload of the vote
-mkVotePayload votepub stkVerify = VotePayload votepub stkVerify
+mkVotePayload votepub vkey = VotePayload votepub vkey
 
 signVotePayload
   :: VotePayload
   -- ^ Vote payload
-  -> Crypto.SigDSIGN Crypto.Ed25519DSIGN
+  -> Shelley.SignedDSIGN StandardCrypto ByteString
   -- ^ Signature
-  -> Either String Vote
+  -> Maybe Vote
   -- ^ Signed vote
-signVotePayload payload@(VotePayload votePub (StakeVerificationKey (Shelley.VKey vkey))) sig =
+signVotePayload payload@(VotePayload votePub vkey) sig =
   let
     payloadCBOR = CBOR.serialize' payload
   in
-    case Crypto.verifyDSIGN () vkey payloadCBOR sig of
-      Left err -> Left err
-      Right () -> Right $ Vote payload sig
+    if verify vkey payloadCBOR sig == False
+    then Nothing
+    else Just $ Vote payload sig
 
 votePayloadToTxMetadata :: VotePayload -> TxMetadata
 votePayloadToTxMetadata (VotePayload votepub stkVerify) =
@@ -120,7 +123,7 @@ votePayloadToTxMetadata (VotePayload votepub stkVerify) =
     ])]
 
 voteToTxMetadata :: Vote -> TxMetadata
-voteToTxMetadata (Vote payload sig) =
+voteToTxMetadata (Vote payload (DSIGN.SignedDSIGN sig)) =
   let
     payloadMeta = votePayloadToTxMetadata payload
     sigMeta = makeTransactionMetadata $ M.fromList [
@@ -140,17 +143,20 @@ fromTxMetadata meta = do
   
   sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
     Nothing -> throwError (_DeserialiseSigDSIGNFailure # sigBytes)
-    Just x  -> pure x
+    Just x  -> pure $ DSIGN.SignedDSIGN x
   stkVerify <- case Api.deserialiseFromRawBytes AsVoteVerificationKey stkVerifyRaw of
-    Left err -> throwError (_DeserialiseVerKeyDSIGNFailure (err, stkVerifyRaw))
-    Right x  -> pure x
+    Nothing  -> throwError (_DeserialiseVerKeyDSIGNFailure # stkVerifyRaw)
+    Just x   -> pure x
   votePub   <- case Api.deserialiseFromRawBytes AsVotingKeyPublic votePubRaw of
-    Left err -> throwError (_DeserialiseVotePublicKeyFailure (err, votePubRaw))
-    Right x  -> pure x
+    Nothing -> throwError (_DeserialiseVotePublicKeyFailure # votePubRaw)
+    Just x  -> pure x
 
-  case (mkVotePayload votePub stkVerify) `signVotePayload` sig of
-    Left err   -> throwError (_MetadataSignatureInvalid # (err, sig))
-    Right vote -> pure vote
+  let
+    payload = mkVotePayload votePub stkVerify
+
+  case payload `signVotePayload` sig of
+    Nothing   -> throwError (_MetadataSignatureInvalid # (payload, sig))
+    Just vote -> pure vote
 
   where
     metaKey :: Word64 -> TxMetadata -> Either MetadataParsingError TxMetadataValue

@@ -3,8 +3,13 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
+                                  , VoteVerificationKey
+                                  , AsType(AsVoteVerificationKey)
+                                  , getVoteVerificationKey
+                                  , withVoteVerificationKey
                                   , withVoteSigningKey
                                   , withVoteShelleySigningKey
                                   , sign
@@ -17,15 +22,15 @@ import           Control.Monad.Except (MonadError)
 import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
-import           Cardano.API (AsType (AsSigningKey, AsStakeExtendedKey, AsStakeKey), FromSomeType,
-                     HasTypeProxy, Key, SerialiseAsRawBytes, SigningKey, StakeExtendedKey,
+import           Cardano.API (AsType (AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey), FromSomeType,
+                     HasTypeProxy, Key, SerialiseAsRawBytes(serialiseToRawBytes, deserialiseFromRawBytes), SigningKey, StakeExtendedKey,
                      StakeKey, VerificationKey, getVerificationKey, proxyToAsType,
-                     serialiseToRawBytes)
+                     serialiseToRawBytes, castVerificationKey)
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
 import           Cardano.Api.Typed (FromSomeType (FromSomeType))
 import           Cardano.Api.Typed (ShelleySigningKey,
                      ShelleyWitnessSigningKey (WitnessStakeExtendedKey, WitnessStakeKey),
-                     SigningKey (StakeExtendedSigningKey, StakeSigningKey),
+                     SigningKey (StakeExtendedSigningKey, StakeSigningKey), VerificationKey(StakeVerificationKey),
                      getShelleyKeyWitnessVerificationKey, makeShelleySignature,
                      toShelleySigningKey)
 import           Cardano.CLI.Types (SigningKeyFile)
@@ -35,12 +40,28 @@ import qualified Cardano.Crypto.Wallet as Crypto.HD
 import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 
-data VoteSigningKey = AStakeSigningKey         (SigningKey StakeKey)
-                    | AStakeExtendedSigningKey (SigningKey StakeExtendedKey)
+data VoteSigningKey
+  = AStakeSigningKey         (SigningKey StakeKey)
+  | AStakeExtendedSigningKey (SigningKey StakeExtendedKey)
   deriving Show
 
--- data VoteVerificationKey
---   = AStakeVerificationKey
+data VoteVerificationKey
+  = AStakeVerificationKey (VerificationKey StakeKey)
+  | AStakeExtendedVerificationKey (VerificationKey StakeExtendedKey)
+  deriving (Eq, Show)
+
+getVoteVerificationKey :: VoteSigningKey -> VoteVerificationKey
+getVoteVerificationKey (AStakeSigningKey skey)         = AStakeVerificationKey         $ getVerificationKey skey
+getVoteVerificationKey (AStakeExtendedSigningKey skey) = AStakeExtendedVerificationKey $ getVerificationKey skey
+
+withVoteVerificationKey :: VoteVerificationKey -> (VerificationKey StakeKey -> a) -> a
+withVoteVerificationKey ver f =
+  let
+    vkey = case ver of
+      (AStakeVerificationKey vkey)         -> vkey
+      (AStakeExtendedVerificationKey vkey) -> castVerificationKey vkey
+  in
+    f vkey
 
 verificationKeyRawBytes :: VoteSigningKey -> ByteString
 verificationKeyRawBytes (AStakeSigningKey k)         = serialiseToRawBytes $ getVerificationKey k
@@ -57,16 +78,13 @@ sign payload vsk =
 
 verify
   :: Crypto.SignableRepresentation tosign
-  => VoteSigningKey
+  => VoteVerificationKey
   -> tosign
   -> Shelley.SignedDSIGN StandardCrypto tosign
   -> Bool
-verify vsk payload sig =
-  withVoteShelleySigningKey vsk $ \skey ->
-    let
-      v = getShelleyKeyWitnessVerificationKey skey
-    in
-      Shelley.verifySignedDSIGN v payload sig
+verify vkey payload sig =
+  withVoteVerificationKey vkey $ \(StakeVerificationKey v) ->
+    Shelley.verifySignedDSIGN v payload sig
 
 withVoteSigningKey :: VoteSigningKey
                    -> (forall keyrole. Key keyrole => SigningKey keyrole -> a)
@@ -107,3 +125,16 @@ readVoteSigningKeyFile skFile =
       , FromSomeType (AsSigningKey AsStakeExtendedKey)
                       AStakeExtendedSigningKey
       ]
+
+instance HasTypeProxy VoteVerificationKey where
+  data AsType VoteVerificationKey = AsVoteVerificationKey
+  proxyToAsType _ = AsVoteVerificationKey
+
+instance SerialiseAsRawBytes VoteVerificationKey where
+  serialiseToRawBytes (AStakeVerificationKey vkey)         = serialiseToRawBytes vkey
+  serialiseToRawBytes (AStakeExtendedVerificationKey vkey) = serialiseToRawBytes vkey
+
+  deserialiseFromRawBytes AsVoteVerificationKey bs =
+    case (AStakeExtendedVerificationKey <$> deserialiseFromRawBytes (AsVerificationKey AsStakeExtendedKey) bs) of
+      Nothing -> (AStakeVerificationKey <$> deserialiseFromRawBytes (AsVerificationKey AsStakeKey) bs)
+      x       -> x
