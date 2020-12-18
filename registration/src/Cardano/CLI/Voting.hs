@@ -6,7 +6,8 @@
 
 module Cardano.CLI.Voting where
 
-import           Control.Monad.Except (MonadError)
+import           Control.Lens (( # ))
+import           Control.Monad.Except (MonadError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Base16
@@ -20,12 +21,12 @@ import           Data.Text (Text)
 import           Cardano.API (Address, AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
                      Lovelace (Lovelace), NetworkId, PaymentCredential, PaymentKey, SigningKey,
                      StakeAddressReference, StakeCredential, StakeKey, TTL, Tx, TxBody,
-                     TxIn (TxIn), TxMetadata, VerificationKey, deserialiseFromRawBytesHex,
-                     estimateTransactionFee, getVerificationKey, localNodeNetworkId,
-                     makeShelleyAddress, makeShelleyKeyWitness, makeShelleyTransaction,
-                     makeSignedTransaction, makeTransactionMetadata, serialiseToBech32,
-                     serialiseToRawBytes, serialiseToRawBytesHex, txExtraContentEmpty,
-                     verificationKeyHash)
+                     TxIn (TxIn), TxMetadata, VerificationKey, castVerificationKey,
+                     deserialiseFromRawBytesHex, estimateTransactionFee, getVerificationKey,
+                     localNodeNetworkId, makeShelleyAddress, makeShelleyKeyWitness,
+                     makeShelleyTransaction, makeSignedTransaction, makeTransactionMetadata,
+                     serialiseToBech32, serialiseToRawBytes, serialiseToRawBytesHex,
+                     txExtraContentEmpty, verificationKeyHash)
 import           Cardano.Api.LocalChainSync (getLocalTip)
 import           Cardano.Api.Typed (AsType (AsSigningKey),
                      PaymentCredential (PaymentCredentialByKey), Shelley,
@@ -46,6 +47,7 @@ import qualified Cardano.Crypto.Seed as Crypto
 import qualified Codec.Binary.Bech32 as Bech32
 import           Ouroboros.Consensus.Cardano.Block (Query)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx)
+import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 import           Ouroboros.Network.Block (getTipSlotNo)
 import           Ouroboros.Network.Point (fromWithOrigin)
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type (ShowQuery)
@@ -66,18 +68,22 @@ import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Fee
 import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload,
                      voteMetadata)
+import           Cardano.CLI.Voting.Signing (VoteSigningKey, withVoteShelleySigningKey,
+                     withVoteSigningKey)
+import           Cardano.CLI.Voting.Signing (sign, verify)
 
 -- | Create a vote registration payload.
 createVote
-  :: SigningKey StakeKey
+  :: VoteSigningKey
   -> VotingKeyPublic
   -> Vote
-createVote stkSign@(StakeSigningKey skey) votepub =
-  let
-    stkVerify@(StakeVerificationKey (Shelley.VKey vkey)) = getVerificationKey stkSign
+createVote skey votepub =
+    let
+      payload     = mkVotePayload votepub skey
+      payloadCBOR = CBOR.serialize' payload
 
-    payload     = mkVotePayload votepub stkVerify
-    payloadSig  = signDSIGN () payloadCBOR skey
+      payloadSig  :: Shelley.SignedDSIGN StandardCrypto ByteString
+      payloadSig  = payloadCBOR `sign` skey
   in
     either error id $
       signVotePayload payload payloadSig
@@ -87,6 +93,7 @@ encodeVote
   :: ( MonadIO m
      , MonadError e m
      , AsShelleyQueryCmdLocalStateQueryError e
+     , AsNotEnoughFundsError e
 
      , ShowProxy block
      , ShowProxy (ApplyTxErr block)
@@ -113,7 +120,7 @@ encodeVote connectInfo addr ttl vote = do
   -- Find some unspent funds
   utxos <- queryUTxOFromLocalState (FilterByAddress $ Set.singleton addr) connectInfo
   case findUnspent feeParams (fromShelleyUTxO utxos) of
-    Nothing      -> undefined
+    Nothing      -> throwError $ _NotEnoughFundsToMeetFeeError # (fromShelleyUTxO utxos)
     Just unspent -> do
       tip <- liftIO $ getLocalTip connectInfo
       let

@@ -18,6 +18,7 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , AsShelleyQueryCmdLocalStateQueryError(..)
                             , jAddrBytes
                             , readSigningKeyFile
+                            , readSigningKeyFileAnyOf
                             , AsFileError(..)
                             , AsInputDecodeError(..)
                             , AsEnvSocketError(..)
@@ -53,7 +54,7 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.Text as T
 
 import           Cardano.API (AsType, Bech32DecodeError, HasTextEnvelope, SerialiseAsBech32,
-                     SigningKey, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), cardanoEraStyle, IsShelleyBasedEra)
+                     SigningKey, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), cardanoEraStyle, IsShelleyBasedEra, FromSomeType)
 import           Cardano.Api.Typed (FileError (FileError, FileIOError), ShelleyLedgerEra)
 import           Cardano.Api.Shelley (ShelleyBasedEra)
 import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
@@ -137,6 +138,24 @@ readSigningKeyFile
   -> m (SigningKey keyrole)
 readSigningKeyFile role f = do
   result <- liftIO $ Shelley.readSigningKeyFile role f
+  case result of
+    Right x                 -> pure x
+    Left (FileError fp e)   -> throwError (_FileError # (fp , _InputDecodeError # e))
+    Left (FileIOError fp e) -> throwError (_FileIOError # (fp, e))
+
+readSigningKeyFileAnyOf
+  :: forall e m fileErr b.
+     ( MonadIO m
+     , MonadError e m
+     , AsFileError e fileErr
+     , AsInputDecodeError fileErr
+     )
+  => [FromSomeType SerialiseAsBech32 b]
+  -> [FromSomeType HasTextEnvelope b]
+  -> SigningKeyFile
+  -> m b
+readSigningKeyFileAnyOf bech32Types textEnvTypes f = do
+  result <- liftIO $ Shelley.readSigningKeyFileAnyOf bech32Types textEnvTypes f
   case result of
     Right x                 -> pure x
     Left (FileError fp e)   -> throwError (_FileError # (fp , _InputDecodeError # e))

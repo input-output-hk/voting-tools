@@ -23,6 +23,8 @@ library
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
                      , Cardano.CLI.Voting.Metadata
+                     , Cardano.CLI.Voting.Signing
+                     , Config
 
   build-depends:       base
                      , aeson
@@ -34,11 +36,13 @@ library
                      , cardano-api
                      , cardano-binary
                      , cardano-cli
+                     , cardano-crypto
                      , cardano-crypto-class
                      , cardano-node
                      , cborg
                      , containers
                      , directory
+                     , lens
                      , lens
                      , memory
                      , mtl

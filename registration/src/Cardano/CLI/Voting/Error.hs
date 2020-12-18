@@ -17,6 +17,8 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsEnvSocketError (_EnvSocketError), AsFileError (__FileError),
                      AsShelleyQueryCmdLocalStateQueryError (_ShelleyQueryCmdLocalStateQueryError),
                      Bech32HumanReadablePartError, ShelleyQueryCmdLocalStateQueryError)
+import           Cardano.CLI.Voting.Fee (AsNotEnoughFundsError (_NotEnoughFundsError),
+                     NotEnoughFundsError)
 
 -- | Address doesn't have enough UTxOs to pay the requested amount.
 data AddressUTxOError = AddressNotEnoughUTxOs (Address Shelley) Lovelace
@@ -31,6 +33,7 @@ data AppError = AppEnvSocketError !EnvSocketError
     | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
     | AppAddressUTxOError !AddressUTxOError
     | AppWriteTxError !(FileError ())
+    | AppNotEnoughFundsError !NotEnoughFundsError
     deriving (Show)
 
 makeClassyPrisms ''AppError
@@ -52,3 +55,6 @@ instance AsBech32HumanReadablePartError AppError where
 
 instance AsAddressUTxOError AppError where
   _AddressUTxOError = _AppAddressUTxOError
+
+instance AsNotEnoughFundsError AppError where
+  _NotEnoughFundsError = _AppNotEnoughFundsError

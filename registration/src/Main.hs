@@ -29,6 +29,7 @@ import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
 import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Metadata (voteSignature)
+import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)
 import           Config
 
 main :: IO ()
@@ -38,7 +39,7 @@ main = do
   eCfg  <- runExceptT $ mkConfig opts
   case eCfg of
     Left err  -> putStrLn $ show err
-    Right (Config addr stkSign paySign votePub networkId ttl outFile) -> do
+    Right (Config addr voteSign paySign votePub networkId ttl outFile) -> do
       eResult <- runExceptT $ do
         SocketPath sockPath <-  readEnvSocketPath
         withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
@@ -47,14 +48,14 @@ main = do
           -- (minus a fee).
 
           -- Generate vote payload (vote information is encoded as metadata).
-          let vote = createVote stkSign votePub
+          let vote = createVote voteSign votePub
 
           -- Encode the vote as a transaction and sign it
           voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote
 
           -- Output helpful information
           liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
-          liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (serialiseToRawBytesHex (getVerificationKey stkSign))
+          liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (verificationKeyRawBytes voteSign)
           liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode $ voteSignature vote)
 
           -- Output our vote transaction
