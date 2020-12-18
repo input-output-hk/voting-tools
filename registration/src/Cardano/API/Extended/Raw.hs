@@ -4,6 +4,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.API.Extended.Raw where
 
@@ -24,11 +26,16 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Options.Applicative as Opt
 
+import           Cardano.API 
+import           Cardano.Api.Shelley
+import qualified Ouroboros.Consensus.Cardano.Block as Consensus
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
+import           Ouroboros.Consensus.HardFork.Combinator.Degenerate as Consensus
 import           Cardano.API (AsType (AsShelleyAddress), HasTextEnvelope,
                      NetworkId (Mainnet, Testnet), TextEnvelopeDescr, deserialiseAddress,
                      queryNodeLocalState, serialiseToTextEnvelope)
 import           Cardano.Api.LocalChainSync (getLocalTip)
-import           Cardano.Api.Typed (LocalNodeConnectInfo, NetworkMagic (NetworkMagic))
+import           Cardano.Api.Typed (LocalNodeConnectInfo, NetworkMagic (NetworkMagic), ShelleyLedgerEra)
 import           Cardano.Api.Typed (Address (ByronAddress, ShelleyAddress),
                      LocalNodeConnectInfo (LocalNodeConnectInfo),
                      NodeConsensusMode (ByronMode, CardanoMode, ShelleyMode), Shelley,
@@ -41,6 +48,7 @@ import           Ouroboros.Consensus.HardFork.Combinator.Degenerate (Either (Deg
                      Query (DegenQuery))
 import           Ouroboros.Consensus.Shelley.Ledger.Query
                      (Query (GetCurrentPParams, GetFilteredUTxO, GetUTxO))
+import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
 import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
                      (AcquireFailure (..))
@@ -53,10 +61,16 @@ import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
 
 -- | An error that can occur while querying a node's local state.
-data ShelleyQueryCmdLocalStateQueryError = AcquireFailureError !LocalStateQuery.AcquireFailure
-    | EraMismatchError !EraMismatch
-    | ByronProtocolNotSupportedError
-    deriving (Eq, Show)
+data ShelleyQueryCmdLocalStateQueryError
+  = AcquireFailureError !LocalStateQuery.AcquireFailure
+  | EraMismatchError !EraMismatch
+  -- ^ A query from a certain era was applied to a ledger from a different
+  -- era.
+  | ByronProtocolNotSupportedError
+  -- ^ The query does not support the Byron protocol.
+  | ShelleyProtocolEraMismatch
+  -- ^ The Shelley protocol only supports the Shelley era.
+  deriving (Eq, Show)
 
 -- | Query the UTxO, filtered by a given set of addresses, from a Shelley node
 -- via the local state query protocol.
@@ -64,46 +78,50 @@ data ShelleyQueryCmdLocalStateQueryError = AcquireFailureError !LocalStateQuery.
 -- This one is Shelley-specific because the query is Shelley-specific.
 --
 queryUTxOFromLocalState
-  :: QueryFilter
+  :: forall era ledgerera mode block.
+     ShelleyLedgerEra era ~ ledgerera
+  => IsShelleyBasedEra era
+  => ShelleyBasedEra era
+  -> QueryFilter
   -> LocalNodeConnectInfo mode block
-  -> ExceptT ShelleyQueryCmdLocalStateQueryError IO (Ledger.UTxO StandardShelley)
-queryUTxOFromLocalState qFilter connectInfo@LocalNodeConnectInfo{localNodeConsensusMode} =
+  -> ExceptT ShelleyQueryCmdLocalStateQueryError IO (Ledger.UTxO ledgerera)
+queryUTxOFromLocalState era qFilter connectInfo@LocalNodeConnectInfo{localNodeConsensusMode} =
   case localNodeConsensusMode of
     ByronMode{} -> throwError ByronProtocolNotSupportedError
 
-    ShelleyMode{} -> do
+    ShelleyMode{} | ShelleyBasedEraShelley <- era -> do
       tip <- liftIO $ getLocalTip connectInfo
-      DegenQueryResult result <- firstExceptT AcquireFailureError . newExceptT $
-        queryNodeLocalState
-          connectInfo
-          (getTipPoint tip, DegenQuery (applyUTxOFilter qFilter))
+      Consensus.DegenQueryResult result <-
+        firstExceptT AcquireFailureError . newExceptT $
+          queryNodeLocalState
+            connectInfo
+            ( getTipPoint tip
+            , Consensus.DegenQuery (applyUTxOFilter qFilter)
+            )
       return result
+
+    ShelleyMode{} | otherwise -> throwError ShelleyProtocolEraMismatch
 
     CardanoMode{} -> do
       tip <- liftIO $ getLocalTip connectInfo
       result <- firstExceptT AcquireFailureError . newExceptT $
         queryNodeLocalState
           connectInfo
-          (getTipPoint tip, QueryIfCurrentShelley (applyUTxOFilter qFilter))
+          (getTipPoint tip, queryIfCurrentEra era (applyUTxOFilter qFilter))
       case result of
         QueryResultEraMismatch err -> throwError (EraMismatchError err)
-        QueryResultSuccess utxo    -> return utxo
+        QueryResultSuccess utxo -> return utxo
   where
-    applyUTxOFilter (FilterByAddress as) = GetFilteredUTxO (toShelleyAddrs as)
-    applyUTxOFilter NoFilter             = GetUTxO
+    applyUTxOFilter :: QueryFilter
+                    -> Query (Consensus.ShelleyBlock ledgerera)
+                             (Ledger.UTxO ledgerera)
+    applyUTxOFilter (FilterByAddress as) = Consensus.GetFilteredUTxO (toShelleyAddrs as)
+    applyUTxOFilter NoFilter             = Consensus.GetUTxO
 
-    -- TODO: ultimately, these should be exported from Cardano.API.Shelley
-    -- for the Shelley-specific types and conversion for the API wrapper types.
-    -- But alternatively, the API can also be extended to cover the queries
-    -- properly using the API types.
-
-    toShelleyAddrs :: Set (Address Shelley) -> Set (Ledger.Addr StandardShelley)
-    toShelleyAddrs = Set.map toShelleyAddr
-
-    toShelleyAddr :: Address era -> Ledger.Addr StandardShelley
-    toShelleyAddr (ByronAddress addr)        = Ledger.AddrBootstrap
-                                                 (Ledger.BootstrapAddress addr)
-    toShelleyAddr (ShelleyAddress nw pc scr) = Ledger.Addr nw pc scr
+    toShelleyAddrs :: Set AddressAny -> Set (Ledger.Addr ledgerera)
+    toShelleyAddrs = Set.map (toShelleyAddr
+                           . (anyAddressInShelleyBasedEra
+                                :: AddressAny -> AddressInEra era))
 
 -- | Query the current protocol parameters from a Shelley node via the local
 -- state query protocol.
@@ -140,10 +158,10 @@ queryPParamsFromLocalState connectInfo@LocalNodeConnectInfo{
       QueryResultEraMismatch eraerr  -> throwError (EraMismatchError eraerr)
       QueryResultSuccess     pparams -> return pparams
 
-parseAddress :: Atto.Parser (Address Shelley)
-parseAddress = do
+parseAddressAny :: Atto.Parser AddressAny
+parseAddressAny = do
     str <- lexPlausibleAddressString
-    case deserialiseAddress AsShelleyAddress str of
+    case deserialiseAddress AsAddressAny str of
       Nothing   -> fail "invalid address"
       Just addr -> pure addr
 
@@ -193,3 +211,15 @@ textEnvelopeToJSON mbDescr a  =
 
 textEnvelopeJSONKeyOrder :: Text -> Text -> Ordering
 textEnvelopeJSONKeyOrder = keyOrder ["type", "description", "cborHex"]
+
+-- | Select the appropriate query constructor based on the era
+-- 'QueryIfCurrentShelley', 'QueryIfCurrentAllegra' or 'QueryIfCurrentMary'.
+--
+--
+queryIfCurrentEra :: ShelleyBasedEra era
+                  -> Query (Consensus.ShelleyBlock (ShelleyLedgerEra era)) result
+                  -> Consensus.CardanoQuery StandardCrypto
+                       (Consensus.CardanoQueryResult StandardCrypto result)
+queryIfCurrentEra ShelleyBasedEraShelley = Consensus.QueryIfCurrentShelley
+queryIfCurrentEra ShelleyBasedEraAllegra = Consensus.QueryIfCurrentAllegra
+queryIfCurrentEra ShelleyBasedEraMary    = Consensus.QueryIfCurrentMary

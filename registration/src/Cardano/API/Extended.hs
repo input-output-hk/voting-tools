@@ -22,7 +22,7 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , AsInputDecodeError(..)
                             , AsEnvSocketError(..)
                             , Extended.readerFromAttoParser
-                            , Extended.parseAddress
+                            , Extended.parseAddressAny
                             , Extended.pNetworkId
                             , readEnvSocketPath
                             , Extended.textEnvelopeToJSON
@@ -53,8 +53,10 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.Text as T
 
 import           Cardano.API (AsType, Bech32DecodeError, HasTextEnvelope, SerialiseAsBech32,
-                     SigningKey)
-import           Cardano.Api.Typed (FileError (FileError, FileIOError))
+                     SigningKey, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), cardanoEraStyle, IsShelleyBasedEra)
+import           Cardano.Api.Typed (FileError (FileError, FileIOError), ShelleyLedgerEra)
+import           Cardano.Api.Shelley (ShelleyBasedEra)
+import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
 import           Cardano.Api.Typed (AsType, Bech32DecodeError (Bech32DataPartToBytesError, Bech32DecodingError, Bech32DeserialiseFromBytesError, Bech32UnexpectedPrefix, Bech32WrongPrefix),
                      HasTypeProxy (proxyToAsType),
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes))
@@ -98,13 +100,17 @@ queryUTxOFromLocalState
   :: ( MonadIO m
      , MonadError e m
      , AsShelleyQueryCmdLocalStateQueryError e
+     , Consensus.ShelleyBasedEra ledgerera
+     , ShelleyLedgerEra era ~ ledgerera
+     , IsShelleyBasedEra era
      )
-  => QueryFilter
+  => ShelleyBasedEra era
+  -> QueryFilter
   -> LocalNodeConnectInfo mode block
-  -> m (Ledger.UTxO StandardShelley)
-queryUTxOFromLocalState qf =
+  -> m (Ledger.UTxO ledgerera)
+queryUTxOFromLocalState era qf =
   liftExceptTIO (_ShelleyQueryCmdLocalStateQueryError #) .
-    Extended.queryUTxOFromLocalState qf
+    Extended.queryUTxOFromLocalState era qf
 
 queryPParamsFromLocalState
   :: ( MonadIO m

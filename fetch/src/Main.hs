@@ -35,17 +35,6 @@ import           Config
 type StakeHash = ()
 type VotingKeys = Map StakeHash VotingKeyPublic
 
-data MetadataParsingError
-  = MetadataMissingField TxMetadata Word64
-  = MetadataValueMissingField TxMetadataValue Integer
-  | MetadataValueUnexpectedType String TxMetadataValue
-  | DeserialiseSigDSIGNFailure String ByteString
-  | DeserialiseVerKeyDSIGNFailure String ByteString
-  | DeserialiseVotePublicKeyFailure String ByteString
-  | MetadataSignatureInvalid String VotePayload (Crypto.SigDSIGN alg)
-
-makeClassyPrisms ''MetadataParsingError
-
 parseMetadataFromJson :: Text -> Either String Api.TxMetadata
 parseMetadataFromJson = Aeson.runParser (Aeson.withObject (Api.metadataFromJson Api.TxMetadataJsonDetailedSchema))
 
