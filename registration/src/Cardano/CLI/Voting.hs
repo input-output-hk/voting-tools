@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Performs the bulk of the work creating the vote registration
 -- transaction.
@@ -7,6 +8,7 @@
 module Cardano.CLI.Voting where
 
 import           Control.Lens (( # ))
+import           Data.Maybe (fromMaybe)
 import           Control.Monad.Except (MonadError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Data.ByteString (ByteString)
@@ -18,11 +20,11 @@ import qualified Data.Set as Set
 import           Data.String (fromString)
 import           Data.Text (Text)
 
-import           Cardano.API (Address, AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
+import           Cardano.API (ShelleyEra, IsShelleyBasedEra, Address, AddressInEra(AddressInEra), AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
                      Lovelace, NetworkId, PaymentCredential, PaymentKey, SigningKey,
                      StakeAddressReference, StakeCredential, StakeKey, Tx, TxBody, SlotNo,
-                     TxIn (TxIn), TxMetadata, VerificationKey, castVerificationKey,
-                     deserialiseFromRawBytesHex, estimateTransactionFee, getVerificationKey,
+                     TxIn (TxIn), TxMetadata, VerificationKey, ShelleyBasedEra, castVerificationKey,
+                     anyAddressInShelleyBasedEra, deserialiseFromRawBytesHex, estimateTransactionFee, getVerificationKey,
                      localNodeNetworkId, makeShelleyAddress, makeShelleyKeyWitness,
                      makeSignedTransaction, makeTransactionMetadata,
                      serialiseToBech32, serialiseToRawBytes, serialiseToRawBytesHex,
@@ -30,7 +32,7 @@ import           Cardano.API (Address, AsType (AsPaymentKey, AsStakeKey), Key, L
 import           Cardano.Api.LocalChainSync (getLocalTip)
 import           Cardano.Api.Typed (AsType (AsSigningKey), Lovelace(Lovelace),
                      PaymentCredential (PaymentCredentialByKey), Shelley,
-                     ShelleyWitnessSigningKey (WitnessPaymentKey), SigningKey (StakeSigningKey),
+                     StandardAllegra, ShelleyWitnessSigningKey (WitnessPaymentKey), SigningKey (StakeSigningKey),
                      StakeAddressReference (StakeAddressByValue),
                      StakeCredential (StakeCredentialByKey), StandardShelley, TxId (TxId),
                      TxIx (TxIx),
@@ -58,6 +60,7 @@ import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
+import           Cardano.Ledger.Crypto (Crypto (..))
 
 import           Cardano.API.Extended (textEnvelopeToJSON)
 import           Cardano.API.Extended (AsBech32DecodeError, AsBech32HumanReadablePartError,
@@ -81,10 +84,10 @@ createVote skey votepub =
       payload     = mkVotePayload votepub (getVoteVerificationKey skey)
       payloadCBOR = CBOR.serialize' payload
 
-      payloadSig  :: Shelley.SignedDSIGN StandardCrypto ByteString
+      payloadSig  :: SigDSIGN (DSIGN StandardCrypto)
       payloadSig  = payloadCBOR `sign` skey
   in
-    either error id $
+    fromMaybe (error "Failed to sign vote payload") $
       signVotePayload payload payloadSig
 
 -- | Encode the vote registration payload as a transaction body.
@@ -101,11 +104,15 @@ encodeVote
      , ShowQuery (Query block)
      )
   => LocalNodeConnectInfo mode block
+  -> ShelleyEra
   -> AddressAny
   -> SlotNo
   -> Vote
   -> m (TxBody Shelley)
-encodeVote connectInfo addr ttl vote = do
+encodeVote connectInfo era addr ttl vote = do
+  let
+    addrShelley :: IsShelleyBasedEra era => AddressInEra era
+    addrShelley = anyAddressInShelleyBasedEra addr
   -- Get the network parameters
   pparams <- queryPParamsFromLocalState connectInfo
   let
@@ -114,10 +121,10 @@ encodeVote connectInfo addr ttl vote = do
 
   -- Estimate the fee for the transaction
   let
-    feeParams = estimateVoteFeeParams networkId _era pparams meta
+    feeParams = estimateVoteFeeParams networkId era pparams meta
 
   -- Find some unspent funds
-  utxos <- queryUTxOFromLocalState (FilterByAddress $ Set.singleton addr) connectInfo
+  utxos  <- queryUTxOFromLocalState era (FilterByAddress $ Set.singleton addr) connectInfo
   case findUnspent feeParams (fromShelleyUTxO utxos) of
     Nothing      -> throwError $ _NotEnoughFundsToMeetFeeError # (fromShelleyUTxO utxos)
     Just unspent -> do
@@ -128,34 +135,35 @@ encodeVote connectInfo addr ttl vote = do
         (Lovelace value) = unspentValue unspent
         (Lovelace fee)   =
           estimateVoteTxFee
-            networkId pparams slotTip txins addr (Lovelace value) meta
+            networkId era pparams slotTip txins addrShelley (Lovelace value) meta
 
-      -- Create the vote transaction
-      pure $ voteTx addr txins (Lovelace $ value - fee) (slotTip + ttl) (Lovelace fee) meta
+      undefined
+--       -- Create the vote transaction
+--       pure $ voteTx addrShelley txins (Lovelace $ value - fee) (slotTip + ttl) (Lovelace fee) meta
 
--- | Helper for creating a transaction body.
-voteTx
-  :: Address Shelley
-  -> [TxIn]
-  -> Lovelace
-  -> SlotNo
-  -> Lovelace
-  -> TxMetadata
-  -> TxBody Shelley
-voteTx addr txins (Lovelace value) ttl (Lovelace fee) meta =
- let
-   txouts = [TxOut addr (Lovelace value)]
- in
-   makeShelleyTransaction txExtraContentEmpty {
-                            txCertificates   = [],
-                            txWithdrawals    = [],
-                            txMetadata       = Just meta,
-                            txUpdateProposal = Nothing
-                          }
-                          ttl
-                          (Lovelace fee)
-                          txins
-                          txouts
+-- -- | Helper for creating a transaction body.
+-- voteTx
+--   :: AddressInEra era
+--   -> [TxIn]
+--   -> Lovelace
+--   -> SlotNo
+--   -> Lovelace
+--   -> TxMetadata
+--   -> TxBody Shelley
+-- voteTx addr txins (Lovelace value) ttl (Lovelace fee) meta =
+--  let
+--    txouts = [TxOut addr (Lovelace value)]
+--  in
+--    makeShelleyTransaction txExtraContentEmpty {
+--                             txCertificates   = [],
+--                             txWithdrawals    = [],
+--                             txMetadata       = Just meta,
+--                             txUpdateProposal = Nothing
+--                           }
+--                           ttl
+--                           (Lovelace fee)
+--                           txins
+--                           txouts
 
 -- | Sign a transaction body to create a transaction.
 signTx :: SigningKey PaymentKey -> TxBody Shelley -> Tx Shelley

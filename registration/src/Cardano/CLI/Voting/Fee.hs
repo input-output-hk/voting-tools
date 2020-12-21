@@ -1,4 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 -- | Tools used to estimate the fee associated with a vote transaction
 -- and ensure that the unspent value of the TxIns are enough to cover
 -- the fee associated with submitting the transaction.
@@ -44,6 +48,8 @@ import qualified Cardano.Crypto.Seed as Crypto
 import           Control.Lens.TH (makeClassyPrisms)
 import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
+import qualified Shelley.Spec.Ledger.Tx as Ledger
+import qualified Shelley.Spec.Ledger.UTxO as Ledger
 
 -- | Fee characteristics of a transaction
 data FeeParams = FeeParams
@@ -55,28 +61,29 @@ data FeeParams = FeeParams
   deriving (Eq, Show)
 
 -- | Transactions that aren't fully spent.
-type UnspentSources
-  = [( TxIn
+data UnspentSources era
+  = UnspentSources ([( Ledger.TxIn era
      -- ^ Transaction in
      , Lovelace
      -- ^ Unspent amount
-     )]
+     )])
+  deriving (Eq, Show)
 
-data NotEnoughFundsError = NotEnoughFundsToMeetFeeError !UnspentSources
+data NotEnoughFundsError era = NotEnoughFundsToMeetFeeError !(UnspentSources era)
   deriving (Eq, Show)
 
 makeClassyPrisms ''NotEnoughFundsError
 
 -- | Total amount of unspent value.
-unspentValue :: UnspentSources -> Lovelace
-unspentValue =
+unspentValue :: UnspentSources era -> Lovelace
+unspentValue (UnspentSources srcs) =
   foldr
     (\(_, Lovelace unspent) (Lovelace acc) -> Lovelace $ acc + unspent)
-    (Lovelace 0)
+    (Lovelace 0) srcs
 
 -- | All transactions that aren't fully spent.
-unspentSources :: UnspentSources -> [TxIn]
-unspentSources = foldr (\(txin, _) -> (txin:)) mempty
+unspentSources :: UnspentSources era -> [Ledger.TxIn era]
+unspentSources (UnspentSources srcs) = foldr (\(txin, _) -> (txin:)) mempty srcs
 
 -- | Estimate the fee required for a vote transaction.
 estimateVoteTxFee
@@ -168,15 +175,15 @@ estimateVoteFeeParams networkId era pparams meta =
 findUnspent
   :: FeeParams
   -- ^ Estimates for the base fee and the fee per TxIn
-  -> UnspentSources
+  -> UnspentSources era
   -- ^ UTxOs we can use to cover fees
-  -> Maybe UnspentSources
+  -> Maybe (UnspentSources era)
   -- ^ Nothing if given UTxOs cannot cover fees. Otherwise, UTxOs
   -- actually used to cover fees.
-findUnspent feeParams utxos =
+findUnspent feeParams (UnspentSources utxos) =
   case takeUntilFeePaid feeParams utxos of
     [] -> Nothing
-    xs -> Just xs
+    xs -> Just (UnspentSources xs)
 
 takeUntilFeePaid :: FeeParams -> [(a , Lovelace)] -> [(a , Lovelace)]
 takeUntilFeePaid (FeeParams feeBase (Lovelace feePerTxIn)) =

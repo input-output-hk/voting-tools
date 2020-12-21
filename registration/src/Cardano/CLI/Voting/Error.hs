@@ -1,4 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- | Application error type and instances.
@@ -26,13 +28,13 @@ data AddressUTxOError = AddressNotEnoughUTxOs AddressAny Lovelace
 makeClassyPrisms ''AddressUTxOError
 makeClassyPrisms ''TextEnvelopeError
 
-data AppError = AppEnvSocketError !EnvSocketError
+data AppError era = AppEnvSocketError !EnvSocketError
     | AppShelleyQueryError !ShelleyQueryCmdLocalStateQueryError
     | AppBech32DecodeError !Bech32DecodeError
     | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
     | AppAddressUTxOError !AddressUTxOError
     | AppWriteTxError !(FileError ())
-    | AppNotEnoughFundsError !NotEnoughFundsError
+    | AppNotEnoughFundsError !(NotEnoughFundsError era)
     deriving (Show)
 
 makeClassyPrisms ''AppError
