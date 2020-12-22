@@ -2,9 +2,9 @@
 -- I've replicated them here.
 
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -27,16 +27,14 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Options.Applicative as Opt
 
-import           Cardano.API 
-import           Cardano.Api.Shelley
-import qualified Ouroboros.Consensus.Cardano.Block as Consensus
-import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
-import           Ouroboros.Consensus.HardFork.Combinator.Degenerate as Consensus
+import           Cardano.API
 import           Cardano.API (AsType (AsShelleyAddress), HasTextEnvelope,
                      NetworkId (Mainnet, Testnet), TextEnvelopeDescr, deserialiseAddress,
                      queryNodeLocalState, serialiseToTextEnvelope)
 import           Cardano.Api.LocalChainSync (getLocalTip)
-import           Cardano.Api.Typed (LocalNodeConnectInfo, NetworkMagic (NetworkMagic), ShelleyLedgerEra)
+import           Cardano.Api.Shelley
+import           Cardano.Api.Typed (LocalNodeConnectInfo, NetworkMagic (NetworkMagic),
+                     ShelleyLedgerEra)
 import           Cardano.Api.Typed (Address (ByronAddress, ShelleyAddress),
                      LocalNodeConnectInfo (LocalNodeConnectInfo),
                      NodeConsensusMode (ByronMode, CardanoMode, ShelleyMode), Shelley,
@@ -45,11 +43,14 @@ import           Cardano.CLI.Types (QueryFilter (FilterByAddress, NoFilter))
 import           Ouroboros.Consensus.Cardano.Block
                      (Either (QueryResultEraMismatch, QueryResultSuccess), EraMismatch (..),
                      Query (QueryIfCurrentShelley))
+import qualified Ouroboros.Consensus.Cardano.Block as Consensus
+import           Ouroboros.Consensus.HardFork.Combinator.Degenerate as Consensus
 import           Ouroboros.Consensus.HardFork.Combinator.Degenerate (Either (DegenQueryResult),
                      Query (DegenQuery))
+import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
 import           Ouroboros.Consensus.Shelley.Ledger.Query
                      (Query (GetCurrentPParams, GetFilteredUTxO, GetUTxO))
-import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
                      (AcquireFailure (..))

@@ -7,7 +7,7 @@
 
 module Main where
 
-import           Cardano.API (ShelleyBasedEra(ShelleyBasedEraShelley))
+import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley))
 import           Cardano.Api.LocalChainSync (getLocalTip)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (Lovelace (Lovelace), Shelley, Tx, TxId (TxId), TxIn (TxIn),
@@ -16,6 +16,7 @@ import           Cardano.Api.Typed (Lovelace (Lovelace), Shelley, Tx, TxId (TxId
 import qualified Cardano.Binary as CBOR
 import           Cardano.Chain.Slotting (EpochSlots (..))
 import           Cardano.CLI.Types (QueryFilter (FilterByAddress), SocketPath (SocketPath))
+import qualified Cardano.Crypto.DSIGN as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import           Control.Monad.Except (ExceptT, runExceptT, throwError)
 import           Control.Monad.IO.Class (liftIO)
@@ -25,7 +26,6 @@ import qualified Data.Set as Set
 import qualified Options.Applicative as Opt
 import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 import           Ouroboros.Network.Point (fromWithOrigin)
-import qualified Cardano.Crypto.DSIGN as Crypto
 
 import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)

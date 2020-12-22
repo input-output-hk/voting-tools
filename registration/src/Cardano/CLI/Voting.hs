@@ -9,7 +9,6 @@
 module Cardano.CLI.Voting where
 
 import           Control.Lens (( # ))
-import           Data.Maybe (fromMaybe)
 import           Control.Monad.Except (MonadError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Data.ByteString (ByteString)
@@ -17,32 +16,40 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BSC
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import           Data.String (fromString)
 import           Data.Text (Text)
 
-import Cardano.Ledger.Mary.Value
-import Cardano.Ledger.Shelley as Shel
-import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
-import           Cardano.Api.Shelley (fromMaryValue)
-import qualified Cardano.Ledger.Era as Ledger
-import qualified Shelley.Spec.Ledger.Hashing as Ledger
-import           Cardano.API (TxValidityLowerBound(TxValidityNoLowerBound), TxValidityUpperBound(TxValidityUpperBound), ValidityUpperBoundSupportedInEra(ValidityUpperBoundInShelleyEra, ValidityUpperBoundInAllegraEra, ValidityUpperBoundInMaryEra), TxOutValue(TxOutAdaOnly), TxAuxScripts(TxAuxScriptsNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates(TxCertificatesNone), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(TxMintNone), MaryEra, ShelleyEra, IsShelleyBasedEra, Address, AddressInEra(AddressInEra), AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
-                     Lovelace, NetworkId, PaymentCredential, PaymentKey, SigningKey,
-                     StakeAddressReference, StakeCredential, StakeKey, Tx, TxBody, SlotNo,
-                     TxIn (TxIn), TxMetadata, VerificationKey, ShelleyBasedEra(ShelleyBasedEraShelley, ShelleyBasedEraAllegra, ShelleyBasedEraMary), castVerificationKey,
-                     anyAddressInShelleyBasedEra, deserialiseFromRawBytesHex, estimateTransactionFee, getVerificationKey,
-                     localNodeNetworkId, makeShelleyAddress, makeShelleyKeyWitness,
-                     multiAssetSupportedInEra, TxOutValue(TxOutValue), lovelaceToValue, makeSignedTransaction, makeTransactionMetadata, makeTransactionBody, TxBodyContent(TxBodyContent),
-                     valueToLovelace, serialiseToBech32, serialiseToRawBytes, serialiseToRawBytesHex,
-                     verificationKeyHash, AddressAny)
+import           Cardano.API (Address, AddressAny, AddressInEra (AddressInEra),
+                     AsType (AsPaymentKey, AsStakeKey), IsShelleyBasedEra, Key,
+                     LocalNodeConnectInfo, Lovelace, MaryEra, NetworkId, PaymentCredential,
+                     PaymentKey,
+                     ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
+                     ShelleyEra, SigningKey, SlotNo, StakeAddressReference, StakeCredential,
+                     StakeKey, Tx, TxAuxScripts (TxAuxScriptsNone), TxBody,
+                     TxBodyContent (TxBodyContent), TxCertificates (TxCertificatesNone),
+                     TxIn (TxIn), TxMetadata, TxMintValue (TxMintNone), TxOutValue (TxOutAdaOnly),
+                     TxOutValue (TxOutValue), TxUpdateProposal (TxUpdateProposalNone),
+                     TxValidityLowerBound (TxValidityNoLowerBound),
+                     TxValidityUpperBound (TxValidityUpperBound),
+                     TxWithdrawals (TxWithdrawalsNone),
+                     ValidityUpperBoundSupportedInEra (ValidityUpperBoundInAllegraEra, ValidityUpperBoundInMaryEra, ValidityUpperBoundInShelleyEra),
+                     VerificationKey, anyAddressInShelleyBasedEra, castVerificationKey,
+                     deserialiseFromRawBytesHex, estimateTransactionFee, getVerificationKey,
+                     localNodeNetworkId, lovelaceToValue, makeShelleyAddress,
+                     makeShelleyKeyWitness, makeSignedTransaction, makeTransactionBody,
+                     makeTransactionMetadata, multiAssetSupportedInEra, serialiseToBech32,
+                     serialiseToRawBytes, serialiseToRawBytesHex, valueToLovelace,
+                     verificationKeyHash)
 import           Cardano.Api.LocalChainSync (getLocalTip)
-import           Cardano.Api.Typed (ShelleyLedgerEra, AsType (AsSigningKey), Lovelace(Lovelace),
-                     PaymentCredential (PaymentCredentialByKey), Shelley,
-                     StandardAllegra, ShelleyWitnessSigningKey (WitnessPaymentKey), SigningKey (StakeSigningKey),
+import           Cardano.Api.Shelley (fromMaryValue)
+import           Cardano.Api.Typed (AsType (AsSigningKey), Lovelace (Lovelace),
+                     PaymentCredential (PaymentCredentialByKey), Shelley, ShelleyLedgerEra,
+                     ShelleyWitnessSigningKey (WitnessPaymentKey), SigningKey (StakeSigningKey),
                      StakeAddressReference (StakeAddressByValue),
-                     StakeCredential (StakeCredentialByKey), StandardShelley, TxId (TxId),
-                     TxIx (TxIx),
+                     StakeCredential (StakeCredentialByKey), StandardAllegra, StandardShelley,
+                     TxId (TxId), TxIx (TxIx),
                      TxMetadataValue (TxMetaBytes, TxMetaMap, TxMetaNumber, TxMetaText),
                      TxOut (TxOut), VerificationKey (StakeVerificationKey),
                      deterministicSigningKey, deterministicSigningKeySeedSize, txCertificates,
@@ -53,47 +60,54 @@ import           Cardano.Crypto.DSIGN.Class
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import qualified Cardano.Crypto.Seed as Crypto
+import           Cardano.Ledger.Crypto (Crypto (..))
+import qualified Cardano.Ledger.Era as Ledger
+import           Cardano.Ledger.Mary.Value
+import           Cardano.Ledger.Shelley as Shel
 import qualified Codec.Binary.Bech32 as Bech32
 import           Ouroboros.Consensus.Cardano.Block (Query)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx)
+import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 import           Ouroboros.Network.Block (getTipSlotNo)
 import           Ouroboros.Network.Point (fromWithOrigin)
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type (ShowQuery)
 import           Ouroboros.Network.Util.ShowProxy (ShowProxy)
 import qualified Shelley.Spec.Ledger.Coin as Ledger
+import qualified Shelley.Spec.Ledger.Hashing as Ledger
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
-import           Cardano.Ledger.Crypto (Crypto (..))
 
-import           Cardano.API.Extended (textEnvelopeToJSON, liftShelleyBasedEra, liftShelleyBasedTxFee, liftShelleyBasedMetadata)
+import           Cardano.API.Extended (liftShelleyBasedEra, liftShelleyBasedMetadata,
+                     liftShelleyBasedTxFee, textEnvelopeToJSON)
 import           Cardano.API.Extended (AsBech32DecodeError, AsBech32HumanReadablePartError,
                      AsShelleyQueryCmdLocalStateQueryError, AsType (AsVotingKeyPublic),
                      VotingKeyPublic, deserialiseFromBech32', queryPParamsFromLocalState,
                      queryUTxOFromLocalState)
 import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Fee
-import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload, voteToTxMetadata)
+import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload,
+                     voteToTxMetadata)
 import           Cardano.CLI.Voting.Signing (VoteSigningKey, withVoteShelleySigningKey,
                      withVoteSigningKey)
-import           Cardano.CLI.Voting.Signing (sign, verify, getVoteVerificationKey)
+import           Cardano.CLI.Voting.Signing (getVoteVerificationKey, sign, verify)
 
-import qualified Shelley.Spec.Ledger.Coin
-import qualified Shelley.Spec.Ledger.TxBody
-import qualified Shelley.Spec.Ledger.UTxO
-import qualified Cardano.Ledger.Val
 import qualified Cardano.Ledger.Compactible
-import qualified Cardano.Ledger.Torsor
-import qualified Shelley.Spec.Ledger.Hashing
-import qualified NoThunks.Class
 import qualified Cardano.Ledger.Core
 import qualified Cardano.Ledger.Shelley
-import qualified Shelley.Spec.Ledger.API
 import qualified Cardano.Ledger.Shelley.Constraints
 import qualified Cardano.Ledger.ShelleyMA.TxBody
+import qualified Cardano.Ledger.Torsor
+import qualified Cardano.Ledger.Val
+import qualified NoThunks.Class
+import qualified Shelley.Spec.Ledger.API
+import qualified Shelley.Spec.Ledger.Coin
+import qualified Shelley.Spec.Ledger.Hashing
+import qualified Shelley.Spec.Ledger.TxBody
+import qualified Shelley.Spec.Ledger.UTxO
 
 -- | Create a vote registration payload.
 createVote
@@ -126,7 +140,7 @@ encodeVote
      , Ledger.HashIndex (Cardano.Ledger.Core.TxBody ledgerera) ~ Ledger.EraIndependentTxBody
      , Ledger.Era ledgerera
      , Cardano.Ledger.Shelley.Constraints.ShelleyBased ledgerera
-     
+
 
      , ShowProxy block
      , ShowProxy (ApplyTxErr block)

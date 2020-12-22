@@ -1,8 +1,8 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- | Tools used to estimate the fee associated with a vote transaction
 -- and ensure that the unspent value of the TxIns are enough to cover
@@ -26,22 +26,35 @@ module Cardano.CLI.Voting.Fee where
 
 import           Data.String (fromString)
 
-import           Cardano.API.Extended (liftShelleyBasedTxFee, liftShelleyBasedEra, liftShelleyBasedMetadata)
-import           Cardano.API (TxValidityUpperBound(TxValidityUpperBound), TxValidityLowerBound(TxValidityNoLowerBound), ValidityUpperBoundSupportedInEra(ValidityUpperBoundInShelleyEra, ValidityUpperBoundInAllegraEra, ValidityUpperBoundInMaryEra), ShelleyBasedEra(ShelleyBasedEraShelley, ShelleyBasedEraAllegra, ShelleyBasedEraMary), IsShelleyBasedEra, IsCardanoEra, ShelleyBasedEra, Address, AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
-                     Lovelace, NetworkId, PaymentCredential, PaymentKey, SigningKey,
-                     StakeAddressReference, SlotNo, StakeCredential, StakeKey, Tx, TxBody,
-                     TxIn (TxIn), TxMetadata, ShelleyEra, VerificationKey, estimateTransactionFee, TxBodyContent(TxBodyContent), TxAuxScripts(TxAuxScriptsNone), TxMintValue(TxMintNone),
-                     getVerificationKey, localNodeNetworkId, makeShelleyAddress,
-                     makeShelleyKeyWitness, makeSignedTransaction,
-                     makeTransactionMetadata, makeTransactionBody, serialiseToRawBytes, serialiseToRawBytesHex,
-                     verificationKeyHash, TxValidityUpperBound, makeShelleyAddressInEra, AddressInEra, multiAssetSupportedInEra, TxOutValue(TxOutAdaOnly, TxOutValue), lovelaceToValue, TxWithdrawals(TxWithdrawalsNone), TxCertificates(TxCertificatesNone), TxUpdateProposal(TxUpdateProposalNone))
-import           Cardano.Api.Typed (PaymentCredential (PaymentCredentialByKey), Shelley,
-                     ShelleyWitnessSigningKey (WitnessPaymentKey),
+import           Cardano.API (Address, AddressInEra, AsType (AsPaymentKey, AsStakeKey),
+                     IsCardanoEra, IsShelleyBasedEra, Key, LocalNodeConnectInfo, Lovelace,
+                     NetworkId, PaymentCredential, PaymentKey,
+                     ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
+                     ShelleyEra, SigningKey, SlotNo, StakeAddressReference, StakeCredential,
+                     StakeKey, Tx, TxAuxScripts (TxAuxScriptsNone), TxBody,
+                     TxBodyContent (TxBodyContent), TxCertificates (TxCertificatesNone),
+                     TxIn (TxIn), TxMetadata, TxMintValue (TxMintNone),
+                     TxOutValue (TxOutAdaOnly, TxOutValue),
+                     TxUpdateProposal (TxUpdateProposalNone),
+                     TxValidityLowerBound (TxValidityNoLowerBound),
+                     TxValidityUpperBound (TxValidityUpperBound), TxValidityUpperBound,
+                     TxWithdrawals (TxWithdrawalsNone),
+                     ValidityUpperBoundSupportedInEra (ValidityUpperBoundInAllegraEra, ValidityUpperBoundInMaryEra, ValidityUpperBoundInShelleyEra),
+                     VerificationKey, estimateTransactionFee, getVerificationKey,
+                     localNodeNetworkId, lovelaceToValue, makeShelleyAddress,
+                     makeShelleyAddressInEra, makeShelleyKeyWitness, makeSignedTransaction,
+                     makeTransactionBody, makeTransactionMetadata, multiAssetSupportedInEra,
+                     serialiseToRawBytes, serialiseToRawBytesHex, verificationKeyHash)
+import           Cardano.API.Extended (liftShelleyBasedEra, liftShelleyBasedMetadata,
+                     liftShelleyBasedTxFee)
+import           Cardano.Api.Typed (Lovelace (Lovelace), PaymentCredential (PaymentCredentialByKey),
+                     Shelley, ShelleyWitnessSigningKey (WitnessPaymentKey),
                      StakeAddressReference (StakeAddressByValue),
                      StakeCredential (StakeCredentialByKey), StandardShelley, TxId (TxId),
                      TxIx (TxIx), TxMetadataValue (TxMetaBytes, TxMetaMap, TxMetaText),
                      TxOut (TxOut), deterministicSigningKey, deterministicSigningKeySeedSize,
-                     txCertificates, txMetadata, txUpdateProposal, txWithdrawals, Lovelace(Lovelace), makeShelleyTransaction)
+                     makeShelleyTransaction, txCertificates, txMetadata, txUpdateProposal,
+                     txWithdrawals)
 import           Cardano.Api.Typed (Shelley, StandardShelley)
 import qualified Cardano.Binary as CBOR
 import qualified Cardano.Crypto.Hash.Class as Crypto
@@ -62,8 +75,8 @@ data FeeParams = FeeParams
   deriving (Eq, Show)
 
 -- | Transactions that aren't fully spent.
-type UnspentSources 
-  = [( TxIn 
+type UnspentSources
+  = [( TxIn
      -- ^ Transaction in
      , Lovelace
      -- ^ Unspent amount
@@ -99,7 +112,7 @@ estimateVoteTxFee
   -> Lovelace
 estimateVoteTxFee networkId era pparams ttl txins addr txBaseValue meta =
   let
-    txBaseValue' = 
+    txBaseValue' =
       case multiAssetSupportedInEra (liftShelleyBasedEra era) of
         Left adaOnlyInEra -> TxOutAdaOnly adaOnlyInEra txBaseValue
         Right multiAssetInEra -> TxOutValue multiAssetInEra (lovelaceToValue txBaseValue)

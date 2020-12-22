@@ -2,8 +2,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , VoteVerificationKey
@@ -22,17 +22,19 @@ import           Control.Monad.Except (MonadError)
 import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
-import           Cardano.API (AsType (AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey), FromSomeType,
-                     HasTypeProxy, Key, SerialiseAsRawBytes(serialiseToRawBytes, deserialiseFromRawBytes), SigningKey, StakeExtendedKey,
-                     StakeKey, VerificationKey, getVerificationKey, proxyToAsType,
-                     serialiseToRawBytes, castVerificationKey)
+import           Cardano.API
+                     (AsType (AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                     FromSomeType, HasTypeProxy, Key,
+                     SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
+                     SigningKey, StakeExtendedKey, StakeKey, VerificationKey, castVerificationKey,
+                     getVerificationKey, proxyToAsType, serialiseToRawBytes)
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
 import           Cardano.Api.Typed (FromSomeType (FromSomeType))
 import           Cardano.Api.Typed (ShelleySigningKey,
                      ShelleyWitnessSigningKey (WitnessStakeExtendedKey, WitnessStakeKey),
-                     SigningKey (StakeExtendedSigningKey, StakeSigningKey), VerificationKey(StakeVerificationKey),
-                     getShelleyKeyWitnessVerificationKey, makeShelleySignature,
-                     toShelleySigningKey)
+                     SigningKey (StakeExtendedSigningKey, StakeSigningKey),
+                     VerificationKey (StakeVerificationKey), getShelleyKeyWitnessVerificationKey,
+                     makeShelleySignature, toShelleySigningKey)
 import           Cardano.CLI.Types (SigningKeyFile)
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Cardano.Crypto.Util as Crypto

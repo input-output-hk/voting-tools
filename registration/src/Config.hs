@@ -20,8 +20,8 @@ import qualified Data.Text.IO as TIO
 
 import           Options.Applicative
 
-import           Cardano.API (Address, Bech32DecodeError, FileError, NetworkId, PaymentKey,
-                     SigningKey, StakeKey, Witness, AddressAny)
+import           Cardano.API (Address, AddressAny, Bech32DecodeError, FileError, NetworkId,
+                     PaymentKey, SigningKey, StakeKey, Witness)
 import qualified Cardano.API as Api
 import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)

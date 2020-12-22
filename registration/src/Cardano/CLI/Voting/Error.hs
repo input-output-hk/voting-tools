@@ -1,13 +1,13 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- | Application error type and instances.
 
 module Cardano.CLI.Voting.Error where
 
-import           Cardano.API (Address, Bech32DecodeError, FileError, Lovelace, AddressAny)
+import           Cardano.API (Address, AddressAny, Bech32DecodeError, FileError, Lovelace)
 import           Cardano.Api.Typed (Shelley, TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError (..))
 import qualified Codec.Binary.Bech32 as Bech32

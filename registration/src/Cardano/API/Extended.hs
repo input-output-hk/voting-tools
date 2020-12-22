@@ -46,21 +46,28 @@ import           Control.Monad (guard)
 import           Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, left, newExceptT, right)
+import           Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
+import qualified Data.Aeson as Aeson
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8 as BC
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Text (Text)
-import           Data.Aeson (FromJSON(parseJSON), ToJSON(toJSON))
-import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Base16 as Base16
-import qualified Data.ByteString.Char8 as BC
 import qualified Data.Text as T
 
-import           Cardano.API (TxFee, Lovelace, TxFeesExplicitInEra(TxFeesExplicitInShelleyEra, TxFeesExplicitInAllegraEra, TxFeesExplicitInMaryEra), TxFee(TxFeeExplicit), AsType, Bech32DecodeError, HasTextEnvelope, SerialiseAsBech32,
-                     SigningKey, AnyCardanoEra(AnyCardanoEra), CardanoEraStyle(ShelleyBasedEra), cardanoEraStyle, IsShelleyBasedEra, FromSomeType, CardanoEra(ShelleyEra, AllegraEra, MaryEra), ShelleyBasedEra(ShelleyBasedEraShelley, ShelleyBasedEraAllegra, ShelleyBasedEraMary), TxMetadata, TxMetadataSupportedInEra(TxMetadataInShelleyEra, TxMetadataInAllegraEra, TxMetadataInMaryEra), TxMetadataInEra(TxMetadataInEra))
-import           Cardano.Api.Typed (FileError (FileError, FileIOError), ShelleyLedgerEra)
+import           Cardano.API (AnyCardanoEra (AnyCardanoEra), AsType, Bech32DecodeError,
+                     CardanoEra (AllegraEra, MaryEra, ShelleyEra),
+                     CardanoEraStyle (ShelleyBasedEra), FromSomeType, HasTextEnvelope,
+                     IsShelleyBasedEra, Lovelace, SerialiseAsBech32,
+                     ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
+                     SigningKey, TxFee (TxFeeExplicit),
+                     TxFeesExplicitInEra (TxFeesExplicitInAllegraEra, TxFeesExplicitInMaryEra, TxFeesExplicitInShelleyEra),
+                     TxMetadata, TxMetadataInEra (TxMetadataInEra),
+                     TxMetadataSupportedInEra (TxMetadataInAllegraEra, TxMetadataInMaryEra, TxMetadataInShelleyEra),
+                     cardanoEraStyle)
 import           Cardano.Api.Shelley (ShelleyBasedEra)
-import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
+import           Cardano.Api.Typed (FileError (FileError, FileIOError), ShelleyLedgerEra)
 import           Cardano.Api.Typed (AsType, Bech32DecodeError (Bech32DataPartToBytesError, Bech32DecodingError, Bech32DeserialiseFromBytesError, Bech32UnexpectedPrefix, Bech32WrongPrefix),
                      HasTypeProxy (proxyToAsType),
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes))
@@ -73,6 +80,7 @@ import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import qualified Cardano.CLI.Shelley.Key as Shelley
 import           Cardano.CLI.Types (QueryFilter, SigningKeyFile, SocketPath)
 import qualified Codec.Binary.Bech32 as Bech32
+import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
 import           Ouroboros.Network.Block (Tip)
 import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.UTxO as Ledger

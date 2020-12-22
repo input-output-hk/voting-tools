@@ -6,17 +6,17 @@ module Test.Generators ( lovelace
 import           Control.Monad.Except
 import           Control.Monad.IO.Class
 import qualified Data.Map.Strict as M
-import           Test.Tasty (TestTree, testGroup)
-import Test.Tasty.Hedgehog 
-import           Hedgehog (Property, Gen, forAll, tripping, (===), property)
+import           Hedgehog (Gen, Property, forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
+import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty.Hedgehog
 
+import           Cardano.API (Lovelace (Lovelace), deserialiseFromRawBytes)
 import qualified Data.Aeson as Aeson
-import           Cardano.API (Lovelace(Lovelace), deserialiseFromRawBytes)
 
+import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Fetching
-import           Cardano.API.Extended (VotingKeyPublic, AsType(AsVotingKeyPublic))
 
 -- votingFunds :: Gen VotingFunds
 -- votingFunds = VotingFunds <$> Gen.map (Range.linear 0 16) ((,) <$> jaddr <*> lovelace)

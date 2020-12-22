@@ -8,19 +8,20 @@ where
 
 import           Control.Monad.Except
 import           Control.Monad.IO.Class
+import qualified Data.Aeson as Aeson
 import qualified Data.Map.Strict as M
-import           Test.Tasty (TestTree, testGroup)
-import Test.Tasty.Hedgehog 
-import Test.Tasty.HUnit (testCase, Assertion, assertEqual)
-import           Hedgehog (Property, Gen, forAll, tripping, (===), property)
+import           Hedgehog (Gen, Property, forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import qualified Data.Aeson as Aeson
+import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty.Hedgehog
+import           Test.Tasty.HUnit (Assertion, assertEqual, testCase)
 
-import           Cardano.API (Lovelace(Lovelace), deserialiseFromRawBytes)
+import           Cardano.API (Lovelace (Lovelace), deserialiseFromRawBytes)
 
+import           Cardano.API.Extended (AsType (AsJormungandrAddress, AsVotingKeyPublic),
+                     VotingKeyPublic, deserialiseFromBech32', jAddrBytes)
 import           Cardano.CLI.Fetching
-import           Cardano.API.Extended (VotingKeyPublic, AsType(AsVotingKeyPublic, AsJormungandrAddress), jAddrBytes, deserialiseFromBech32')
 import qualified Test.Generators as Gen
 
 tests :: TestTree
@@ -76,7 +77,7 @@ unit_votingfunds_json_read =
              ]
       )
       (votingFundsToList <$> Aeson.eitherDecode' json)
-      
+
 
 -- prop_votingfunds_json_roundtrip :: Property
 -- prop_votingfunds_json_roundtrip = property $ do

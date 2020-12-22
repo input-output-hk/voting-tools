@@ -1,8 +1,8 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- | A vote in Voltaire is encoded as transaction metadata. We
 -- distinguish two parts of the vote here: the payload, and the signed
@@ -18,32 +18,35 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , voteSignature
                                    ) where
 
-import           Control.Monad.Except (throwError)
 import           Cardano.API (StakeKey, TxMetadata (TxMetadata), VerificationKey,
                      makeTransactionMetadata, serialiseToRawBytes)
-import           Cardano.Api.Typed (TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText), VerificationKey(StakeVerificationKey), TxMetadata)
+import           Cardano.Api.Typed (TxMetadata,
+                     TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText),
+                     VerificationKey (StakeVerificationKey))
 import qualified Cardano.Api.Typed as Api
-import Data.Word (Word64)
 import           Cardano.Binary (ToCBOR)
-import           Data.List (find)
 import qualified Cardano.Binary as CBOR
-import qualified Shelley.Spec.Ledger.Keys as Shelley
-import qualified Cardano.Crypto.Util as Crypto
-import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Cardano.Crypto.DSIGN as Crypto
-import           Data.ByteString (ByteString)
-import qualified Data.Map.Strict as M
-import qualified Data.HashMap.Strict as HM
-import qualified Data.Aeson as Aeson
-import qualified Data.Text as T
-import Control.Lens ((#))
-import Control.Lens.TH (makeClassyPrisms)
-import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 import qualified Cardano.Crypto.DSIGN as DSIGN
+import qualified Cardano.Crypto.DSIGN.Class as Crypto
+import qualified Cardano.Crypto.Util as Crypto
 import           Cardano.Ledger.Crypto (Crypto (..))
+import           Control.Lens (( # ))
+import           Control.Lens.TH (makeClassyPrisms)
+import           Control.Monad.Except (throwError)
+import qualified Data.Aeson as Aeson
+import           Data.ByteString (ByteString)
+import qualified Data.HashMap.Strict as HM
+import           Data.List (find)
+import qualified Data.Map.Strict as M
+import qualified Data.Text as T
+import           Data.Word (Word64)
+import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
+import qualified Shelley.Spec.Ledger.Keys as Shelley
 
-import           Cardano.API.Extended (VotingKeyPublic, AsType(AsVotingKeyPublic))
-import           Cardano.CLI.Voting.Signing (VoteVerificationKey, verify, AsType(AsVoteVerificationKey))
+import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
+import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKey), VoteVerificationKey,
+                     verify)
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).
@@ -142,7 +145,7 @@ fromTxMetadata meta = do
   votePubRaw   <- metaKey 61284 meta >>= metaNum 1 >>= asBytes
   stkVerifyRaw <- metaKey 61284 meta >>= metaNum 2 >>= asBytes
   sigBytes     <- metaKey 61285 meta >>= metaNum 1 >>= asBytes
-  
+
   sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
     Nothing -> throwError (_DeserialiseSigDSIGNFailure # sigBytes)
     Just x  -> pure x

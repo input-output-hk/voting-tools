@@ -1,9 +1,9 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 -- | Handles configuration, which involves parsing command line
 -- arguments and reading key files.
@@ -15,17 +15,17 @@ import           Control.Lens (( # ))
 import           Control.Lens.TH
 import           Control.Monad.Except (ExceptT, MonadError, catchError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Char8 as BC
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
-import qualified Data.Aeson as Aeson
-import Database.Persist.Postgresql (ConnectionString)
-import qualified Data.ByteString.Char8 as BC
+import           Database.Persist.Postgresql (ConnectionString)
 
 import           Options.Applicative
 
-import           Cardano.API (Address, Bech32DecodeError, FileError, NetworkId, PaymentKey,
-                     SigningKey, StakeKey, Witness, Lovelace(Lovelace))
+import           Cardano.API (Address, Bech32DecodeError, FileError, Lovelace (Lovelace), NetworkId,
+                     PaymentKey, SigningKey, StakeKey, Witness)
 import qualified Cardano.API as Api
 import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TTL, TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
@@ -36,10 +36,10 @@ import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, pNetworkId, parseAddress,
-                     readSigningKeyFile, readerFromAttoParser)
-import           Cardano.CLI.Voting.Error (AsTextViewError (_TextViewError))
+                     VotingKeyPublic, pNetworkId, parseAddress, readSigningKeyFile,
+                     readerFromAttoParser)
 import           Cardano.CLI.Fetching (Threshold, VotingFunds)
+import           Cardano.CLI.Voting.Error (AsTextViewError (_TextViewError))
 
 data DatabaseConfig
   = DatabaseConfig { _dbName       :: String
