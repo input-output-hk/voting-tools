@@ -38,6 +38,7 @@ library
                      , cardano-cli
                      , cardano-crypto
                      , cardano-crypto-class
+                     , cardano-ledger-shelley-ma
                      , cardano-node
                      , cborg
                      , containers
@@ -46,6 +47,7 @@ library
                      , lens
                      , memory
                      , mtl
+                     , nothunks
                      , optparse-applicative
                      , ouroboros-consensus
                      , ouroboros-consensus-cardano

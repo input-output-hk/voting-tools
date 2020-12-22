@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Performs the bulk of the work creating the vote registration
 -- transaction.
@@ -20,17 +21,22 @@ import qualified Data.Set as Set
 import           Data.String (fromString)
 import           Data.Text (Text)
 
-import           Cardano.API (ShelleyEra, IsShelleyBasedEra, Address, AddressInEra(AddressInEra), AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
+import Cardano.Ledger.Mary.Value
+import Cardano.Ledger.Shelley as Shel
+import           Cardano.Api.Shelley (fromMaryValue)
+import qualified Cardano.Ledger.Era as Ledger
+import qualified Shelley.Spec.Ledger.Hashing as Ledger
+import           Cardano.API (TxAuxScripts(TxAuxScriptsNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates(TxCertificatesNone), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(TxMintNone), ShelleyEra, IsShelleyBasedEra, Address, AddressInEra(AddressInEra), AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
                      Lovelace, NetworkId, PaymentCredential, PaymentKey, SigningKey,
                      StakeAddressReference, StakeCredential, StakeKey, Tx, TxBody, SlotNo,
                      TxIn (TxIn), TxMetadata, VerificationKey, ShelleyBasedEra, castVerificationKey,
                      anyAddressInShelleyBasedEra, deserialiseFromRawBytesHex, estimateTransactionFee, getVerificationKey,
                      localNodeNetworkId, makeShelleyAddress, makeShelleyKeyWitness,
-                     makeSignedTransaction, makeTransactionMetadata,
-                     serialiseToBech32, serialiseToRawBytes, serialiseToRawBytesHex,
+                     makeSignedTransaction, makeTransactionMetadata, makeTransactionBody, TxBodyContent(TxBodyContent),
+                     valueToLovelace, serialiseToBech32, serialiseToRawBytes, serialiseToRawBytesHex,
                      verificationKeyHash, AddressAny)
 import           Cardano.Api.LocalChainSync (getLocalTip)
-import           Cardano.Api.Typed (AsType (AsSigningKey), Lovelace(Lovelace),
+import           Cardano.Api.Typed (ShelleyLedgerEra, AsType (AsSigningKey), Lovelace(Lovelace),
                      PaymentCredential (PaymentCredentialByKey), Shelley,
                      StandardAllegra, ShelleyWitnessSigningKey (WitnessPaymentKey), SigningKey (StakeSigningKey),
                      StakeAddressReference (StakeAddressByValue),
@@ -74,70 +80,78 @@ import           Cardano.CLI.Voting.Signing (VoteSigningKey, withVoteShelleySign
                      withVoteSigningKey)
 import           Cardano.CLI.Voting.Signing (sign, verify, getVoteVerificationKey)
 
--- | Create a vote registration payload.
-createVote
-  :: VoteSigningKey
-  -> VotingKeyPublic
-  -> Vote
-createVote skey votepub =
-    let
-      payload     = mkVotePayload votepub (getVoteVerificationKey skey)
-      payloadCBOR = CBOR.serialize' payload
+import qualified Shelley.Spec.Ledger.TxBody
+import qualified Shelley.Spec.Ledger.UTxO
+import qualified Cardano.Ledger.Val
+import qualified Cardano.Ledger.Compactible
+import qualified Cardano.Ledger.Torsor
+import qualified Shelley.Spec.Ledger.Hashing
+import qualified NoThunks.Class
+import qualified Cardano.Ledger.Core
 
-      payloadSig  :: SigDSIGN (DSIGN StandardCrypto)
-      payloadSig  = payloadCBOR `sign` skey
-  in
-    fromMaybe (error "Failed to sign vote payload") $
-      signVotePayload payload payloadSig
+-- -- | Create a vote registration payload.
+-- createVote
+--   :: VoteSigningKey
+--   -> VotingKeyPublic
+--   -> Vote
+-- createVote skey votepub =
+--     let
+--       payload     = mkVotePayload votepub (getVoteVerificationKey skey)
+--       payloadCBOR = CBOR.serialize' payload
 
--- | Encode the vote registration payload as a transaction body.
-encodeVote
-  :: ( MonadIO m
-     , MonadError e m
-     , AsShelleyQueryCmdLocalStateQueryError e
-     , AsNotEnoughFundsError e
+--       payloadSig  :: SigDSIGN (DSIGN StandardCrypto)
+--       payloadSig  = payloadCBOR `sign` skey
+--   in
+--     fromMaybe (error "Failed to sign vote payload") $
+--       signVotePayload payload payloadSig
 
-     , ShowProxy block
-     , ShowProxy (ApplyTxErr block)
-     , ShowProxy (Query block)
-     , ShowProxy (GenTx block)
-     , ShowQuery (Query block)
-     )
-  => LocalNodeConnectInfo mode block
-  -> ShelleyEra
-  -> AddressAny
-  -> SlotNo
-  -> Vote
-  -> m (TxBody Shelley)
-encodeVote connectInfo era addr ttl vote = do
-  let
-    addrShelley :: IsShelleyBasedEra era => AddressInEra era
-    addrShelley = anyAddressInShelleyBasedEra addr
-  -- Get the network parameters
-  pparams <- queryPParamsFromLocalState connectInfo
-  let
-    meta      = voteToTxMetadata vote
-    networkId = localNodeNetworkId connectInfo
+-- -- | Encode the vote registration payload as a transaction body.
+-- encodeVote
+--   :: ( MonadIO m
+--      , MonadError e m
+--      , AsShelleyQueryCmdLocalStateQueryError e
+--      , AsNotEnoughFundsError e
 
-  -- Estimate the fee for the transaction
-  let
-    feeParams = estimateVoteFeeParams networkId era pparams meta
+--      , ShowProxy block
+--      , ShowProxy (ApplyTxErr block)
+--      , ShowProxy (Query block)
+--      , ShowProxy (GenTx block)
+--      , ShowQuery (Query block)
+--      )
+--   => LocalNodeConnectInfo mode block
+--   -> ShelleyEra
+--   -> AddressAny
+--   -> SlotNo
+--   -> Vote
+--   -> m (TxBody Shelley)
+-- encodeVote connectInfo era addr ttl vote = do
+--   let
+--     addrShelley :: IsShelleyBasedEra era => AddressInEra era
+--     addrShelley = anyAddressInShelleyBasedEra addr
+--   -- Get the network parameters
+--   pparams <- queryPParamsFromLocalState connectInfo
+--   let
+--     meta      = voteToTxMetadata vote
+--     networkId = localNodeNetworkId connectInfo
 
-  -- Find some unspent funds
-  utxos  <- queryUTxOFromLocalState era (FilterByAddress $ Set.singleton addr) connectInfo
-  case findUnspent feeParams (fromShelleyUTxO utxos) of
-    Nothing      -> throwError $ _NotEnoughFundsToMeetFeeError # (fromShelleyUTxO utxos)
-    Just unspent -> do
-      tip <- liftIO $ getLocalTip connectInfo
-      let
-        slotTip          = fromWithOrigin minBound $ getTipSlotNo tip
-        txins            = unspentSources unspent
-        (Lovelace value) = unspentValue unspent
-        (Lovelace fee)   =
-          estimateVoteTxFee
-            networkId era pparams slotTip txins addrShelley (Lovelace value) meta
+--   -- Estimate the fee for the transaction
+--   let
+--     feeParams = estimateVoteFeeParams networkId era pparams meta
 
-      undefined
+--   -- Find some unspent funds
+--   utxos  <- queryUTxOFromLocalState era (FilterByAddress $ Set.singleton addr) connectInfo
+--   case findUnspent feeParams (fromShelleyUTxO utxos) of
+--     Nothing      -> throwError $ _NotEnoughFundsToMeetFeeError # (fromShelleyUTxO utxos)
+--     Just unspent -> do
+--       tip <- liftIO $ getLocalTip connectInfo
+--       let
+--         slotTip          = fromWithOrigin minBound $ getTipSlotNo tip
+--         txins            = unspentSources unspent
+--         (Lovelace value) = unspentValue unspent
+--         (Lovelace fee)   =
+--           estimateVoteTxFee
+--             networkId era pparams slotTip txins addrShelley (Lovelace value) meta
+
 --       -- Create the vote transaction
 --       pure $ voteTx addrShelley txins (Lovelace $ value - fee) (slotTip + ttl) (Lovelace fee) meta
 
@@ -154,39 +168,146 @@ encodeVote connectInfo era addr ttl vote = do
 --  let
 --    txouts = [TxOut addr (Lovelace value)]
 --  in
---    makeShelleyTransaction txExtraContentEmpty {
---                             txCertificates   = [],
---                             txWithdrawals    = [],
---                             txMetadata       = Just meta,
---                             txUpdateProposal = Nothing
---                           }
---                           ttl
---                           (Lovelace fee)
---                           txins
---                           txouts
+--    makeTransactionBody (TxBodyContent
+--                          txins
+--                          txouts
+--                          (Lovelace fee)
+--                          ttl
+--                          (meta)
+--                          TxAuxScriptsNone
+--                          TxWithdrawalsNone
+--                          TxCertificatesNone
+--                          TxUpdateProposalNone
+--                          TxMintNone
+--                        )
 
--- | Sign a transaction body to create a transaction.
-signTx :: SigningKey PaymentKey -> TxBody Shelley -> Tx Shelley
-signTx psk txbody =
-  let
-    witness = makeShelleyKeyWitness txbody (WitnessPaymentKey psk)
-  in
-    makeSignedTransaction [witness] txbody
+-- -- | Sign a transaction body to create a transaction.
+-- signTx :: SigningKey PaymentKey -> TxBody Shelley -> Tx Shelley
+-- signTx psk txbody =
+--   let
+--     witness = makeShelleyKeyWitness txbody (WitnessPaymentKey psk)
+--   in
+--     makeSignedTransaction [witness] txbody
 
--- | Pretty print a transaction.
-prettyTx :: Tx Shelley -> String
-prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
+-- -- | Pretty print a transaction.
+-- prettyTx :: Tx Shelley -> String
+-- prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
 
-fromShelleyUTxO :: Ledger.UTxO StandardShelley -> UnspentSources
-fromShelleyUTxO = fmap convert . M.assocs . Ledger.unUTxO
-  where
-    convert :: (Ledger.TxIn StandardShelley, Ledger.TxOut StandardShelley) -> (TxIn, Lovelace)
-    convert (txin, Ledger.TxOut _ (Ledger.Coin value)) = (fromShelleyTxIn txin, Lovelace value)
+fromShelleyUTxO
+  :: ( Ledger.Crypto ledgerera ~ StandardCrypto
+     , Ledger.HashIndex (Cardano.Ledger.Core.TxBody ledgerera) ~ Ledger.EraIndependentTxBody
+     , Ledger.Era ledgerera
+     , Cardano.Ledger.Val.Val (Cardano.Ledger.Core.Value ledgerera)
+     , Cardano.Ledger.Compactible.Compactible (Cardano.Ledger.Core.Value ledgerera)
+     , Cardano.Ledger.Val.DecodeNonNegative (Cardano.Ledger.Core.Value ledgerera)
+     , Cardano.Ledger.Torsor.Torsor (Cardano.Ledger.Core.Value ledgerera)
+     , Shelley.Spec.Ledger.Hashing.HashAnnotated (Cardano.Ledger.Core.TxBody ledgerera) ledgerera
+     , Eq (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , Eq (Cardano.Ledger.Core.TxBody ledgerera)
+     , Eq (Cardano.Ledger.Core.Script ledgerera)
+     , Eq (Cardano.Ledger.Core.Metadata ledgerera)
+     , Eq (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera))
+     , Show (Cardano.Ledger.Core.Value ledgerera)
+     , Show (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , Show (Cardano.Ledger.Core.TxBody ledgerera)
+     , Show (Cardano.Ledger.Core.Script ledgerera)
+     , Show (Cardano.Ledger.Core.Metadata ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Core.Value ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Core.TxBody ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Core.Script ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Core.Metadata ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.FromCBOR (Cardano.Ledger.Core.Value ledgerera)
+     , CBOR.FromCBOR (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.FromCBOR (Cardano.Ledger.Core.TxBody ledgerera)
+     , CBOR.FromCBOR (Cardano.Ledger.Core.Script ledgerera)
+     , CBOR.FromCBOR (Cardano.Ledger.Core.Metadata ledgerera)
+     , CBOR.FromCBOR (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.TxBody ledgerera))
 
-fromShelleyTxIn  :: Ledger.TxIn StandardShelley -> TxIn
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera)))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.TxBody ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.Script ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.Metadata ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera)))
+
+     , CBOR.ToCBOR (Cardano.Ledger.Core.Value ledgerera)
+     , CBOR.ToCBOR (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.ToCBOR (Cardano.Ledger.Core.TxBody ledgerera)
+     , CBOR.ToCBOR (Cardano.Ledger.Core.Script ledgerera)
+     , CBOR.ToCBOR (Cardano.Ledger.Core.Metadata ledgerera)
+     , CBOR.ToCBOR (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera))
+     )
+  => Shelley.Spec.Ledger.UTxO.UTxO ledgerera
+  -> UnspentSources
+fromShelleyUTxO = fmap (\(txin, txout) -> (fromShelleyTxIn txin, txOutLovelace txout)) . M.assocs . Ledger.unUTxO
+
+txOutLovelace
+  :: ( Ledger.Crypto ledgerera ~ StandardCrypto
+     , Ledger.HashIndex (Cardano.Ledger.Core.TxBody ledgerera) ~ Ledger.EraIndependentTxBody
+     , Ledger.Era ledgerera
+     , Cardano.Ledger.Val.Val (Cardano.Ledger.Core.Value ledgerera)
+
+     , Cardano.Ledger.Compactible.Compactible (Cardano.Ledger.Core.Value ledgerera)
+     , Cardano.Ledger.Val.DecodeNonNegative (Cardano.Ledger.Core.Value ledgerera)
+     , Cardano.Ledger.Torsor.Torsor (Cardano.Ledger.Core.Value ledgerera)
+     , Shelley.Spec.Ledger.Hashing.HashAnnotated (Cardano.Ledger.Core.TxBody ledgerera) ledgerera
+     , Eq (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , Eq (Cardano.Ledger.Core.TxBody ledgerera)
+     , Eq (Cardano.Ledger.Core.Script ledgerera)
+     , Eq (Cardano.Ledger.Core.Metadata ledgerera)
+     , Eq (Cardano.Ledger.Core.Metadata ledgerera)
+     , Eq (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera))
+     , Show (Cardano.Ledger.Core.Value ledgerera)
+     , Show (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , Show (Cardano.Ledger.Core.TxBody ledgerera)
+     , Show (Cardano.Ledger.Core.Script ledgerera)
+     , Show (Cardano.Ledger.Core.Metadata ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Core.Value ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Core.TxBody ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Core.Script ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Core.Metadata ledgerera)
+     , NoThunks.Class.NoThunks (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.FromCBOR (Cardano.Ledger.Core.Value ledgerera)
+     , CBOR.FromCBOR (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.FromCBOR (Cardano.Ledger.Core.TxBody ledgerera)
+     , CBOR.FromCBOR (Cardano.Ledger.Core.Script ledgerera)
+     , CBOR.FromCBOR (Cardano.Ledger.Core.Metadata ledgerera)
+     , CBOR.FromCBOR (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera))
+
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera)))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.TxBody ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.Script ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Core.Metadata ledgerera))
+     , CBOR.FromCBOR (CBOR.Annotator (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera)))
+
+     , CBOR.ToCBOR (Cardano.Ledger.Core.Value ledgerera)
+     , CBOR.ToCBOR (Cardano.Ledger.Torsor.Delta (Cardano.Ledger.Core.Value ledgerera))
+     , CBOR.ToCBOR (Cardano.Ledger.Core.TxBody ledgerera)
+     , CBOR.ToCBOR (Cardano.Ledger.Core.Script ledgerera)
+     , CBOR.ToCBOR (Cardano.Ledger.Core.Metadata ledgerera)
+     , CBOR.ToCBOR (Cardano.Ledger.Compactible.CompactForm (Cardano.Ledger.Core.Value ledgerera))
+     )
+  => Shelley.Spec.Ledger.TxBody.TxOut ledgerera
+  -> Lovelace
+txOutLovelace (Shelley.Spec.Ledger.TxBody.TxOut _ v) = fromIntegral $ Ledger.unCoin $ Cardano.Ledger.Val.coin v
+
+fromShelleyTxIn
+  :: ( Ledger.Era ledgerera
+     , Ledger.Crypto ledgerera ~ StandardCrypto
+     )
+  => Ledger.TxIn ledgerera
+  -> TxIn
 fromShelleyTxIn (Ledger.TxIn txid txix) =
     TxIn (fromShelleyTxId txid) (TxIx (fromIntegral txix))
 
-fromShelleyTxId :: Ledger.TxId StandardShelley -> TxId
+fromShelleyTxId
+  :: Ledger.Crypto ledgerera ~ StandardCrypto
+  => Ledger.TxId ledgerera
+  -> TxId
 fromShelleyTxId (Ledger.TxId h) =
     TxId (Crypto.castHash h)

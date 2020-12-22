@@ -61,29 +61,28 @@ data FeeParams = FeeParams
   deriving (Eq, Show)
 
 -- | Transactions that aren't fully spent.
-data UnspentSources era
-  = UnspentSources ([( Ledger.TxIn era
+type UnspentSources 
+  = [( TxIn 
      -- ^ Transaction in
      , Lovelace
      -- ^ Unspent amount
-     )])
-  deriving (Eq, Show)
+     )]
 
-data NotEnoughFundsError era = NotEnoughFundsToMeetFeeError !(UnspentSources era)
+data NotEnoughFundsError = NotEnoughFundsToMeetFeeError !UnspentSources
   deriving (Eq, Show)
 
 makeClassyPrisms ''NotEnoughFundsError
 
 -- | Total amount of unspent value.
-unspentValue :: UnspentSources era -> Lovelace
-unspentValue (UnspentSources srcs) =
+unspentValue :: UnspentSources -> Lovelace
+unspentValue =
   foldr
     (\(_, Lovelace unspent) (Lovelace acc) -> Lovelace $ acc + unspent)
-    (Lovelace 0) srcs
+    (Lovelace 0)
 
 -- | All transactions that aren't fully spent.
-unspentSources :: UnspentSources era -> [Ledger.TxIn era]
-unspentSources (UnspentSources srcs) = foldr (\(txin, _) -> (txin:)) mempty srcs
+unspentSources :: UnspentSources -> [TxIn]
+unspentSources = foldr (\(txin, _) -> (txin:)) mempty
 
 -- | Estimate the fee required for a vote transaction.
 estimateVoteTxFee
@@ -175,15 +174,15 @@ estimateVoteFeeParams networkId era pparams meta =
 findUnspent
   :: FeeParams
   -- ^ Estimates for the base fee and the fee per TxIn
-  -> UnspentSources era
+  -> UnspentSources
   -- ^ UTxOs we can use to cover fees
-  -> Maybe (UnspentSources era)
+  -> Maybe UnspentSources
   -- ^ Nothing if given UTxOs cannot cover fees. Otherwise, UTxOs
   -- actually used to cover fees.
-findUnspent feeParams (UnspentSources utxos) =
+findUnspent feeParams utxos =
   case takeUntilFeePaid feeParams utxos of
     [] -> Nothing
-    xs -> Just (UnspentSources xs)
+    xs -> Just xs
 
 takeUntilFeePaid :: FeeParams -> [(a , Lovelace)] -> [(a , Lovelace)]
 takeUntilFeePaid (FeeParams feeBase (Lovelace feePerTxIn)) =

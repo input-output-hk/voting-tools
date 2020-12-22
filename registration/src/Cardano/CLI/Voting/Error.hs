@@ -28,13 +28,13 @@ data AddressUTxOError = AddressNotEnoughUTxOs AddressAny Lovelace
 makeClassyPrisms ''AddressUTxOError
 makeClassyPrisms ''TextEnvelopeError
 
-data AppError era = AppEnvSocketError !EnvSocketError
+data AppError = AppEnvSocketError !EnvSocketError
     | AppShelleyQueryError !ShelleyQueryCmdLocalStateQueryError
     | AppBech32DecodeError !Bech32DecodeError
     | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
     | AppAddressUTxOError !AddressUTxOError
     | AppWriteTxError !(FileError ())
-    | AppNotEnoughFundsError !(NotEnoughFundsError era)
+    | AppNotEnoughFundsError !NotEnoughFundsError
     deriving (Show)
 
 makeClassyPrisms ''AppError

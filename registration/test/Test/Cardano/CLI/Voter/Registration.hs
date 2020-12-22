@@ -29,7 +29,7 @@ tests = do
     unitGenerateVoteMetadata
 
 unitGenerateVoteMetadata = do
-  (eMetadata :: Either AppError TxMetadata) <- runExceptT $ do
+  (eMetadata :: Either (AppError era) TxMetadata) <- runExceptT $ do
     stkSign   <- maybe (error "Failed to deserialise stake signing key") pure $
       deserialiseFromRawBytesHex (AsSigningKey AsStakeKey) "efb3df51bee6858af75927ce0f4828e55876d8c3111831f87ca4058b7da58a69"
     stkVerify <- maybe (error "Failed to deserialise stake verification key") pure $
