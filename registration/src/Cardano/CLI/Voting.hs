@@ -27,10 +27,10 @@ import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
 import           Cardano.Api.Shelley (fromMaryValue)
 import qualified Cardano.Ledger.Era as Ledger
 import qualified Shelley.Spec.Ledger.Hashing as Ledger
-import           Cardano.API (TxOutValue(TxOutAdaOnly), TxAuxScripts(TxAuxScriptsNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates(TxCertificatesNone), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(TxMintNone), MaryEra, ShelleyEra, IsShelleyBasedEra, Address, AddressInEra(AddressInEra), AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
+import           Cardano.API (TxValidityLowerBound(TxValidityNoLowerBound), TxValidityUpperBound(TxValidityUpperBound), ValidityUpperBoundSupportedInEra(ValidityUpperBoundInShelleyEra, ValidityUpperBoundInAllegraEra, ValidityUpperBoundInMaryEra), TxOutValue(TxOutAdaOnly), TxAuxScripts(TxAuxScriptsNone), TxWithdrawals(TxWithdrawalsNone), TxCertificates(TxCertificatesNone), TxUpdateProposal(TxUpdateProposalNone), TxMintValue(TxMintNone), MaryEra, ShelleyEra, IsShelleyBasedEra, Address, AddressInEra(AddressInEra), AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
                      Lovelace, NetworkId, PaymentCredential, PaymentKey, SigningKey,
                      StakeAddressReference, StakeCredential, StakeKey, Tx, TxBody, SlotNo,
-                     TxIn (TxIn), TxMetadata, VerificationKey, ShelleyBasedEra, castVerificationKey,
+                     TxIn (TxIn), TxMetadata, VerificationKey, ShelleyBasedEra(ShelleyBasedEraShelley, ShelleyBasedEraAllegra, ShelleyBasedEraMary), castVerificationKey,
                      anyAddressInShelleyBasedEra, deserialiseFromRawBytesHex, estimateTransactionFee, getVerificationKey,
                      localNodeNetworkId, makeShelleyAddress, makeShelleyKeyWitness,
                      multiAssetSupportedInEra, TxOutValue(TxOutValue), lovelaceToValue, makeSignedTransaction, makeTransactionMetadata, makeTransactionBody, TxBodyContent(TxBodyContent),
@@ -189,12 +189,17 @@ voteTx era addr txins (Lovelace value) ttl (Lovelace fee) meta =
        Left adaOnlyInEra -> TxOutAdaOnly adaOnlyInEra (Lovelace value)
        Right multiAssetInEra -> TxOutValue multiAssetInEra (lovelaceToValue (Lovelace value))
    txouts = [TxOut addr txoutVal]
+
+   validityUpperBound = case era of
+    ShelleyBasedEraShelley -> TxValidityUpperBound ValidityUpperBoundInShelleyEra ttl
+    ShelleyBasedEraAllegra -> TxValidityUpperBound ValidityUpperBoundInAllegraEra ttl
+    ShelleyBasedEraMary    -> TxValidityUpperBound ValidityUpperBoundInMaryEra ttl
  in
    either (error . show) id $ makeTransactionBody (TxBodyContent
                          txins
                          txouts
                          (liftShelleyBasedTxFee era $ Lovelace fee)
-                         (undefined) -- ttl
+                         (TxValidityNoLowerBound, validityUpperBound)
                          (liftShelleyBasedMetadata era meta)
                          TxAuxScriptsNone
                          TxWithdrawalsNone

@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 -- | Tools used to estimate the fee associated with a vote transaction
@@ -26,7 +27,7 @@ module Cardano.CLI.Voting.Fee where
 import           Data.String (fromString)
 
 import           Cardano.API.Extended (liftShelleyBasedTxFee, liftShelleyBasedEra, liftShelleyBasedMetadata)
-import           Cardano.API (IsShelleyBasedEra, IsCardanoEra, ShelleyBasedEra, Address, AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
+import           Cardano.API (TxValidityUpperBound(TxValidityUpperBound), TxValidityLowerBound(TxValidityNoLowerBound), ValidityUpperBoundSupportedInEra(ValidityUpperBoundInShelleyEra, ValidityUpperBoundInAllegraEra, ValidityUpperBoundInMaryEra), ShelleyBasedEra(ShelleyBasedEraShelley, ShelleyBasedEraAllegra, ShelleyBasedEraMary), IsShelleyBasedEra, IsCardanoEra, ShelleyBasedEra, Address, AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
                      Lovelace, NetworkId, PaymentCredential, PaymentKey, SigningKey,
                      StakeAddressReference, SlotNo, StakeCredential, StakeKey, Tx, TxBody,
                      TxIn (TxIn), TxMetadata, ShelleyEra, VerificationKey, estimateTransactionFee, TxBodyContent(TxBodyContent), TxAuxScripts(TxAuxScriptsNone), TxMintValue(TxMintNone),
@@ -103,11 +104,17 @@ estimateVoteTxFee networkId era pparams ttl txins addr txBaseValue meta =
         Left adaOnlyInEra -> TxOutAdaOnly adaOnlyInEra txBaseValue
         Right multiAssetInEra -> TxOutValue multiAssetInEra (lovelaceToValue txBaseValue)
     txoutsNoFee = [TxOut addr txBaseValue']
+
+    validityUpperBound = case era of
+      ShelleyBasedEraShelley -> TxValidityUpperBound ValidityUpperBoundInShelleyEra ttl
+      ShelleyBasedEraAllegra -> TxValidityUpperBound ValidityUpperBoundInAllegraEra ttl
+      ShelleyBasedEraMary    -> TxValidityUpperBound ValidityUpperBoundInMaryEra ttl
+
     txBody = either (error . show) id $ makeTransactionBody
                (TxBodyContent txins
                txoutsNoFee
                (liftShelleyBasedTxFee era $ fromInteger 0)
-               undefined
+               (TxValidityNoLowerBound, validityUpperBound)
                (liftShelleyBasedMetadata era meta)
                TxAuxScriptsNone
                TxWithdrawalsNone
