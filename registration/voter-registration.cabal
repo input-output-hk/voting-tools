@@ -67,7 +67,9 @@ executable voter-registration
   other-modules:       Config
   -- other-extensions:
   build-depends:       base
+                     , aeson
                      , aeson-pretty
+                     , unordered-containers
                      , attoparsec
                      , base16-bytestring
                      , bech32
@@ -77,9 +79,12 @@ executable voter-registration
                      , cardano-cli
                      , cardano-crypto-class
                      , cardano-ledger
+                     , cardano-crypto
                      , containers
                      , lens
                      , mtl
+                     , nothunks
+                     , cardano-ledger-shelley-ma
                      , optparse-applicative
                      , ouroboros-consensus
                      , ouroboros-consensus-cardano

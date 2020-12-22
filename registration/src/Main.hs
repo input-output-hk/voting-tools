@@ -7,6 +7,7 @@
 
 module Main where
 
+import           Cardano.API (ShelleyBasedEra(ShelleyBasedEraShelley))
 import           Cardano.Api.LocalChainSync (getLocalTip)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (Lovelace (Lovelace), Shelley, Tx, TxId (TxId), TxIn (TxIn),
@@ -24,6 +25,7 @@ import qualified Data.Set as Set
 import qualified Options.Applicative as Opt
 import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 import           Ouroboros.Network.Point (fromWithOrigin)
+import qualified Cardano.Crypto.DSIGN as Crypto
 
 import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
@@ -51,12 +53,12 @@ main = do
           let vote = createVote voteSign votePub
 
           -- Encode the vote as a transaction and sign it
-          voteTx <- signTx paySign <$> encodeVote connectInfo addr ttl vote
+          voteTx <- signTx paySign <$> encodeVote connectInfo ShelleyBasedEraShelley addr ttl vote
 
           -- Output helpful information
           liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
           liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (verificationKeyRawBytes voteSign)
-          liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode $ voteSignature vote)
+          liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
 
           -- Output our vote transaction
           liftIO . writeFile outFile $ prettyTx voteTx
