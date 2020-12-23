@@ -21,7 +21,7 @@ import qualified Data.Set as Set
 import           Data.String (fromString)
 import           Data.Text (Text)
 
-import           Cardano.API (Address, AddressAny, AddressInEra (AddressInEra),
+import           Cardano.API (IsCardanoEra, Address, AddressAny, AddressInEra (AddressInEra),
                      AsType (AsPaymentKey, AsStakeKey), IsShelleyBasedEra, Key,
                      LocalNodeConnectInfo, Lovelace, MaryEra, NetworkId, PaymentCredential,
                      PaymentKey,
@@ -223,7 +223,11 @@ voteTx era addr txins (Lovelace value) ttl (Lovelace fee) meta =
                        )
 
 -- | Sign a transaction body to create a transaction.
-signTx :: SigningKey PaymentKey -> TxBody Cardano.API.ShelleyEra -> Tx Cardano.API.ShelleyEra
+signTx
+  :: IsShelleyBasedEra era
+  => SigningKey PaymentKey
+  -> TxBody era
+  -> Tx era
 signTx psk txbody =
   let
     witness = makeShelleyKeyWitness txbody (WitnessPaymentKey psk)
@@ -231,7 +235,7 @@ signTx psk txbody =
     makeSignedTransaction [witness] txbody
 
 -- | Pretty print a transaction.
-prettyTx :: Tx Cardano.API.ShelleyEra -> String
+prettyTx :: (IsCardanoEra era) => Tx era -> String
 prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
 
 fromShelleyUTxO

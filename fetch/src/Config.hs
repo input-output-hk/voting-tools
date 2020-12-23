@@ -24,10 +24,10 @@ import           Database.Persist.Postgresql (ConnectionString)
 
 import           Options.Applicative
 
-import           Cardano.API (Address, Bech32DecodeError, FileError, Lovelace (Lovelace), NetworkId,
+import           Cardano.API (Address, Bech32DecodeError, FileError, Lovelace, NetworkId,
                      PaymentKey, SigningKey, StakeKey, Witness)
 import qualified Cardano.API as Api
-import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TTL, TextEnvelopeError)
+import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
 import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
@@ -36,10 +36,10 @@ import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, pNetworkId, parseAddress, readSigningKeyFile,
+                     VotingKeyPublic, pNetworkId, readSigningKeyFile,
                      readerFromAttoParser)
 import           Cardano.CLI.Fetching (Threshold, VotingFunds)
-import           Cardano.CLI.Voting.Error (AsTextViewError (_TextViewError))
+import           Cardano.CLI.Voting.Error ()
 
 data DatabaseConfig
   = DatabaseConfig { _dbName       :: String

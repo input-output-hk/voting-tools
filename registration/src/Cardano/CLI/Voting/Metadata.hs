@@ -16,6 +16,12 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , voteToTxMetadata
                                    , votePayloadToTxMetadata
                                    , voteSignature
+                                   , MetadataParsingError(..)
+                                   , AsMetadataParsingError(..)
+                                   , fromTxMetadata
+                                   , withMetaKey
+                                   , metadataMetaKey
+                                   , signatureMetaKey
                                    ) where
 
 import           Cardano.API (StakeKey, TxMetadata (TxMetadata), VerificationKey,
@@ -61,6 +67,7 @@ data Vote
   = Vote { _voteMeta :: VotePayload
          , _voteSig  :: Crypto.SigDSIGN (DSIGN StandardCrypto)
          }
+  deriving (Eq, Show)
 
 data MetadataParsingError
   = MetadataMissingField TxMetadata Word64
@@ -70,6 +77,7 @@ data MetadataParsingError
   | DeserialiseVerKeyDSIGNFailure ByteString
   | DeserialiseVotePublicKeyFailure ByteString
   | MetadataSignatureInvalid VotePayload (Crypto.SigDSIGN (DSIGN StandardCrypto))
+  deriving (Eq, Show)
 
 makeClassyPrisms ''MetadataParsingError
 
