@@ -25,7 +25,7 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      JormungandrAddress, VotingKeyPublic, deserialiseFromBech32', pNetworkId,
                      readSigningKeyFile, readerFromAttoParser)
 
-type Threshold = Int
+type Threshold = Api.Lovelace
 
 data VotingFunds
   = VotingFunds { _votingFunds :: Map JormungandrAddress Lovelace }

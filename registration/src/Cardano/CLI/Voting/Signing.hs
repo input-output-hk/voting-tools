@@ -4,6 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , VoteVerificationKey
@@ -25,7 +26,7 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
 import           Cardano.API
-                     (Hash, AsType (AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                     (Hash, AsType (AsHash, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
                      FromSomeType, HasTypeProxy, Key,
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
                      SigningKey, StakeExtendedKey, StakeKey, VerificationKey, castVerificationKey, verificationKeyHash,
@@ -60,6 +61,19 @@ data VoteVerificationKeyHash
   = AStakeVerificationKeyHash (Hash StakeKey)
   | AStakeExtendedVerificationKeyHash (Hash StakeExtendedKey)
   deriving (Ord, Eq, Show)
+
+instance HasTypeProxy VoteVerificationKeyHash where
+  data AsType VoteVerificationKeyHash = AsVoteVerificationKeyHash
+  proxyToAsType _ = AsVoteVerificationKeyHash
+
+instance SerialiseAsRawBytes (VoteVerificationKeyHash ) where
+    serialiseToRawBytes (AStakeVerificationKeyHash h)         = serialiseToRawBytes h
+    serialiseToRawBytes (AStakeExtendedVerificationKeyHash h) = serialiseToRawBytes h
+
+    deserialiseFromRawBytes AsVoteVerificationKeyHash bs = do
+      case AStakeExtendedVerificationKeyHash <$> deserialiseFromRawBytes (AsHash AsStakeExtendedKey) bs of
+        Nothing -> AStakeVerificationKeyHash <$> deserialiseFromRawBytes (AsHash AsStakeKey) bs
+        Just h  -> pure h
 
 getVoteVerificationKeyHash :: VoteVerificationKey -> VoteVerificationKeyHash
 getVoteVerificationKeyHash (AStakeVerificationKey k)         = AStakeVerificationKeyHash $ verificationKeyHash k

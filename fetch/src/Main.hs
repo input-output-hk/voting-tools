@@ -34,6 +34,7 @@ import Database.Esqueleto
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey)
 import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash)
+import Cardano.CLI.Fetching (Threshold)
 import qualified Cardano.API as Api
 import qualified Cardano.Api.Typed as Api (metadataFromJson)
 import qualified Data.Map.Strict as M
@@ -138,13 +139,14 @@ queryStake mSlotRestriction stakeHash = do
         []               -> error $ "No txs found in slot " <> show (slotNo + 1)-- TODO throwError (_NoTxsFoundInSlot # (slotNo + 1))
         x1:(x2:xs)       -> error $ "Too many txs found for slot " <> show slotNo <> ", add 'LIMIT 1' to query."
         (Single txid):[] ->
-          pure $ "SELECT SUM(tx_out.value) FROM tx_out INNER JOIN tx ON tx.id = tx_out.tx_id LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index AND tx_in_id < " <> T.pack (show txid) <> " INNER JOIN block ON block.id = tx.block_id AND block.slot_no < " <> T.pack (show slotNo) <> " WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '" <> T.pack (show stakeHash) <> "' AND tx_in.tx_in_id is null;"
+          pure $ "SELECT SUM(tx_out.value) FROM tx_out INNER JOIN tx ON tx.id = tx_out.tx_id LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index AND tx_in_id < " <> T.pack (show txid) <> " INNER JOIN block ON block.id = tx.block_id AND block.slot_no < " <> T.pack (show slotNo) <> " WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '" <> T.pack (show $ Api.serialiseToRawBytesHex stakeHash) <> "' AND tx_in.tx_in_id is null;"
 
-  (stakeValues :: [Single Int]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
+  (stakeValues :: [Single (Maybe Int)]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
   case stakeValues of
-    x1:(x2:xs)        -> error "Too many stake values found for stake sum, is SUM missing from your query?"
-    []                -> pure 0
-    (Single stake):[] -> pure $ fromIntegral stake
+    x1:(x2:xs)               -> error "Too many stake values found for stake sum, is SUM missing from your query?"
+    []                       -> pure 0
+    (Single Nothing):[]      -> pure 0
+    (Single (Just stake)):[] -> pure $ fromIntegral stake
 
 next
   :: ( MonadIO m
@@ -155,7 +157,7 @@ next
      , AsMetadataRetrievalError e
      )
   => Maybe SlotNo
-  -> Api.Lovelace
+  -> Threshold
   -> m (Map VoteVerificationKeyHash Api.Lovelace)
 next mSlotNo threshold = do
   regos <- queryVoteRegistration mSlotNo
@@ -205,14 +207,16 @@ queryVoteRegistration mSlotNo =
       meta <- either (\err -> throwError $ (_MetadataFailedToDecodeTxMetadata # (metaObj, err))) pure $ parseMetadataFromJson metaObj
       either (throwError . (_MetadataParsingError #)) pure $ fromTxMetadata meta
 
-runServer :: DatabaseConfig -> IO ()
-runServer dbConfig = runStdoutLoggingT $ do
+runServer :: DatabaseConfig -> Threshold -> IO ()
+runServer dbConfig threshold = runStdoutLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
-    (results :: Either VoteRegistrationRetrievalError [Vote]) <-
-      runQuery backend $ runExceptT $ queryVoteRegistration Nothing
+    (results) <-
+      runQuery backend $ runExceptT $
+        next Nothing threshold
+      -- queryVoteRegistration Nothing
     liftIO $ case results of
-      (Left err) -> error (show err)
+      (Left (err :: VoteRegistrationRetrievalError)) -> error (show err)
       (Right regos) -> do
         putStrLn $ show regos
         putStrLn $ show $ length regos
@@ -230,4 +234,4 @@ main = do
     Left err  -> putStrLn $ show err
     Right cfg@(Config networkId threshold dbCfg slotNo extraFunds) -> do
       putStrLn $ show cfg
-      runServer dbCfg
+      runServer dbCfg threshold
