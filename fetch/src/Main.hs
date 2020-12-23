@@ -32,7 +32,8 @@ import Cardano.Db
 import Database.Esqueleto
 
 import Cardano.API (SlotNo)
-import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError)
+import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey)
+import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash)
 import qualified Cardano.API as Api
 import qualified Cardano.Api.Typed as Api (metadataFromJson)
 import qualified Data.Map.Strict as M
@@ -113,6 +114,60 @@ instance AsMetadataRetrievalError VoteRegistrationRetrievalError where
 instance AsMetadataParsingError VoteRegistrationRetrievalError where
   _MetadataParsingError = _VoteRegistrationMetadataParsingError
 
+queryStake
+  :: ( MonadIO m
+     , MonadReader backend m
+     , BackendCompatible SqlBackend backend
+     )
+  => Maybe SlotNo
+  -> VoteVerificationKeyHash
+  -> m Api.Lovelace
+queryStake mSlotRestriction stakeHash = do
+  r <- ask
+  stakeQuerySql <- case mSlotRestriction of
+    Nothing             ->
+      pure $ "SELECT SUM(utxo_view.value) FROM utxo_view WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '" <> T.pack (show stakeHash) <> "';"
+    Just slotNo -> do
+      -- Get first tx is slot after one we've asked to restrict the
+      -- query to, we don't want to get this Tx or any later Txs.
+      let
+        firstUnwantedTxIdSql = "SELECT tx.id FROM tx LEFT OUTER JOIN block ON block.id = tx.block_id WHERE block.slot_no > " <> T.pack (show slotNo) <> " LIMIT 1";
+
+      (txids :: [Single Word64]) <- (flip runReaderT) r $ rawSql firstUnwantedTxIdSql []
+      case txids of
+        []               -> error $ "No txs found in slot " <> show (slotNo + 1)-- TODO throwError (_NoTxsFoundInSlot # (slotNo + 1))
+        x1:(x2:xs)       -> error $ "Too many txs found for slot " <> show slotNo <> ", add 'LIMIT 1' to query."
+        (Single txid):[] ->
+          pure $ "SELECT SUM(tx_out.value) FROM tx_out INNER JOIN tx ON tx.id = tx_out.tx_id LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index AND tx_in_id < " <> T.pack (show txid) <> " INNER JOIN block ON block.id = tx.block_id AND block.slot_no < " <> T.pack (show slotNo) <> " WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '" <> T.pack (show stakeHash) <> "' AND tx_in.tx_in_id is null;"
+
+  (stakeValues :: [Single Int]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
+  case stakeValues of
+    x1:(x2:xs)        -> error "Too many stake values found for stake sum, is SUM missing from your query?"
+    []                -> pure 0
+    (Single stake):[] -> pure $ fromIntegral stake
+
+next
+  :: ( MonadIO m
+     , MonadReader backend m
+     , BackendCompatible SqlBackend backend
+     , MonadError e m
+     , AsMetadataParsingError e
+     , AsMetadataRetrievalError e
+     )
+  => Maybe SlotNo
+  -> Api.Lovelace
+  -> m (Map VoteVerificationKeyHash Api.Lovelace)
+next mSlotNo threshold = do
+  regos <- queryVoteRegistration mSlotNo
+  let
+    verKeyHashes = (getVoteVerificationKeyHash . voteRegistrationVerificationKey) <$> regos
+  fmap (M.fromList . mconcat) $ forM verKeyHashes $ \hash -> do
+    stake <- queryStake mSlotNo hash
+    if stake > threshold
+    then pure [(hash, stake)]
+    else pure []
+
+
 queryVoteRegistration
   :: ( MonadIO m
      , MonadError e m
@@ -156,8 +211,11 @@ runServer dbConfig = runStdoutLoggingT $ do
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     (results :: Either VoteRegistrationRetrievalError [Vote]) <-
       runQuery backend $ runExceptT $ queryVoteRegistration Nothing
-    liftIO $ print results
-    liftIO $ print (length results)
+    liftIO $ case results of
+      (Left err) -> error (show err)
+      (Right regos) -> do
+        putStrLn $ show regos
+        putStrLn $ show $ length regos
 
 runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a
 runQuery backend query = liftIO $ runSqlConnWithIsolation query backend Serializable

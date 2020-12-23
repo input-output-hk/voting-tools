@@ -22,6 +22,8 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , withMetaKey
                                    , metadataMetaKey
                                    , signatureMetaKey
+                                   , voteRegistrationPublicKey
+                                   , voteRegistrationVerificationKey
                                    ) where
 
 import           Cardano.API (StakeKey, TxMetadata (TxMetadata), VerificationKey,
@@ -68,6 +70,12 @@ data Vote
          , _voteSig  :: Crypto.SigDSIGN (DSIGN StandardCrypto)
          }
   deriving (Eq, Show)
+
+voteRegistrationPublicKey :: Vote -> VotingKeyPublic
+voteRegistrationPublicKey (Vote (VotePayload pubkey _) _) = pubkey
+
+voteRegistrationVerificationKey :: Vote -> VoteVerificationKey
+voteRegistrationVerificationKey (Vote (VotePayload _ vkey) _) = vkey
 
 data MetadataParsingError
   = MetadataMissingField TxMetadata Word64

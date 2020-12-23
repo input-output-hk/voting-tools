@@ -7,7 +7,9 @@
 
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , VoteVerificationKey
+                                  , VoteVerificationKeyHash
                                   , AsType(AsVoteVerificationKey)
+                                  , getVoteVerificationKeyHash
                                   , getVoteVerificationKey
                                   , withVoteVerificationKey
                                   , withVoteSigningKey
@@ -23,10 +25,10 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
 import           Cardano.API
-                     (AsType (AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                     (Hash, AsType (AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
                      FromSomeType, HasTypeProxy, Key,
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
-                     SigningKey, StakeExtendedKey, StakeKey, VerificationKey, castVerificationKey,
+                     SigningKey, StakeExtendedKey, StakeKey, VerificationKey, castVerificationKey, verificationKeyHash,
                      getVerificationKey, proxyToAsType, serialiseToRawBytes)
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
 import           Cardano.Api.Typed (FromSomeType (FromSomeType))
@@ -53,6 +55,15 @@ data VoteVerificationKey
   = AStakeVerificationKey (VerificationKey StakeKey)
   | AStakeExtendedVerificationKey (VerificationKey StakeExtendedKey)
   deriving (Eq, Show)
+
+data VoteVerificationKeyHash
+  = AStakeVerificationKeyHash (Hash StakeKey)
+  | AStakeExtendedVerificationKeyHash (Hash StakeExtendedKey)
+  deriving (Ord, Eq, Show)
+
+getVoteVerificationKeyHash :: VoteVerificationKey -> VoteVerificationKeyHash
+getVoteVerificationKeyHash (AStakeVerificationKey k)         = AStakeVerificationKeyHash $ verificationKeyHash k
+getVoteVerificationKeyHash (AStakeExtendedVerificationKey k) = AStakeExtendedVerificationKeyHash $ verificationKeyHash k
 
 getVoteVerificationKey :: VoteSigningKey -> VoteVerificationKey
 getVoteVerificationKey (AStakeSigningKey skey)         = AStakeVerificationKey         $ getVerificationKey skey
