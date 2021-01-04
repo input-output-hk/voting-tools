@@ -12,6 +12,7 @@ module Main where
 
 import Data.Maybe (fromMaybe)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Cardano.Db (DbLovelace(unDbLovelace))
 import Control.Monad.Except (runExceptT, MonadError, throwError)
 import Control.Monad.Reader (MonadReader, asks, runReaderT, ask)
 import qualified Options.Applicative as Opt
@@ -25,15 +26,18 @@ import Data.ByteString (ByteString)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.ByteString.Char8 as BC
+import Data.Ratio (numerator)
 import Data.Conduit (($$))
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource
 import Cardano.Db
 import Database.Esqueleto
+import System.IO
 
 import Cardano.API (SlotNo)
-import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey)
-import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash)
+import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
+import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash, AsType(AsVoteVerificationKeyHash))
 import Cardano.CLI.Fetching (Threshold)
 import qualified Cardano.API as Api
 import qualified Cardano.Api.Typed as Api (metadataFromJson)
@@ -125,9 +129,10 @@ queryStake
   -> m Api.Lovelace
 queryStake mSlotRestriction stakeHash = do
   r <- ask
+  let stkHashSql = T.pack (BC.unpack $ Api.serialiseToRawBytesHex stakeHash)
   stakeQuerySql <- case mSlotRestriction of
     Nothing             ->
-      pure $ "SELECT SUM(utxo_view.value) FROM utxo_view WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '" <> T.pack (show stakeHash) <> "';"
+      pure $ "SELECT SUM(utxo_view.value) FROM utxo_view WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "';"
     Just slotNo -> do
       -- Get first tx is slot after one we've asked to restrict the
       -- query to, we don't want to get this Tx or any later Txs.
@@ -139,14 +144,13 @@ queryStake mSlotRestriction stakeHash = do
         []               -> error $ "No txs found in slot " <> show (slotNo + 1)-- TODO throwError (_NoTxsFoundInSlot # (slotNo + 1))
         x1:(x2:xs)       -> error $ "Too many txs found for slot " <> show slotNo <> ", add 'LIMIT 1' to query."
         (Single txid):[] ->
-          pure $ "SELECT SUM(tx_out.value) FROM tx_out INNER JOIN tx ON tx.id = tx_out.tx_id LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index AND tx_in_id < " <> T.pack (show txid) <> " INNER JOIN block ON block.id = tx.block_id AND block.slot_no < " <> T.pack (show slotNo) <> " WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '" <> T.pack (show $ Api.serialiseToRawBytesHex stakeHash) <> "' AND tx_in.tx_in_id is null;"
+          pure $ "SELECT SUM(tx_out.value) FROM tx_out INNER JOIN tx ON tx.id = tx_out.tx_id LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index AND tx_in_id < " <> T.pack (show txid) <> " INNER JOIN block ON block.id = tx.block_id AND block.slot_no < " <> T.pack (show slotNo) <> " WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "' AND tx_in.tx_in_id is null;"
 
-  (stakeValues :: [Single (Maybe Int)]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
+  (stakeValues :: [Single DbLovelace]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
   case stakeValues of
-    x1:(x2:xs)               -> error "Too many stake values found for stake sum, is SUM missing from your query?"
-    []                       -> pure 0
-    (Single Nothing):[]      -> pure 0
-    (Single (Just stake)):[] -> pure $ fromIntegral stake
+    x1:(x2:xs)                     -> error "Too many stake values found for stake sum, is SUM missing from your query?"
+    []                             -> pure 0
+    (Single (DbLovelace stake)):[] -> pure $ fromIntegral stake
 
 next
   :: ( MonadIO m
@@ -161,6 +165,7 @@ next
   -> m (Map VoteVerificationKeyHash Api.Lovelace)
 next mSlotNo threshold = do
   regos <- queryVoteRegistration mSlotNo
+  liftIO $ putStrLn $ "Voter registrations returned: " <> show (length regos)
   let
     verKeyHashes = (getVoteVerificationKeyHash . voteRegistrationVerificationKey) <$> regos
   fmap (M.fromList . mconcat) $ forM verKeyHashes $ \hash -> do
@@ -207,19 +212,41 @@ queryVoteRegistration mSlotNo =
       meta <- either (\err -> throwError $ (_MetadataFailedToDecodeTxMetadata # (metaObj, err))) pure $ parseMetadataFromJson metaObj
       either (throwError . (_MetadataParsingError #)) pure $ fromTxMetadata meta
 
+runStakeQuery :: DatabaseConfig -> VoteVerificationKeyHash -> IO ()
+runStakeQuery dbConfig stakeHash = runStdoutLoggingT $ do
+  logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
+  withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
+    results <- runQuery backend $ runExceptT $ queryStake Nothing stakeHash
+    case results of
+      Left (err :: VoteRegistrationRetrievalError) -> error $ show err
+      Right stake -> liftIO $ putStrLn $ show stake
+
 runServer :: DatabaseConfig -> Threshold -> IO ()
 runServer dbConfig threshold = runStdoutLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     (results) <-
-      runQuery backend $ runExceptT $
+      runQuery backend $ runExceptT $ do
         next Nothing threshold
-      -- queryVoteRegistration Nothing
-    liftIO $ case results of
-      (Left (err :: VoteRegistrationRetrievalError)) -> error (show err)
-      (Right regos) -> do
-        putStrLn $ show regos
-        putStrLn $ show $ length regos
+        -- regos <- queryVoteRegistration Nothing
+        -- let verKeyHashes = (Api.serialiseToRawBytesHex . getVoteVerificationKeyHash . voteRegistrationVerificationKey) <$> regos
+        -- let voteKeys = (Api.serialiseToRawBytesHex . voteRegistrationPublicKey) <$> regos
+        -- pure $ zip verKeyHashes voteKeys
+    case results of
+      Left (err :: VoteRegistrationRetrievalError) -> error $ show err
+      Right xs -> liftIO $ do
+        withFile "/home/sam/code/iohk/voting-tools/test.txt" WriteMode $ \h -> do
+          let m = M.toList xs
+          hPutStrLn h $ show $ length m
+          hPutStrLn h $ show $ m
+          
+    -- liftIO $ case results of
+    --   (Left (err :: VoteRegistrationRetrievalError)) -> error (show err)
+    --   (Right regos) -> do
+    --     putStrLn $ show regos
+    --     putStrLn $ show $ length regos
+
+dbCfg = DatabaseConfig "cexplorer" "cardano-node" "/run/postgresql"
 
 runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a
 runQuery backend query = liftIO $ runSqlConnWithIsolation query backend Serializable

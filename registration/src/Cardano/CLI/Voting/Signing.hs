@@ -9,7 +9,7 @@
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , VoteVerificationKey
                                   , VoteVerificationKeyHash
-                                  , AsType(AsVoteVerificationKey)
+                                  , AsType(AsVoteVerificationKey, AsVoteVerificationKeyHash)
                                   , getVoteVerificationKeyHash
                                   , getVoteVerificationKey
                                   , withVoteVerificationKey
@@ -66,7 +66,7 @@ instance HasTypeProxy VoteVerificationKeyHash where
   data AsType VoteVerificationKeyHash = AsVoteVerificationKeyHash
   proxyToAsType _ = AsVoteVerificationKeyHash
 
-instance SerialiseAsRawBytes (VoteVerificationKeyHash ) where
+instance SerialiseAsRawBytes VoteVerificationKeyHash where
     serialiseToRawBytes (AStakeVerificationKeyHash h)         = serialiseToRawBytes h
     serialiseToRawBytes (AStakeExtendedVerificationKeyHash h) = serialiseToRawBytes h
 
