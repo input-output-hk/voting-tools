@@ -34,6 +34,8 @@ import Control.Monad.Trans.Resource
 import Cardano.Db
 import Database.Esqueleto
 import System.IO
+import qualified Data.Map.Monoidal as MM
+import Data.Monoid (Sum(getSum))
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
@@ -162,17 +164,16 @@ next
      )
   => Maybe SlotNo
   -> Threshold
-  -> m (Map VoteVerificationKeyHash Api.Lovelace)
+  -> m (Map VotingKeyPublic Api.Lovelace)
 next mSlotNo threshold = do
   regos <- queryVoteRegistration mSlotNo
   liftIO $ putStrLn $ "Voter registrations returned: " <> show (length regos)
-  let
-    verKeyHashes = (getVoteVerificationKeyHash . voteRegistrationVerificationKey) <$> regos
-  fmap (M.fromList . mconcat) $ forM verKeyHashes $ \hash -> do
-    stake <- queryStake mSlotNo hash
-    if stake > threshold
-    then pure [(hash, stake)]
-    else pure []
+  fmap (getSum . mconcat) $ forM regos $ \rego -> do
+    let
+      verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
+      votePub    = voteRegistrationPublicKey rego
+    stake <- queryStake mSlotNo verKeyHash
+    pure $ MM.singleton [(votePub, Sum stake)]
 
 
 queryVoteRegistration

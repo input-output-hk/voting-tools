@@ -39,6 +39,7 @@ executable fetch-registration
                      , cardano-ledger
                      , containers
                      , unordered-containers
+                     , monoidal-containers
                      , lens
                      , mtl
                      , optparse-applicative
