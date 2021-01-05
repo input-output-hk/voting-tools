@@ -18,6 +18,7 @@ library
 
   exposed-modules:     Cardano.API.Extended
                      , Cardano.API.Extended.Raw
+                     , Cardano.API.Jormungandr
                      , Cardano.CLI.Fetching
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
@@ -31,6 +32,8 @@ library
                      , aeson-pretty
                      , attoparsec
                      , base16-bytestring
+                     , binary
+                     , binary-strict
                      , bech32
                      , bytestring
                      , cardano-api
@@ -40,6 +43,7 @@ library
                      , cardano-crypto-class
                      , cardano-ledger-shelley-ma
                      , cardano-node
+                     , cardano-wallet-jormungandr
                      , cborg
                      , containers
                      , directory

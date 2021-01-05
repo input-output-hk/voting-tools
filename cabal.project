@@ -22,6 +22,12 @@ package cardano-node
 package cardano-db
   tests: False
 
+package cardano-wallet
+  tests: False
+
+package cardano-wallet-jormungandr
+  tests: False
+
 package ouroboros-consensus-cardano
   tests: False
 
@@ -104,6 +110,36 @@ source-repository-package
     plugins/backend-trace-forwarder
     plugins/scribe-systemd
     tracer-transformers
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-wallet-jormungandr
+  tag: cc80db2d09bd5901d4827a3a215af0d257b1138e
+  --sha256: 17p55cr3dz35zy541p8nd7zb9qw1378pfcvwcp9h3gcyvj7vycgd
+  subdir:
+    lib/core/
+    lib/core-integration/
+    lib/cli/
+    lib/launcher/
+    lib/text-class/
+    lib/test-utils/
+    lib/jormungandr/
+    lib/shelley/
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-wallet
+  tag: a256c3ecc486a7c8d5b37086a6ea7060dc605a3c
+  --sha256: 0gcj25y631pivba557s2grj6yfihcgkqcf398r8wky7jzxi9cxsd
+  subdir:
+    lib/core/
+    lib/core-integration/
+    lib/cli/
+    lib/launcher/
+    lib/strict-non-empty-containers/
+    lib/text-class/
+    lib/test-utils/
+    lib/shelley/
 
 source-repository-package
   type: git
