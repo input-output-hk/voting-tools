@@ -34,5 +34,17 @@
         "type": "tarball",
         "url": "https://github.com/nmattia/niv/archive/9d35b9e4837ab88517210b1701127612c260eccf.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "cardano-node": {
+        "branch": "cardano-lib-metadata",
+        "description": "The core component that is used to participate in a Cardano decentralised blockchain.",
+        "homepage": "https://cardano.org",
+        "owner": "input-output-hk",
+        "repo": "cardano-node",
+        "rev": "cbd7dcc58be81a5174f6aca9431f93ed370b3993",
+        "sha256": "1fx0sy5hgfqaim1lv1ajx2ih87nb7m4z996cfs7bbmyjchg9nqyy",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/cbd7dcc58be81a5174f6aca9431f93ed370b3993.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }

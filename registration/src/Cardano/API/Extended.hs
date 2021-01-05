@@ -230,6 +230,7 @@ instance SerialiseAsBech32' VotingKeyPublic where
 data JormungandrAddress = JormungandrAddress { _jAddressRawBytes :: ByteString }
   deriving (Eq, Ord, Show)
 
+
 jAddrBytes :: JormungandrAddress -> ByteString
 jAddrBytes (JormungandrAddress bs) = bs
 

@@ -46,7 +46,7 @@ import qualified Cardano.Api.Typed as Api (metadataFromJson)
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
 import Data.Map.Strict (Map)
-import Cardano.API.Extended (VotingKeyPublic)
+import Cardano.API.Extended (VotingKeyPublic, serialiseToBech32')
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
 import Control.Lens ((#))
@@ -196,7 +196,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> ";")
+        Nothing   -> (sqlBase <> " LIMIT 10;")
     r <- ask
     (results :: [(Single ByteString, Single Word64, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
@@ -243,7 +243,7 @@ runServer dbConfig threshold = runStdoutLoggingT $ do
         withFile "/home/sam/code/iohk/voting-tools/test.txt" WriteMode $ \h -> do
           let m = M.toList xs
           hPutStrLn h $ show $ length m
-          hPutStrLn h $ show $ fmap (\(votepub, votingPower) -> (Api.serialiseToRawBytesHex votepub, votingPower)) $ m
+          hPutStrLn h $ show $ fmap (\(votepub, votingPower) -> (serialiseToBech32' votepub, votingPower)) $ m
 
 dbCfg = DatabaseConfig "cexplorer" "cardano-node" "/run/postgresql"
 
