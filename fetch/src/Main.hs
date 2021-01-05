@@ -35,7 +35,7 @@ import Cardano.Db
 import Database.Esqueleto
 import System.IO
 import qualified Data.Map.Monoidal as MM
-import Data.Monoid (Sum(getSum))
+import Data.Monoid (Sum(Sum), getSum)
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
@@ -148,11 +148,12 @@ queryStake mSlotRestriction stakeHash = do
         (Single txid):[] ->
           pure $ "SELECT SUM(tx_out.value) FROM tx_out INNER JOIN tx ON tx.id = tx_out.tx_id LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index AND tx_in_id < " <> T.pack (show txid) <> " INNER JOIN block ON block.id = tx.block_id AND block.slot_no < " <> T.pack (show slotNo) <> " WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "' AND tx_in.tx_in_id is null;"
 
-  (stakeValues :: [Single DbLovelace]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
+  (stakeValues :: [Single (Maybe DbLovelace)]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
   case stakeValues of
-    x1:(x2:xs)                     -> error "Too many stake values found for stake sum, is SUM missing from your query?"
-    []                             -> pure 0
-    (Single (DbLovelace stake)):[] -> pure $ fromIntegral stake
+    x1:(x2:xs)                            -> error "Too many stake values found for stake sum, is SUM missing from your query?"
+    []                                    -> pure 0
+    (Single Nothing):[]                   -> pure 0
+    (Single (Just (DbLovelace stake))):[] -> pure $ fromIntegral stake
 
 next
   :: ( MonadIO m
@@ -163,18 +164,20 @@ next
      , AsMetadataRetrievalError e
      )
   => Maybe SlotNo
-  -> Threshold
   -> m (Map VotingKeyPublic Api.Lovelace)
-next mSlotNo threshold = do
+next mSlotNo = do
   regos <- queryVoteRegistration mSlotNo
   liftIO $ putStrLn $ "Voter registrations returned: " <> show (length regos)
-  fmap (getSum . mconcat) $ forM regos $ \rego -> do
+  mmap <- fmap mconcat $ forM regos $ \rego -> do
     let
       verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
       votePub    = voteRegistrationPublicKey rego
     stake <- queryStake mSlotNo verKeyHash
-    pure $ MM.singleton [(votePub, Sum stake)]
+    pure $ MM.singleton votePub (Sum stake)
+  pure . M.fromList . MM.toList . fmap getSum $ mmap
 
+aboveThreshold :: Threshold -> Map k Api.Lovelace -> Map k Api.Lovelace
+aboveThreshold threshold = M.filter (\votingPower -> votingPower > threshold)
 
 queryVoteRegistration
   :: ( MonadIO m
@@ -228,7 +231,8 @@ runServer dbConfig threshold = runStdoutLoggingT $ do
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     (results) <-
       runQuery backend $ runExceptT $ do
-        next Nothing threshold
+        aboveThreshold threshold <$> next Nothing
+        
         -- regos <- queryVoteRegistration Nothing
         -- let verKeyHashes = (Api.serialiseToRawBytesHex . getVoteVerificationKeyHash . voteRegistrationVerificationKey) <$> regos
         -- let voteKeys = (Api.serialiseToRawBytesHex . voteRegistrationPublicKey) <$> regos
@@ -239,13 +243,7 @@ runServer dbConfig threshold = runStdoutLoggingT $ do
         withFile "/home/sam/code/iohk/voting-tools/test.txt" WriteMode $ \h -> do
           let m = M.toList xs
           hPutStrLn h $ show $ length m
-          hPutStrLn h $ show $ m
-          
-    -- liftIO $ case results of
-    --   (Left (err :: VoteRegistrationRetrievalError)) -> error (show err)
-    --   (Right regos) -> do
-    --     putStrLn $ show regos
-    --     putStrLn $ show $ length regos
+          hPutStrLn h $ show $ fmap (\(votepub, votingPower) -> (Api.serialiseToRawBytesHex votepub, votingPower)) $ m
 
 dbCfg = DatabaseConfig "cexplorer" "cardano-node" "/run/postgresql"
 
