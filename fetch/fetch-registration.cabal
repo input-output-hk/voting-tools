@@ -29,7 +29,9 @@ executable fetch-registration
                      , attoparsec
                      , resourcet
                      , esqueleto
+                     , lens-aeson
                      , base16-bytestring
+                     , time
                      , bech32
                      , bytestring
                      , cardano-api

@@ -32,11 +32,14 @@ import Data.Conduit (($$))
 import qualified Data.Conduit.List as CL
 import Control.Monad.Trans.Resource
 import Cardano.Db
-import Database.Esqueleto
+import Database.Esqueleto (BackendCompatible, Single(Single))
 import System.IO
+import Data.Time
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Data.Map.Monoidal as MM
 import Data.Monoid (Sum(Sum), getSum, Last(Last), getLast, First(First), getFirst)
 import Data.Maybe (fromJust)
+import qualified Data.ByteString.Lazy.Char8 as BLC
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
@@ -56,6 +59,9 @@ import Control.Lens.TH (makeClassyPrisms)
 import qualified Cardano.API.Jormungandr as Jormungandr
 
 import           Config
+
+import Control.Lens
+import Data.Aeson.Lens
 
 type StakeHash = ()
 type VotingKeys = Map StakeHash VotingKeyPublic
@@ -203,7 +209,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> " LIMIT 100;")
+        Nothing   -> (sqlBase <> ";")
     r <- ask
     (results :: [(Single ByteString, Single Word64, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
@@ -232,13 +238,13 @@ runStakeQuery dbConfig stakeHash = runStdoutLoggingT $ do
       Left (err :: VoteRegistrationRetrievalError) -> error $ show err
       Right stake -> liftIO $ putStrLn $ show stake
 
-runServer :: Api.NetworkId -> DatabaseConfig -> Threshold -> IO ()
-runServer networkId dbConfig threshold = runStdoutLoggingT $ do
+runServer :: Api.NetworkId -> DatabaseConfig -> Threshold -> Maybe SlotNo -> IO VotingFunds
+runServer networkId dbConfig threshold slotNo = runStdoutLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     (results) <-
       runQuery backend $ runExceptT $ do
-        aboveThreshold threshold <$> getVotingFunds networkId Nothing
+        aboveThreshold threshold <$> getVotingFunds networkId slotNo
         
         -- regos <- queryVoteRegistration Nothing
         -- let verKeyHashes = (Api.serialiseToRawBytesHex . getVoteVerificationKeyHash . voteRegistrationVerificationKey) <$> regos
@@ -246,13 +252,14 @@ runServer networkId dbConfig threshold = runStdoutLoggingT $ do
         -- pure $ zip verKeyHashes voteKeys
     case results of
       Left (err :: VoteRegistrationRetrievalError) -> error $ show err
-      Right (VotingFunds xs) -> liftIO $ do
-        withFile "/home/sam/code/iohk/voting-tools/test.txt" WriteMode $ \h -> do
-          let m = M.toList xs
-          hPutStrLn h $ show $ length m
-          hPutStrLn h $ show $ fmap (\(jaddr, votingPower) -> (serialiseToBech32' jaddr, votingPower)) $ m
+      Right (votingFunds) -> pure votingFunds
+      -- Right (VotingFunds xs) -> liftIO $ do
+      --   withFile "/home/sam/code/iohk/voting-tools/test.txt" WriteMode $ \h -> do
+      --     let m = M.toList xs
+      --     hPutStrLn h $ show $ length m
+      --     hPutStrLn h $ show $ fmap (\(jaddr, votingPower) -> (serialiseToBech32' jaddr, votingPower)) $ m
 
-test = runServer Api.Mainnet dbCfg 8000000000
+test = runServer Api.Mainnet dbCfg 8000000000 Nothing
 dbCfg = DatabaseConfig "cexplorer" "cardano-node" "/run/postgresql"
 
 runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a
@@ -268,4 +275,26 @@ main = do
     Left err  -> putStrLn $ show err
     Right cfg@(Config networkId threshold dbCfg slotNo extraFunds) -> do
       putStrLn $ show cfg
-      runServer networkId dbCfg threshold
+      votingFunds <- runServer networkId dbCfg threshold slotNo
+      let allFunds = votingFunds <> extraFunds
+      result <- Aeson.eitherDecodeFileStrict' "genesis-template.json"
+      case result of
+        Left err                                -> error err
+        Right (genesisTemplate :: Aeson.Value) -> do
+          (UTCTime day dayTime) <- getCurrentTime
+          let (TimeOfDay hr min sec) = timeToTimeOfDay dayTime
+          let blockZeroDate =
+                utcTimeToPOSIXSeconds $
+                  UTCTime day (timeOfDayToTime $ TimeOfDay hr 0 0)
+          let timestamp = undefined
+          let
+            genesis = 
+              genesisTemplate
+                & _Object %~ (HM.insert "initial" (Aeson.toJSON allFunds))
+                & (key "blockchain_configuration"
+                  %~ (key "block0_date"
+                        .~ (Aeson.Number $ fromIntegral $ floor (blockZeroDate :: NominalDiffTime))))
+          BLC.putStr $ Aeson.encode genesis
+
+
+      
