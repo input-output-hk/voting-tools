@@ -52,6 +52,8 @@ import qualified Data.Aeson.Types as Aeson
 import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
 
+import qualified Cardano.API.Jormungandr as Jormungandr
+
 import           Config
 
 type StakeHash = ()
@@ -225,8 +227,8 @@ runStakeQuery dbConfig stakeHash = runStdoutLoggingT $ do
       Left (err :: VoteRegistrationRetrievalError) -> error $ show err
       Right stake -> liftIO $ putStrLn $ show stake
 
-runServer :: DatabaseConfig -> Threshold -> IO ()
-runServer dbConfig threshold = runStdoutLoggingT $ do
+runServer :: Api.NetworkId -> DatabaseConfig -> Threshold -> IO ()
+runServer networkId dbConfig threshold = runStdoutLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     (results) <-
@@ -243,7 +245,7 @@ runServer dbConfig threshold = runStdoutLoggingT $ do
         withFile "/home/sam/code/iohk/voting-tools/test.txt" WriteMode $ \h -> do
           let m = M.toList xs
           hPutStrLn h $ show $ length m
-          hPutStrLn h $ show $ fmap (\(votepub, votingPower) -> (serialiseToBech32' votepub, votingPower)) $ m
+          hPutStrLn h $ show $ fmap (\(votepub, votingPower) -> (serialiseToBech32' (Jormungandr.addressFromVotingKeyPublic networkId votepub), votingPower)) $ m
 
 dbCfg = DatabaseConfig "cexplorer" "cardano-node" "/run/postgresql"
 
@@ -260,4 +262,4 @@ main = do
     Left err  -> putStrLn $ show err
     Right cfg@(Config networkId threshold dbCfg slotNo extraFunds) -> do
       putStrLn $ show cfg
-      runServer dbCfg threshold
+      runServer networkId dbCfg threshold

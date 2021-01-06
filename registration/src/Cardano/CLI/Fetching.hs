@@ -22,13 +22,14 @@ import qualified Cardano.API as Api
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     JormungandrAddress, VotingKeyPublic, deserialiseFromBech32', pNetworkId,
+                     VotingKeyPublic, deserialiseFromBech32', pNetworkId,
                      readSigningKeyFile, readerFromAttoParser)
+import qualified Cardano.API.Jormungandr as Jormungandr
 
 type Threshold = Api.Lovelace
 
 data VotingFunds
-  = VotingFunds { _votingFunds :: Map JormungandrAddress Lovelace }
+  = VotingFunds { _votingFunds :: Map Jormungandr.Address Lovelace }
   deriving (Eq, Show)
 
 instance Semigroup VotingFunds where

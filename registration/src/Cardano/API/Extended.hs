@@ -16,7 +16,6 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , queryPParamsFromLocalState
                             , Extended.ShelleyQueryCmdLocalStateQueryError(..)
                             , AsShelleyQueryCmdLocalStateQueryError(..)
-                            , jAddrBytes
                             , readSigningKeyFile
                             , readSigningKeyFileAnyOf
                             , AsFileError(..)
@@ -36,8 +35,8 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , liftShelleyBasedEra
                             , liftShelleyBasedMetadata
                             , liftShelleyBasedTxFee
-                            , AsType(AsVotingKeyPublic, AsJormungandrAddress)
-                            , JormungandrAddress
+                            , SerialiseAsBech32'(bech32PrefixFor, bech32PrefixesPermitted)
+                            , AsType(AsVotingKeyPublic)
                             ) where
 
 import           Control.Lens (( # ))
@@ -226,34 +225,6 @@ instance SerialiseAsRawBytes VotingKeyPublic where
 instance SerialiseAsBech32' VotingKeyPublic where
     bech32PrefixFor (VotingKeyPublic _) = "ed25519_pk"
     bech32PrefixesPermitted AsVotingKeyPublic = ["ed25519_pk"]
-
-data JormungandrAddress = JormungandrAddress { _jAddressRawBytes :: ByteString }
-  deriving (Eq, Ord, Show)
-
-jAddrBytes :: JormungandrAddress -> ByteString
-jAddrBytes (JormungandrAddress bs) = bs
-
-instance SerialiseAsBech32' JormungandrAddress where
-    bech32PrefixFor (JormungandrAddress _) = "ca"
-    bech32PrefixesPermitted AsJormungandrAddress = ["ca"]
-
-instance HasTypeProxy JormungandrAddress where
-  data AsType JormungandrAddress = AsJormungandrAddress
-  proxyToAsType _ = AsJormungandrAddress
-
-instance SerialiseAsRawBytes JormungandrAddress where
-  serialiseToRawBytes (JormungandrAddress raw) = raw
-  deserialiseFromRawBytes AsJormungandrAddress = Just . JormungandrAddress
-
-instance FromJSON JormungandrAddress where
-  parseJSON = Aeson.withText "JormungandrAddress" $ \t ->
-    case (deserialiseFromBech32' AsJormungandrAddress t) of
-      Left err    -> fail $ "Failed to deserialise JormungandrAddress from Bech32 string: " <> show t <> "\n"
-        <> "Error was: " <> show err
-      Right addr  -> pure addr
-
-instance ToJSON JormungandrAddress where
-  toJSON = Aeson.String . serialiseToBech32'
 
 -- TODO Ask for this class to be exposed in Cardano.API...
 -- The SerialiseAsBech32 class need to be exposed from the CardanoAPI

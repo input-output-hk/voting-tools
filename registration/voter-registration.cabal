@@ -43,7 +43,6 @@ library
                      , cardano-crypto-class
                      , cardano-ledger-shelley-ma
                      , cardano-node
-                     , cardano-wallet-jormungandr
                      , cborg
                      , containers
                      , directory
