@@ -35,12 +35,13 @@ import Cardano.Db
 import Database.Esqueleto
 import System.IO
 import qualified Data.Map.Monoidal as MM
-import Data.Monoid (Sum(Sum), getSum)
+import Data.Monoid (Sum(Sum), getSum, Last(Last), getLast, First(First), getFirst)
+import Data.Maybe (fromJust)
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
 import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash, AsType(AsVoteVerificationKeyHash))
-import Cardano.CLI.Fetching (Threshold)
+import Cardano.CLI.Fetching (Threshold, VotingFunds(VotingFunds), aboveThreshold)
 import qualified Cardano.API as Api
 import qualified Cardano.Api.Typed as Api (metadataFromJson)
 import qualified Data.Map.Strict as M
@@ -157,7 +158,7 @@ queryStake mSlotRestriction stakeHash = do
     (Single Nothing):[]                   -> pure 0
     (Single (Just (DbLovelace stake))):[] -> pure $ fromIntegral stake
 
-next
+getVotingFunds
   :: ( MonadIO m
      , MonadReader backend m
      , BackendCompatible SqlBackend backend
@@ -165,21 +166,25 @@ next
      , AsMetadataParsingError e
      , AsMetadataRetrievalError e
      )
-  => Maybe SlotNo
-  -> m (Map VotingKeyPublic Api.Lovelace)
-next mSlotNo = do
+  => Api.NetworkId
+  -> Maybe SlotNo
+  -> m VotingFunds
+getVotingFunds nw mSlotNo = do
   regos <- queryVoteRegistration mSlotNo
   liftIO $ putStrLn $ "Voter registrations returned: " <> show (length regos)
-  mmap <- fmap mconcat $ forM regos $ \rego -> do
+  m <- fmap mconcat $ forM regos $ \rego -> do
     let
       verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
       votePub    = voteRegistrationPublicKey rego
-    stake <- queryStake mSlotNo verKeyHash
-    pure $ MM.singleton votePub (Sum stake)
-  pure . M.fromList . MM.toList . fmap getSum $ mmap
+    liftIO $ putStrLn $ show (Api.serialiseToRawBytesHex verKeyHash)
+    liftIO $ putStrLn $ show (Api.serialiseToRawBytesHex votePub)
+    pure $ MM.singleton verKeyHash (Last $ Just votePub)
 
-aboveThreshold :: Threshold -> Map k Api.Lovelace -> Map k Api.Lovelace
-aboveThreshold threshold = M.filter (\votingPower -> votingPower > threshold)
+  mmap <- fmap mconcat $ forM (MM.toList m) $ \(verKeyHash, votePub) -> do
+    stake <- queryStake mSlotNo verKeyHash
+    pure $ MM.singleton (Jormungandr.addressFromVotingKeyPublic nw (fromJust $ getLast votePub)) (Sum stake)
+
+  pure . VotingFunds . M.fromList . MM.toList . fmap getSum $ mmap
 
 queryVoteRegistration
   :: ( MonadIO m
@@ -198,7 +203,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> " LIMIT 10;")
+        Nothing   -> (sqlBase <> " LIMIT 100;")
     r <- ask
     (results :: [(Single ByteString, Single Word64, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
@@ -233,7 +238,7 @@ runServer networkId dbConfig threshold = runStdoutLoggingT $ do
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     (results) <-
       runQuery backend $ runExceptT $ do
-        aboveThreshold threshold <$> next Nothing
+        aboveThreshold threshold <$> getVotingFunds networkId Nothing
         
         -- regos <- queryVoteRegistration Nothing
         -- let verKeyHashes = (Api.serialiseToRawBytesHex . getVoteVerificationKeyHash . voteRegistrationVerificationKey) <$> regos
@@ -241,12 +246,13 @@ runServer networkId dbConfig threshold = runStdoutLoggingT $ do
         -- pure $ zip verKeyHashes voteKeys
     case results of
       Left (err :: VoteRegistrationRetrievalError) -> error $ show err
-      Right xs -> liftIO $ do
+      Right (VotingFunds xs) -> liftIO $ do
         withFile "/home/sam/code/iohk/voting-tools/test.txt" WriteMode $ \h -> do
           let m = M.toList xs
           hPutStrLn h $ show $ length m
-          hPutStrLn h $ show $ fmap (\(votepub, votingPower) -> (serialiseToBech32' (Jormungandr.addressFromVotingKeyPublic networkId votepub), votingPower)) $ m
+          hPutStrLn h $ show $ fmap (\(jaddr, votingPower) -> (serialiseToBech32' jaddr, votingPower)) $ m
 
+test = runServer Api.Mainnet dbCfg 8000000000
 dbCfg = DatabaseConfig "cexplorer" "cardano-node" "/run/postgresql"
 
 runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a

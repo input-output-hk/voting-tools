@@ -61,3 +61,5 @@ instance ToJSON VotingFunds where
     in
       Aeson.Object $ obj
 
+aboveThreshold :: Threshold -> VotingFunds -> VotingFunds
+aboveThreshold threshold (VotingFunds map) = VotingFunds $ M.filter (\votingPower -> votingPower > threshold) map
