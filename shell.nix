@@ -37,7 +37,7 @@ let
     # If shellFor local packages selection is wrong,
     # then list all local packages then include source-repository-package that cabal complains about:
     packages = ps: with ps; [
-       ps.voter-registration
+       ps.voting-tools
     ];
     # packags = ps: pkgs.lib.attrValues (selectProjectPackages ps);
 

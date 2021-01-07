@@ -1,5 +1,5 @@
 cabal-version:       >=1.10
-name:                voter-registration
+name:                voting-tools
 version:             0.1.0.0
 -- synopsis:
 -- description:
@@ -34,6 +34,7 @@ library
                      , base16-bytestring
                      , resourcet
                      , esqueleto
+                     , cardano-db
                      , time
                      , binary
                      , binary-strict
@@ -106,7 +107,7 @@ executable voter-registration
                      , shelley-spec-ledger
                      , text
                      , transformers-except
-                     , voter-registration
+                     , voting-tools
 
   hs-source-dirs:      src/
   default-language:    Haskell2010
@@ -122,6 +123,9 @@ executable fetch-registration
                      , base16-bytestring
                      , bech32
                      , bytestring
+                     , conduit
+                     , lens-aeson
+                     , binary
                      , cardano-api
                      , cardano-binary
                      , cardano-cli
@@ -129,10 +133,17 @@ executable fetch-registration
                      , cardano-ledger
                      , cardano-crypto
                      , containers
+                     , esqueleto
+                     , time
+                     , cardano-db
+                     , resourcet
+                     , monad-logger
+                     , monoidal-containers
                      , lens
                      , mtl
                      , nothunks
                      , cardano-ledger-shelley-ma
+                     , persistent-postgresql
                      , optparse-applicative
                      , ouroboros-consensus
                      , ouroboros-consensus-cardano
@@ -141,9 +152,10 @@ executable fetch-registration
                      , ouroboros-network-framework
                      , safe-exceptions
                      , shelley-spec-ledger
+                     , scientific
                      , text
                      , transformers-except
-                     , voter-registration
+                     , voting-tools
 
   hs-source-dirs:      src/
   default-language:    Haskell2010
@@ -155,7 +167,7 @@ test-suite unit-tests
 
   build-depends:
                         base >=4.12 && <5
-                      , voter-registration
+                      , voting-tools
                       , aeson
                       , hspec
                       , hedgehog
