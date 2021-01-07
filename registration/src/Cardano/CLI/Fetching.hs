@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Cardano.CLI.Fetching where
 
 import           Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
@@ -15,6 +18,9 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
+import Data.Text.Lazy.Encoding as TL
+import Data.Char (toLower)
+import GHC.Generics
 
 import           Cardano.API (Lovelace, Quantity)
 import qualified Cardano.API as Api
@@ -22,7 +28,7 @@ import qualified Cardano.API as Api
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32', pNetworkId,
+                     VotingKeyPublic, deserialiseFromBech32', serialiseToBech32', pNetworkId,
                      readSigningKeyFile, readerFromAttoParser)
 import qualified Cardano.API.Jormungandr as Jormungandr
 
@@ -46,9 +52,13 @@ instance FromJSON VotingFunds where
             Nothing  -> fail $ "failed to convert " <> show n <> " into a valid integer."
             Just num -> pure $ fromInteger $ toInteger (num :: Int64)
 
+        decodeJormungandrAddr k = case deserialiseFromBech32' Jormungandr.AsAddress k of
+          Left err    -> fail $ show err
+          Right jaddr -> pure jaddr
+
         kvs = HM.toList v
 
-      kvs' <- traverse (\(k, v) -> (,) <$> (Aeson.parseJSON . Aeson.String $ k) <*> decodeLovelace v) kvs
+      kvs' <- traverse (\(k, v) -> (,) <$> decodeJormungandrAddr k <*> decodeLovelace v) kvs
       pure . VotingFunds . M.fromList $ kvs'
 
 instance ToJSON VotingFunds where
@@ -57,9 +67,46 @@ instance ToJSON VotingFunds where
       kvs = M.toList map
 
       obj :: HashMap Text Aeson.Value
-      obj = HM.fromList $ fmap (\(k,v) -> (TL.toStrict . TL.decodeUtf8 . Aeson.encode $ k, Aeson.toJSON v)) kvs
+      obj = HM.fromList $ fmap (\(k,v) -> (serialiseToBech32' k, Aeson.toJSON v)) kvs
     in
       Aeson.Object $ obj
 
 aboveThreshold :: Threshold -> VotingFunds -> VotingFunds
 aboveThreshold threshold (VotingFunds map) = VotingFunds $ M.filter (\votingPower -> votingPower > threshold) map
+
+fundFromVotingFunds :: VotingFunds -> Fund
+fundFromVotingFunds (VotingFunds m) = Fund . fmap (\(addr, val) -> FundItem addr val) . M.toList $ m
+
+data FundItem
+  = FundItem { fiAddress :: Jormungandr.Address
+             , fiValue   :: Lovelace
+             }
+  deriving (Eq, Show, Ord, Generic)
+
+instance ToJSON FundItem where
+  toJSON = Aeson.genericToJSON jsonParserOptions
+
+instance FromJSON FundItem where
+  parseJSON = Aeson.genericParseJSON jsonParserOptions
+
+data Fund = Fund { fuFund :: [FundItem] }
+  deriving (Eq, Show, Ord, Generic)
+
+instance ToJSON Fund where
+  toJSON = Aeson.genericToJSON jsonParserOptions
+
+instance FromJSON Fund where
+  parseJSON = Aeson.genericParseJSON jsonParserOptions
+
+jsonParserOptions = Aeson.defaultOptions { Aeson.fieldLabelModifier = (fmap toLower) . (drop 2)
+                                         }
+
+chunkFund :: Int -> Fund -> [Fund]
+chunkFund x f
+  | x <= 0            = []
+chunkFund x (Fund []) = []
+chunkFund x (Fund fs) =
+  let
+    (chunk, rest) = splitAt x fs
+  in
+    [Fund chunk] <> chunkFund x (Fund rest)

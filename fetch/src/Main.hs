@@ -44,7 +44,7 @@ import qualified Data.ByteString.Lazy.Char8 as BLC
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
 import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash, AsType(AsVoteVerificationKeyHash))
-import Cardano.CLI.Fetching (Threshold, VotingFunds(VotingFunds), aboveThreshold)
+import Cardano.CLI.Fetching (Threshold, VotingFunds(VotingFunds), aboveThreshold, fundFromVotingFunds, chunkFund)
 import qualified Cardano.API as Api
 import qualified Cardano.Api.Typed as Api (metadataFromJson)
 import qualified Data.Map.Strict as M
@@ -209,7 +209,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> ";")
+        Nothing   -> (sqlBase <> " LIMIT 100;")
     r <- ask
     (results :: [(Single ByteString, Single Word64, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
@@ -290,7 +290,7 @@ main = do
           let
             genesis = 
               genesisTemplate
-                & _Object %~ (HM.insert "initial" (Aeson.toJSON allFunds))
+                & _Object %~ (HM.insert "initial" (Aeson.toJSON $ chunkFund 100 $ fundFromVotingFunds allFunds))
                 & (key "blockchain_configuration"
                   %~ (key "block0_date"
                         .~ (Aeson.Number $ fromIntegral $ floor (blockZeroDate :: NominalDiffTime))))
