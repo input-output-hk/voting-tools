@@ -18,7 +18,7 @@ import Control.Monad.Reader (MonadReader, asks, runReaderT, ask)
 import qualified Options.Applicative as Opt
 import Database.Persist.Postgresql (SqlBackend, withPostgresqlConn, SqlPersistT, runSqlConnWithIsolation, IsolationLevel(Serializable), rawQuery, rawSql, Entity)
 import Control.Monad.Logger
-    ( logInfoN, runStdoutLoggingT )
+    ( logInfoN, runStdoutLoggingT, runStderrLoggingT, runNoLoggingT)
 import Data.Text (Text)
 import Data.Traversable (forM)
 import Data.Word (Word64)
@@ -63,44 +63,8 @@ import           Config
 import Control.Lens
 import Data.Aeson.Lens
 
-type StakeHash = ()
-type VotingKeys = Map StakeHash VotingKeyPublic
-
 parseMetadataFromJson :: Aeson.Object -> Either Api.TxMetadataJsonError Api.TxMetadata
 parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonNoSchema . Aeson.Object
-
--- x
---   :: ( MonadError e m
---      , AsMetadataParsingError e
---      )
---   => NetworkId
---   -> VoteMetadata
---   -> m VotingKeys
--- x nw metaJSONRaw sigJSONRaw = do
---   meta    <- either (throwError . _MetadataJSONParsingFailure metaJSONRaw) pure $ parseMetadataFromJson metaJSONRaw
---   sigMeta <- either (throwError . _MetadataJSONParsingFailure sigJSONRaw)  pure $ parseMetadataFromJson sigJSONRaw
---   (sig :: SigDSIGN) <-
---     case M.lookup 1 sigMeta of
---       Nothing     -> throwError (_MetadataMissingField # (sigMeta, 1))
---       Just sigRaw -> maybe (throwError . DeserialiseSigDSIGNFailure sigRaw) pure $ rawDeserialiseSigDSIGN sigRaw
---   (pubkey :: VerKeyDSIGN) <-
---     case M.lookup 2 meta of
---       Nothing        -> throwError (_MetadataMissingField # (metaRaw, 2))
---       Just pubkeyRaw -> maybe (throwError (FailedToDeserialise)) pure $ rawDeserialiseVerKeyDSIGN pubkeyRaw
---   if verifyDSIGN () pubkey (toCBOR meta) sig == False
---   then
---     -- pure [pubkey (toCBOR meta) sig]
---     -- log verifcation errors
---   else 
---     let
---       hash = makeShelleyAddress nw (PaymentCredentialsByKey (verificationKeyHash pubkey)) NoStakeAddress
---     in
---       M.insert hash pubkey
-
-
-
--- x :: Word64 -> ByteString -> Text -> Text -> VotingKeys
--- x txId txHash meta sig =
 
 data VoteMetadata
   = VoteMetadata { _voteMetaMetadata  :: TxMetadata
@@ -177,13 +141,10 @@ getVotingFunds
   -> m VotingFunds
 getVotingFunds nw mSlotNo = do
   regos <- queryVoteRegistration mSlotNo
-  liftIO $ putStrLn $ "Voter registrations returned: " <> show (length regos)
   m <- fmap mconcat $ forM regos $ \rego -> do
     let
       verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
       votePub    = voteRegistrationPublicKey rego
-    liftIO $ putStrLn $ show (Api.serialiseToRawBytesHex verKeyHash)
-    liftIO $ putStrLn $ show (Api.serialiseToRawBytesHex votePub)
     pure $ MM.singleton verKeyHash (Last $ Just votePub)
 
   mmap <- fmap mconcat $ forM (MM.toList m) $ \(verKeyHash, votePub) -> do
@@ -209,7 +170,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> " LIMIT 100;")
+        Nothing   -> (sqlBase <> ";")
     r <- ask
     (results :: [(Single ByteString, Single Word64, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
@@ -229,35 +190,16 @@ queryVoteRegistration mSlotNo =
       meta <- either (\err -> throwError $ (_MetadataFailedToDecodeTxMetadata # (metaObj, err))) pure $ parseMetadataFromJson metaObj
       either (throwError . (_MetadataParsingError #)) pure $ fromTxMetadata meta
 
-runStakeQuery :: DatabaseConfig -> VoteVerificationKeyHash -> IO ()
-runStakeQuery dbConfig stakeHash = runStdoutLoggingT $ do
-  logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
-  withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
-    results <- runQuery backend $ runExceptT $ queryStake Nothing stakeHash
-    case results of
-      Left (err :: VoteRegistrationRetrievalError) -> error $ show err
-      Right stake -> liftIO $ putStrLn $ show stake
-
 runServer :: Api.NetworkId -> DatabaseConfig -> Threshold -> Maybe SlotNo -> IO VotingFunds
-runServer networkId dbConfig threshold slotNo = runStdoutLoggingT $ do
+runServer networkId dbConfig threshold slotNo = runNoLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     (results) <-
       runQuery backend $ runExceptT $ do
         aboveThreshold threshold <$> getVotingFunds networkId slotNo
-        
-        -- regos <- queryVoteRegistration Nothing
-        -- let verKeyHashes = (Api.serialiseToRawBytesHex . getVoteVerificationKeyHash . voteRegistrationVerificationKey) <$> regos
-        -- let voteKeys = (Api.serialiseToRawBytesHex . voteRegistrationPublicKey) <$> regos
-        -- pure $ zip verKeyHashes voteKeys
     case results of
       Left (err :: VoteRegistrationRetrievalError) -> error $ show err
       Right (votingFunds) -> pure votingFunds
-      -- Right (VotingFunds xs) -> liftIO $ do
-      --   withFile "/home/sam/code/iohk/voting-tools/test.txt" WriteMode $ \h -> do
-      --     let m = M.toList xs
-      --     hPutStrLn h $ show $ length m
-      --     hPutStrLn h $ show $ fmap (\(jaddr, votingPower) -> (serialiseToBech32' jaddr, votingPower)) $ m
 
 test = runServer Api.Mainnet dbCfg 8000000000 Nothing
 dbCfg = DatabaseConfig "cexplorer" "cardano-node" "/run/postgresql"
@@ -269,12 +211,10 @@ main :: IO ()
 main = do
   -- Parse command-line options
   opts <- Opt.execParser opts
-  putStrLn $ show opts
   eCfg  <- runExceptT $ mkConfig opts
   case eCfg of
     Left err  -> putStrLn $ show err
     Right cfg@(Config networkId threshold dbCfg slotNo extraFunds) -> do
-      putStrLn $ show cfg
       votingFunds <- runServer networkId dbCfg threshold slotNo
       let allFunds = votingFunds <> extraFunds
       result <- Aeson.eitherDecodeFileStrict' "genesis-template.json"
