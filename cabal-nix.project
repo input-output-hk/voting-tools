@@ -1,5 +1,4 @@
 packages:
   ./registration
-  ./fetch
 tests: True
 benchmarks: True

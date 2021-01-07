@@ -1,35 +1,69 @@
-module Registration where
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 
-data Registry id a
+module Main where
 
--- ∀x. isNotRegistered id1 x =>
---   registry (register id a1 (register id a2 x))
---   = registry (register id a2 (register id a1 x))
---   = [(id, max a1 a2)] <> registry x 
+import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley))
+import           Cardano.Api.LocalChainSync (getLocalTip)
+import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
+import           Cardano.Api.Typed (Lovelace (Lovelace), Shelley, Tx, TxId (TxId), TxIn (TxIn),
+                     TxIx (TxIx), getVerificationKey, localNodeNetworkId, serialiseToRawBytesHex,
+                     writeFileTextEnvelope)
+import qualified Cardano.Binary as CBOR
+import           Cardano.Chain.Slotting (EpochSlots (..))
+import           Cardano.CLI.Types (QueryFilter (FilterByAddress), SocketPath (SocketPath))
+import qualified Cardano.Crypto.DSIGN as Crypto
+import qualified Cardano.Crypto.Hash.Class as Crypto
+import           Control.Monad.Except (ExceptT, runExceptT, throwError)
+import           Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8 as BSC
+import qualified Data.Set as Set
+import qualified Options.Applicative as Opt
+import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
+import           Ouroboros.Network.Point (fromWithOrigin)
 
--- ∀x. getRegistration id x = find ((id ==) . fst) (registry x)
+import           Cardano.API.Extended (readEnvSocketPath)
+import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
+import           Cardano.CLI.Voting.Error
+import           Cardano.CLI.Voting.Metadata (voteSignature)
+import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)
+import           Config.Registration
 
--- ∀x. isRegistered id x = maybe False True $ getRegistration id x
--- ∀id. isNotRegistered id = not . isRegistered id
+main :: IO ()
+main = do
+  -- Parse command-line options
+  opts <- Opt.execParser opts
+  eCfg  <- runExceptT $ mkConfig opts
+  case eCfg of
+    Left err  -> putStrLn $ show err
+    Right (Config addr voteSign paySign votePub networkId ttl outFile) -> do
+      eResult <- runExceptT $ do
+        SocketPath sockPath <-  readEnvSocketPath
+        withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
+          -- Create a transaction, encoding our vote as transaction
+          -- metadata. The transaction sends some unspent ADA back to us
+          -- (minus a fee).
 
--- ∀id x.
---   deregister id x
---   = remove ((id ==) . fst) $ registry x
+          -- Generate vote payload (vote information is encoded as metadata).
+          let vote = createVote voteSign votePub
 
-register :: Ord a => id -> a -> Registry id a -> Registry id a
-deregister :: id -> Registry id a -> Registry id a
+          -- Encode the vote as a transaction and sign it
+          voteTx <- signTx paySign <$> encodeVote connectInfo ShelleyBasedEraShelley addr ttl vote
 
-getRegistration :: id -> Registry id a -> Maybe a
-isRegistered    :: id -> Registry id a -> Bool
-isNotRegistered :: id -> Registry id a -> Bool
+          -- Output helpful information
+          liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
+          liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (verificationKeyRawBytes voteSign)
+          liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
 
-registry :: Registry id a -> [(id, a)]
+          -- Output our vote transaction
+          liftIO . writeFile outFile $ prettyTx voteTx
+      case eResult of
+        Left  (err :: AppError) -> error $ show err
+        Right ()                -> pure ()
 
-instance Semigroup (Registry id a)
-instance Monoid (Registry id a)
-instance Functor (Registry id a)
-instance Foldable (Registry id a)
-instance Traversable (Registry id a)
-instance Commutative (Registry id a)
-instance Eq (Registry id a)
-instance Ord (Registry id a)
+

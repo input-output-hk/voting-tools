@@ -59,7 +59,7 @@ import Control.Lens.TH (makeClassyPrisms)
 
 import qualified Cardano.API.Jormungandr as Jormungandr
 
-import           Config
+import           Config.Fetch
 
 import Control.Lens
 import Data.Aeson.Lens

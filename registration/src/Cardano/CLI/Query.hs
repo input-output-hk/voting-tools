@@ -51,8 +51,6 @@ import Control.Lens.TH (makeClassyPrisms)
 
 import qualified Cardano.API.Jormungandr as Jormungandr
 
-import           Config
-
 import Control.Lens
 
 parseMetadataFromJson :: Aeson.Object -> Either Api.TxMetadataJsonError Api.TxMetadata

@@ -26,7 +26,6 @@ library
                      , Cardano.CLI.Voting.Fee
                      , Cardano.CLI.Voting.Metadata
                      , Cardano.CLI.Voting.Signing
-                     , Config
 
   build-depends:       base
                      , aeson
@@ -76,9 +75,45 @@ library
                      , unordered-containers
 
 executable voter-registration
-  main-is:             Main.hs
-  other-modules:       Config
-  -- other-extensions:
+  main-is:             Registration.hs
+  other-modules:       Config.Registration
+  build-depends:       base
+                     , aeson
+                     , aeson-pretty
+                     , unordered-containers
+                     , attoparsec
+                     , base16-bytestring
+                     , bech32
+                     , bytestring
+                     , cardano-api
+                     , cardano-binary
+                     , cardano-cli
+                     , cardano-crypto-class
+                     , cardano-ledger
+                     , cardano-crypto
+                     , containers
+                     , lens
+                     , mtl
+                     , nothunks
+                     , cardano-ledger-shelley-ma
+                     , optparse-applicative
+                     , ouroboros-consensus
+                     , ouroboros-consensus-cardano
+                     , ouroboros-consensus-shelley
+                     , ouroboros-network
+                     , ouroboros-network-framework
+                     , safe-exceptions
+                     , shelley-spec-ledger
+                     , text
+                     , transformers-except
+                     , voter-registration
+
+  hs-source-dirs:      src/
+  default-language:    Haskell2010
+
+executable fetch-registration
+  main-is:             Fetch.hs
+  other-modules:       Config.Fetch
   build-depends:       base
                      , aeson
                      , aeson-pretty

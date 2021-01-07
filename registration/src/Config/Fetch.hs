@@ -8,7 +8,7 @@
 -- | Handles configuration, which involves parsing command line
 -- arguments and reading key files.
 
-module Config (Config(Config), opts, mkConfig, DatabaseConfig(..), pgConnectionString) where
+module Config.Fetch (Config(Config), opts, mkConfig, DatabaseConfig(..), pgConnectionString) where
 
 import           Control.Exception.Safe (try)
 import           Control.Lens (( # ))
