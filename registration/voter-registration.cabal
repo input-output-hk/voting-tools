@@ -20,6 +20,7 @@ library
                      , Cardano.API.Extended.Raw
                      , Cardano.API.Jormungandr
                      , Cardano.CLI.Fetching
+                     , Cardano.CLI.Query
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
@@ -32,12 +33,21 @@ library
                      , aeson-pretty
                      , attoparsec
                      , base16-bytestring
+                     , resourcet
+                     , esqueleto
+                     , time
                      , binary
                      , binary-strict
                      , bech32
                      , bytestring
                      , cardano-api
                      , cardano-binary
+                     , cardano-db
+                     , persistent-postgresql
+                     , monad-logger
+                     , monoidal-containers
+                     , lens-aeson
+                     , conduit
                      , cardano-cli
                      , cardano-crypto
                      , cardano-crypto-class

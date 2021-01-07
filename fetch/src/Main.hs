@@ -43,8 +43,9 @@ import qualified Data.ByteString.Lazy.Char8 as BLC
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
+import Cardano.CLI.Query
 import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash, AsType(AsVoteVerificationKeyHash))
-import Cardano.CLI.Fetching (Threshold, VotingFunds(VotingFunds), aboveThreshold, fundFromVotingFunds, chunkFund)
+import Cardano.CLI.Fetching (Threshold, Fund, VotingFunds(VotingFunds), aboveThreshold, fundFromVotingFunds, chunkFund)
 import qualified Cardano.API as Api
 import qualified Cardano.Api.Typed as Api (metadataFromJson)
 import qualified Data.Map.Strict as M
@@ -63,178 +64,62 @@ import           Config
 import Control.Lens
 import Data.Aeson.Lens
 
-parseMetadataFromJson :: Aeson.Object -> Either Api.TxMetadataJsonError Api.TxMetadata
-parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonNoSchema . Aeson.Object
-
-data VoteMetadata
-  = VoteMetadata { _voteMetaMetadata  :: TxMetadata
-                 , _voteMetaSignature :: TxMetadata
-                 }
-
-data MetadataRetrievalError
-  = MetadataFailedToRetrieveMetadataField
-  | MetadataFailedToRetrieveSignatureField
-  | MetadataFailedToDecodeMetadataField !String
-  | MetadataFailedToDecodeSignatureField !String
-  | MetadataFailedToDecodeTxMetadata Aeson.Object !Api.TxMetadataJsonError
-  deriving (Eq, Show)
-
-makeClassyPrisms ''MetadataRetrievalError
-
-data VoteRegistrationRetrievalError
-  = VoteRegistrationMetadataRetrievalError !MetadataRetrievalError
-  | VoteRegistrationMetadataParsingError !MetadataParsingError
-  deriving (Eq, Show)
-
-makeClassyPrisms ''VoteRegistrationRetrievalError
-
-instance AsMetadataRetrievalError VoteRegistrationRetrievalError where
-  _MetadataRetrievalError = _VoteRegistrationMetadataRetrievalError
-
-instance AsMetadataParsingError VoteRegistrationRetrievalError where
-  _MetadataParsingError = _VoteRegistrationMetadataParsingError
-
-queryStake
-  :: ( MonadIO m
-     , MonadReader backend m
-     , BackendCompatible SqlBackend backend
-     )
-  => Maybe SlotNo
-  -> VoteVerificationKeyHash
-  -> m Api.Lovelace
-queryStake mSlotRestriction stakeHash = do
-  r <- ask
-  let stkHashSql = T.pack (BC.unpack $ Api.serialiseToRawBytesHex stakeHash)
-  stakeQuerySql <- case mSlotRestriction of
-    Nothing             ->
-      pure $ "SELECT SUM(utxo_view.value) FROM utxo_view WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "';"
-    Just slotNo -> do
-      -- Get first tx is slot after one we've asked to restrict the
-      -- query to, we don't want to get this Tx or any later Txs.
+main :: IO ()
+main = do
+  opts <- Opt.execParser opts
+  eCfg  <- runExceptT $ mkConfig opts
+  case eCfg of
+    Left err ->
+      putStrLn $ show err
+    Right cfg@(Config networkId threshold dbCfg slotNo extraFunds) -> do
+      (votingFunds :: VotingFunds) <- getVotingFunds networkId dbCfg threshold slotNo
       let
-        firstUnwantedTxIdSql = "SELECT tx.id FROM tx LEFT OUTER JOIN block ON block.id = tx.block_id WHERE block.slot_no > " <> T.pack (show slotNo) <> " LIMIT 1";
+        allFunds :: Fund
+        allFunds = fundFromVotingFunds $ votingFunds <> extraFunds
 
-      (txids :: [Single Word64]) <- (flip runReaderT) r $ rawSql firstUnwantedTxIdSql []
-      case txids of
-        []               -> error $ "No txs found in slot " <> show (slotNo + 1)-- TODO throwError (_NoTxsFoundInSlot # (slotNo + 1))
-        x1:(x2:xs)       -> error $ "Too many txs found for slot " <> show slotNo <> ", add 'LIMIT 1' to query."
-        (Single txid):[] ->
-          pure $ "SELECT SUM(tx_out.value) FROM tx_out INNER JOIN tx ON tx.id = tx_out.tx_id LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index AND tx_in_id < " <> T.pack (show txid) <> " INNER JOIN block ON block.id = tx.block_id AND block.slot_no < " <> T.pack (show slotNo) <> " WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "' AND tx_in.tx_in_id is null;"
-
-  (stakeValues :: [Single (Maybe DbLovelace)]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
-  case stakeValues of
-    x1:(x2:xs)                            -> error "Too many stake values found for stake sum, is SUM missing from your query?"
-    []                                    -> pure 0
-    (Single Nothing):[]                   -> pure 0
-    (Single (Just (DbLovelace stake))):[] -> pure $ fromIntegral stake
-
-getVotingFunds
-  :: ( MonadIO m
-     , MonadReader backend m
-     , BackendCompatible SqlBackend backend
-     , MonadError e m
-     , AsMetadataParsingError e
-     , AsMetadataRetrievalError e
-     )
-  => Api.NetworkId
-  -> Maybe SlotNo
-  -> m VotingFunds
-getVotingFunds nw mSlotNo = do
-  regos <- queryVoteRegistration mSlotNo
-  m <- fmap mconcat $ forM regos $ \rego -> do
-    let
-      verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
-      votePub    = voteRegistrationPublicKey rego
-    pure $ MM.singleton verKeyHash (Last $ Just votePub)
-
-  mmap <- fmap mconcat $ forM (MM.toList m) $ \(verKeyHash, votePub) -> do
-    stake <- queryStake mSlotNo verKeyHash
-    pure $ MM.singleton (Jormungandr.addressFromVotingKeyPublic nw (fromJust $ getLast votePub)) (Sum stake)
-
-  pure . VotingFunds . M.fromList . MM.toList . fmap getSum $ mmap
-
-queryVoteRegistration
-  :: ( MonadIO m
-     , MonadError e m
-     , AsMetadataParsingError e
-     , AsMetadataRetrievalError e
-     , MonadReader backend m
-     , BackendCompatible SqlBackend backend
-     )
-  => Maybe SlotNo
-  -> m [Vote]
-queryVoteRegistration mSlotNo =
-  let
-    sqlBase = "WITH meta_table AS (select tx_id, json AS metadata from tx_metadata where key = '" <> T.pack (show metadataMetaKey) <> "') , sig_table AS (select tx_id, json AS signature from tx_metadata where key = '" <> T.pack (show signatureMetaKey) <> "') SELECT tx.hash,tx_id,metadata,signature FROM meta_table INNER JOIN tx ON tx.id = meta_table.tx_id INNER JOIN sig_table USING(tx_id)"
-  in do
-    let
-      sql = case mSlotNo of
-        Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> ";")
-    r <- ask
-    (results :: [(Single ByteString, Single Word64, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
-    forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
-      metadata  <- maybe (throwError $ _MetadataFailedToRetrieveMetadataField # ()) pure mMetadata
-      signature <- maybe (throwError $ _MetadataFailedToRetrieveSignatureField # ()) pure mSignature
-
-      metadataObj <- either (throwError . (_MetadataFailedToDecodeMetadataField #)) pure $ Aeson.eitherDecode' $ TL.encodeUtf8 $ TL.fromStrict $ metadata
-      signatureObj <- either (throwError . (_MetadataFailedToDecodeSignatureField #)) pure $ Aeson.eitherDecode' $ TL.encodeUtf8 $ TL.fromStrict $ signature
+      genesisTemplate <- decodeGenesisTemplateJSON
+      blockZeroDate   <- getBlockZeroDate
 
       let
-        metaObj :: Aeson.Object
-        metaObj = HM.fromList
-          [ (T.pack $ show metadataMetaKey, metadataObj)
-          , (T.pack $ show signatureMetaKey, signatureObj)
-          ]
+        genesis = 
+          genesisTemplate
+            & setInitialFunds (chunkFund 100 $ allFunds)
+            & setBlockZeroDate blockZeroDate
 
-      meta <- either (\err -> throwError $ (_MetadataFailedToDecodeTxMetadata # (metaObj, err))) pure $ parseMetadataFromJson metaObj
-      either (throwError . (_MetadataParsingError #)) pure $ fromTxMetadata meta
+      BLC.putStr $ Aeson.encode genesis
 
-runServer :: Api.NetworkId -> DatabaseConfig -> Threshold -> Maybe SlotNo -> IO VotingFunds
-runServer networkId dbConfig threshold slotNo = runNoLoggingT $ do
+getVotingFunds :: Api.NetworkId -> DatabaseConfig -> Threshold -> Maybe SlotNo -> IO VotingFunds
+getVotingFunds networkId dbConfig threshold slotNo = runNoLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     (results) <-
       runQuery backend $ runExceptT $ do
-        aboveThreshold threshold <$> getVotingFunds networkId slotNo
+        aboveThreshold threshold <$> queryVotingFunds networkId slotNo
     case results of
       Left (err :: VoteRegistrationRetrievalError) -> error $ show err
       Right (votingFunds) -> pure votingFunds
 
-test = runServer Api.Mainnet dbCfg 8000000000 Nothing
-dbCfg = DatabaseConfig "cexplorer" "cardano-node" "/run/postgresql"
 
-runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a
-runQuery backend query = liftIO $ runSqlConnWithIsolation query backend Serializable
+decodeGenesisTemplateJSON :: IO (Aeson.Value)
+decodeGenesisTemplateJSON = do
+  result <- Aeson.eitherDecodeFileStrict' "genesis-template.json"
+  case result of
+    Left err                               -> error err
+    Right (genesisTemplate :: Aeson.Value) -> pure genesisTemplate
 
-main :: IO ()
-main = do
-  -- Parse command-line options
-  opts <- Opt.execParser opts
-  eCfg  <- runExceptT $ mkConfig opts
-  case eCfg of
-    Left err  -> putStrLn $ show err
-    Right cfg@(Config networkId threshold dbCfg slotNo extraFunds) -> do
-      votingFunds <- runServer networkId dbCfg threshold slotNo
-      let allFunds = votingFunds <> extraFunds
-      result <- Aeson.eitherDecodeFileStrict' "genesis-template.json"
-      case result of
-        Left err                                -> error err
-        Right (genesisTemplate :: Aeson.Value) -> do
-          (UTCTime day dayTime) <- getCurrentTime
-          let (TimeOfDay hr min sec) = timeToTimeOfDay dayTime
-          let blockZeroDate =
-                utcTimeToPOSIXSeconds $
-                  UTCTime day (timeOfDayToTime $ TimeOfDay hr 0 0)
-          let timestamp = undefined
-          let
-            genesis = 
-              genesisTemplate
-                & _Object %~ (HM.insert "initial" (Aeson.toJSON $ chunkFund 100 $ fundFromVotingFunds allFunds))
-                & (key "blockchain_configuration"
-                  %~ (key "block0_date"
-                        .~ (Aeson.Number $ fromIntegral $ floor (blockZeroDate :: NominalDiffTime))))
-          BLC.putStr $ Aeson.encode genesis
+getBlockZeroDate :: IO UTCTime
+getBlockZeroDate = do
+  (UTCTime day dayTime) <- getCurrentTime
+  let
+    (TimeOfDay hr min sec) = timeToTimeOfDay dayTime
+    blockZeroDate          = UTCTime day (timeOfDayToTime $ TimeOfDay hr 0 0)
+  pure blockZeroDate
 
+setInitialFunds :: [Fund] -> Aeson.Value -> Aeson.Value
+setInitialFunds funds = _Object %~ HM.insert "initial" (Aeson.toJSON funds)
 
-      
+setBlockZeroDate :: UTCTime -> Aeson.Value -> Aeson.Value
+setBlockZeroDate time =
+  (key "blockchain_configuration"
+    %~ (key "block0_date"
+      .~ (Aeson.Number . fromIntegral . floor . utcTimeToPOSIXSeconds $ time)))
