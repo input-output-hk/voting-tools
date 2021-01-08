@@ -1,69 +1,84 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Main where
+-- | This module contains an algebra for encoding the semantics of
+-- "registrations".
+--
+-- The laws associated with each constructor define their semantics,
+-- but they are loosely described here.
+--   - Each identity may only register once, with the "greatest"
+--     registration being used, for some definition of "greatest" (we
+--     call this law "register/newest-wins").
+--   - The order in which registrations are made does not matter.
+--   - De-registering twice is the same as de-registering once.
+--   - The registry, which contains all registrations, forms a
+--     law-abiding semigroup, monoid, commutative monoid, and functor.
+--   - Registering then de-registering is the same as not registering
+--     at all.
+--
+-- The constructors are used to construct values in the algebra.
+-- The observations are used to "get values out of" the algebra.
+-- All observations can be derived from the observation "registry",
+-- therefore "registry" is the denotation of the algebra.
 
-import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley))
-import           Cardano.Api.LocalChainSync (getLocalTip)
-import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
-import           Cardano.Api.Typed (Lovelace (Lovelace), Shelley, Tx, TxId (TxId), TxIn (TxIn),
-                     TxIx (TxIx), getVerificationKey, localNodeNetworkId, serialiseToRawBytesHex,
-                     writeFileTextEnvelope)
-import qualified Cardano.Binary as CBOR
-import           Cardano.Chain.Slotting (EpochSlots (..))
-import           Cardano.CLI.Types (QueryFilter (FilterByAddress), SocketPath (SocketPath))
-import qualified Cardano.Crypto.DSIGN as Crypto
-import qualified Cardano.Crypto.Hash.Class as Crypto
-import           Control.Monad.Except (ExceptT, runExceptT, throwError)
-import           Control.Monad.IO.Class (liftIO)
-import qualified Data.ByteString.Base16 as Base16
-import qualified Data.ByteString.Char8 as BSC
-import qualified Data.Set as Set
-import qualified Options.Applicative as Opt
-import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
-import           Ouroboros.Network.Point (fromWithOrigin)
+module Registration
+  ( -- * Observations
+    registry
+  , getRegistration
+  , isRegistered
+  , isNotRegistered
+    -- * Constructors
+  , register
+  , deregister
+    -- * Types
+  , Registry
+  ) where
 
-import           Cardano.API.Extended (readEnvSocketPath)
-import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
-import           Cardano.CLI.Voting.Error
-import           Cardano.CLI.Voting.Metadata (voteSignature)
-import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)
-import           Config.Registration
+import qualified Registration.Initial as R
 
-main :: IO ()
-main = do
-  -- Parse command-line options
-  opts <- Opt.execParser opts
-  eCfg  <- runExceptT $ mkConfig opts
-  case eCfg of
-    Left err  -> putStrLn $ show err
-    Right (Config addr voteSign paySign votePub networkId ttl outFile) -> do
-      eResult <- runExceptT $ do
-        SocketPath sockPath <-  readEnvSocketPath
-        withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
-          -- Create a transaction, encoding our vote as transaction
-          -- metadata. The transaction sends some unspent ADA back to us
-          -- (minus a fee).
+type Registry = R.Registry
 
-          -- Generate vote payload (vote information is encoded as metadata).
-          let vote = createVote voteSign votePub
+-- | Register an identity and their information.
+-- "register/newestwins":
+--   register ident a2 (register ident a1 rs)
+--   = register ident (max a2 a1) rs
+-- "register/commutative":
+--   register ident x (register ident y rs)
+--   = register ident y (register ident x rs)
+-- "register/deregister":
+--   deregister ident (register ident info rs)
+--   = rs
+register :: id -> a -> Registry id a -> Registry id a
+register = R.register
 
-          -- Encode the vote as a transaction and sign it
-          voteTx <- signTx paySign <$> encodeVote connectInfo ShelleyBasedEraShelley addr ttl vote
+-- | Deregister an identity.
+-- "register/deregister":
+--   deregister ident (register ident info rs) = rs
+-- "deregister/idempotent":
+--   deregister ident (deregister ident rs) = deregister ident rs
+deregister :: id -> Registry id a -> Registry id a
+deregister = R.deregister
 
-          -- Output helpful information
-          liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
-          liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (verificationKeyRawBytes voteSign)
-          liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
+-- | Return all registrations and their info.
+registry :: forall id a. (Ord id, Ord a) => Registry id a -> [(id, a)]
+registry = R.registry
 
-          -- Output our vote transaction
-          liftIO . writeFile outFile $ prettyTx voteTx
-      case eResult of
-        Left  (err :: AppError) -> error $ show err
-        Right ()                -> pure ()
+-- | Return the information associated with a registration.
+-- "getRegistration":
+--   getRegistration ident rs
+--   = fmap snd $ find ((ident ==) . fst) $ registry r
+getRegistration :: (Ord id, Ord a) => id -> Registry id a -> Maybe a
+getRegistration = R.getRegistration
 
+-- | Returns true if a identity is registered.
+-- "isRegistered":
+--   isRegistered ident rs
+--   = maybe False (const True) (getRegistration ident r)
+isRegistered :: (Ord id, Ord a) => id -> Registry id a -> Bool
+isRegistered = R.isRegistered
 
+-- | Returns true if an identity is NOT registered.
+-- "isNotRegistered":
+--   isNotRegistered ident
+--   = not . isRegistered ident
+isNotRegistered :: (Ord id, Ord a) => id -> Registry id a -> Bool
+isNotRegistered = R.isNotRegistered
