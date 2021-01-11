@@ -28,9 +28,14 @@ let
     mkdir -p $out
     tar -czvf $out/voter-registration.tar.gz voter-registration
   '';
+  voterFetchTarball = pkgs.runCommandNoCC "voter-fetch-tarball" { buildInputs = [ pkgs.gnutar gzip ]; } ''
+    cp ${haskellPackagesMusl64.voting-tools.components.exes.fetch-registration}/bin/fetch-registration ./
+    mkdir -p $out
+    tar -czvf $out/fetch-registration.tar.gz fetch-registration
+  '';
 
   self = {
-    inherit votingToolsHaskellPackages voterRegistrationTarball;
+    inherit votingToolsHaskellPackages voterRegistrationTarball voterFetchTarball;
     inherit haskellPackages hydraEvalErrors;
 
     inherit (pkgs.iohkNix) checkCabalProject;
@@ -49,7 +54,5 @@ let
       inherit pkgs;
       withHoogle = true;
     };
-
-    integration-tests = import ./test/integration/vm.nix { inherit pkgs; };
   };
 in self
