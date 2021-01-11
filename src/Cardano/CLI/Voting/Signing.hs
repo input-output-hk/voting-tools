@@ -26,14 +26,13 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
 import           Cardano.API
-                     (Hash, AsType (AsHash, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                     (StakeAddress, makeStakeAddress, Hash, AsType (AsHash, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
                      FromSomeType, HasTypeProxy, Key,
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
-                     SigningKey, StakeExtendedKey, StakeKey, VerificationKey, castVerificationKey, verificationKeyHash,
+                     SigningKey, StakeExtendedKey, StakeKey, NetworkId, VerificationKey, castVerificationKey, verificationKeyHash,
                      getVerificationKey, proxyToAsType, serialiseToRawBytes)
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
-import           Cardano.Api.Typed (FromSomeType (FromSomeType))
-import           Cardano.Api.Typed (ShelleySigningKey,
+import           Cardano.Api.Typed (StakeCredential(StakeCredentialByKey), FromSomeType (FromSomeType), ShelleySigningKey,
                      ShelleyWitnessSigningKey (WitnessStakeExtendedKey, WitnessStakeKey),
                      SigningKey (StakeExtendedSigningKey, StakeSigningKey),
                      VerificationKey (StakeVerificationKey), getShelleyKeyWitnessVerificationKey,
@@ -91,6 +90,17 @@ withVoteVerificationKey ver f =
       (AStakeExtendedVerificationKey vkey) -> castVerificationKey vkey
   in
     f vkey
+
+withStakeKeyHash :: VoteVerificationKeyHash -> (Hash StakeKey -> a) -> a
+withStakeKeyHash ver f = withVoteVerificationKey ver $ \vkey ->
+  let
+    hash :: Hash StakeKey
+    hash = verificationKeyHash vkey
+  in
+    f hash
+
+toStakeAddr :: NetworkId -> Hash StakeKey -> StakeAddress
+toStakeAddr nw = makeStakeAddress nw . StakeCredentialByKey
 
 verificationKeyRawBytes :: VoteSigningKey -> ByteString
 verificationKeyRawBytes (AStakeSigningKey k)         = serialiseToRawBytes $ getVerificationKey k

@@ -29,13 +29,15 @@ import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKe
 import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash, AsType(AsVoteVerificationKeyHash))
 import Cardano.CLI.Fetching (Threshold, Fund, VotingFunds(VotingFunds), aboveThreshold, fundFromVotingFunds, chunkFund)
 import qualified Cardano.API as Api
-import qualified Cardano.Api.Typed as Api (metadataFromJson)
+import Cardano.API.Extended (VotingKeyPublic)
+import qualified Cardano.Api.Typed as Api (metadataFromJson, Lovelace(Lovelace))
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Aeson as Aeson
 import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
-import Registration (register, registry)
+import Registration (register, registry, Registry)
 
 import qualified Cardano.API.Jormungandr as Jormungandr
 
@@ -109,6 +111,62 @@ queryStake mSlotRestriction stakeHash = do
     (Single Nothing):[]                   -> pure 0
     (Single (Just (DbLovelace stake))):[] -> pure $ fromIntegral stake
 
+queryVoteRegistrationInfo
+  :: ( MonadIO m
+     , MonadReader backend m
+     , BackendCompatible SqlBackend backend
+     , MonadError e m
+     , AsMetadataParsingError e
+     , AsMetadataRetrievalError e
+     )
+  => Maybe SlotNo
+  -> m (Registry VoteVerificationKeyHash (OrderedBy TxId (VotingKeyPublic, Api.Lovelace)))
+queryVoteRegistrationInfo mSlotNo = do
+  regos <- queryVoteRegistration mSlotNo
+
+  let
+    addRego registry (txId, rego) = do
+      let
+        verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
+        votePub    = voteRegistrationPublicKey rego
+
+      stake <- queryStake mSlotNo verKeyHash
+      register verKeyHash (OrderedBy txId (votePub, stake)) <$> registry
+
+  -- By the Registration algebra, registrations are naturally filtered
+  -- to only use the latest registration for each verification key.
+  foldl' addRego (pure mempty) regos
+
+queryVotingProportion
+  :: ( MonadIO m
+     , MonadReader backend m
+     , BackendCompatible SqlBackend backend
+     , MonadError e m
+     , AsMetadataParsingError e
+     , AsMetadataRetrievalError e
+     )
+  => Api.NetworkId
+  -> Maybe SlotNo
+  -> m (Map VoteVerificationKeyHash Double)
+queryVotingProportion nw mSlotNo = do
+  latestRegistrations       <- queryVoteRegistrationInfo mSlotNo
+  (VotingFunds votingFunds) <- queryVotingFunds nw mSlotNo
+
+  let
+    x = foldl' (\acc (verKeyHash, (OrderedBy _txId (votePub, stake))) ->
+      let
+        votingFundsAddr = Jormungandr.addressFromVotingKeyPublic nw votePub
+      in
+        case M.lookup votingFundsAddr votingFunds of
+          Just stakeTotal ->
+            let
+              (Api.Lovelace stakeL) = stake
+              (Api.Lovelace stakeTotalL) = stakeTotal
+            in
+              M.insert verKeyHash (fromIntegral stakeL / fromIntegral stakeTotalL) acc
+          Nothing         -> acc) mempty (registry latestRegistrations)
+  pure x
+
 queryVotingFunds
   :: ( MonadIO m
      , MonadReader backend m
@@ -121,21 +179,9 @@ queryVotingFunds
   -> Maybe SlotNo
   -> m VotingFunds
 queryVotingFunds nw mSlotNo = do
-  regos <- queryVoteRegistration mSlotNo
-  let
-    addRego registry (txId, rego) =
-      let
-        verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
-        votePub    = voteRegistrationPublicKey rego
-      in
-        register verKeyHash (OrderedBy txId votePub) registry
+  latestRegistrations <- queryVoteRegistrationInfo mSlotNo
 
-  -- By the Registration algebra, registrations are naturally filtered
-  -- to only use the latest registration for each verification key.
-  let latestRegistrations = foldl' addRego mempty regos
-
-  addrStakeMap <- fmap mconcat $ forM (registry latestRegistrations) $ \(verKeyHash, (OrderedBy _txId votePub)) -> do
-    stake <- queryStake mSlotNo verKeyHash
+  addrStakeMap <- fmap mconcat $ forM (registry latestRegistrations) $ \(verKeyHash, (OrderedBy _txId (votePub, stake))) -> do
     pure $ MM.singleton (Jormungandr.addressFromVotingKeyPublic nw votePub) (Sum stake)
 
   pure . VotingFunds . M.fromList . MM.toList . fmap getSum $ addrStakeMap
