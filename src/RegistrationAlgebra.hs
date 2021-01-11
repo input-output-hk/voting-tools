@@ -5,7 +5,7 @@ data Registry id a
 -- ∀x. isNotRegistered id1 x =>
 --   registry (register id a1 (register id a2 x))
 --   = registry (register id a2 (register id a1 x))
---   = [(id, max a1 a2)] <> registry x 
+--   = [(id, max a1 a2)] <> registry x
 
 -- ∀x. getRegistration id x = find ((id ==) . fst) (registry x)
 

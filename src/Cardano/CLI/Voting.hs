@@ -21,8 +21,8 @@ import qualified Data.Set as Set
 import           Data.String (fromString)
 import           Data.Text (Text)
 
-import           Cardano.API (IsCardanoEra, Address, AddressAny, AddressInEra (AddressInEra),
-                     AsType (AsPaymentKey, AsStakeKey), IsShelleyBasedEra, Key,
+import           Cardano.API (Address, AddressAny, AddressInEra (AddressInEra),
+                     AsType (AsPaymentKey, AsStakeKey), IsCardanoEra, IsShelleyBasedEra, Key,
                      LocalNodeConnectInfo, Lovelace, MaryEra, NetworkId, PaymentCredential,
                      PaymentKey,
                      ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),

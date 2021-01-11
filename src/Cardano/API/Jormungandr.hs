@@ -1,6 +1,6 @@
-{-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE BinaryLiterals    #-}
+{-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | JormungandrAddress
 --
@@ -39,17 +39,21 @@
 
 module Cardano.API.Jormungandr where
 
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
+import           Cardano.Api.Typed (AsType, HasTypeProxy (proxyToAsType),
+                     NetworkId (Mainnet, Testnet),
+                     SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes))
+import           Data.Aeson (FromJSON, ToJSON)
+import qualified Data.Aeson as Aeson
 import qualified Data.Binary.Get as Bin
 import qualified Data.Binary.Put as Bin
-import Data.Word
-import Cardano.Api.Typed (NetworkId(Mainnet, Testnet), AsType, HasTypeProxy (proxyToAsType), SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes))
-import Data.Aeson (FromJSON, ToJSON)
-import qualified Data.Aeson as Aeson
-import Data.Bits ( (.&.) )
+import           Data.Bits ((.&.))
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
+import           Data.Word
 
-import Cardano.API.Extended (serialiseToBech32', SerialiseAsBech32'(bech32PrefixFor, bech32PrefixesPermitted), VotingKeyPublic, deserialiseFromBech32')
+import           Cardano.API.Extended
+                     (SerialiseAsBech32' (bech32PrefixFor, bech32PrefixesPermitted),
+                     VotingKeyPublic, deserialiseFromBech32', serialiseToBech32')
 
 data Discrimination = Production
                     | Test

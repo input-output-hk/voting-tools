@@ -28,7 +28,8 @@ import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 import           Ouroboros.Network.Point (fromWithOrigin)
 
 import           Cardano.API.Extended (readEnvSocketPath)
-import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx, signTx)
+import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
+                     signTx)
 import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Metadata (voteSignature)
 import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)

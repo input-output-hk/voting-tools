@@ -28,7 +28,8 @@ import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
 import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, readVoteSigningKeyFile, readVotePaymentKeyFile)
+import           Cardano.CLI.Voting.Signing (VoteSigningKey, readVotePaymentKeyFile,
+                     readVoteSigningKeyFile)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),

@@ -1,10 +1,10 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , VoteVerificationKey
@@ -27,12 +27,11 @@ import           Control.Monad.Except (MonadError)
 import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
-import           Cardano.API
-                     (Hash, AsType (AsHash, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
-                     FromSomeType, HasTypeProxy, Key,
+import           Cardano.API (AsType (AsHash, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                     FromSomeType, HasTypeProxy, Hash, Key,
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
-                     SigningKey, StakeExtendedKey, StakeKey, VerificationKey, castVerificationKey, verificationKeyHash,
-                     getVerificationKey, proxyToAsType, serialiseToRawBytes)
+                     SigningKey, StakeExtendedKey, StakeKey, VerificationKey, castVerificationKey,
+                     getVerificationKey, proxyToAsType, serialiseToRawBytes, verificationKeyHash)
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
 import           Cardano.Api.Typed (FromSomeType (FromSomeType))
 import           Cardano.Api.Typed (ShelleySigningKey,
