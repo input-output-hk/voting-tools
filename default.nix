@@ -23,19 +23,17 @@ let
   haskellPackagesMusl64 = recRecurseIntoAttrs
     # the Haskell.nix package set, reduced to local packages.
     (selectProjectPackages pkgs.pkgsCross.musl64.votingToolsHaskellPackages);
-  voterRegistrationTarball = pkgs.runCommandNoCC "voter-registration-tarball" { buildInputs = [ pkgs.gnutar gzip ]; } ''
+  votingToolsTarball = pkgs.runCommandNoCC "voter-registration-tarball" { buildInputs = [ pkgs.gnutar gzip ]; } ''
     cp ${haskellPackagesMusl64.voting-tools.components.exes.voter-registration}/bin/voter-registration ./
-    mkdir -p $out
-    tar -czvf $out/voter-registration.tar.gz voter-registration
-  '';
-  voterFetchTarball = pkgs.runCommandNoCC "voter-fetch-tarball" { buildInputs = [ pkgs.gnutar gzip ]; } ''
     cp ${haskellPackagesMusl64.voting-tools.components.exes.fetch-registration}/bin/fetch-registration ./
     mkdir -p $out
+    tar -czvf $out/voter-registration.tar.gz voter-registration
     tar -czvf $out/fetch-registration.tar.gz fetch-registration
+    tar -czvf $out/voting-tools.tar.gz voter-registration fetch-registration
   '';
 
   self = {
-    inherit votingToolsHaskellPackages voterRegistrationTarball voterFetchTarball;
+    inherit votingToolsHaskellPackages votingToolsTarball;
     inherit haskellPackages hydraEvalErrors;
 
     inherit (pkgs.iohkNix) checkCabalProject;
