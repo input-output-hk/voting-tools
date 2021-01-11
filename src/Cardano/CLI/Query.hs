@@ -2,37 +2,27 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Cardano.CLI.Query where
 
-import Data.Maybe (fromMaybe)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Cardano.Db (DbLovelace(unDbLovelace))
 import Control.Monad.Except (runExceptT, MonadError, throwError)
 import Control.Monad.Reader (MonadReader, asks, runReaderT, ask)
-import qualified Options.Applicative as Opt
-import Database.Persist.Postgresql (SqlBackend, withPostgresqlConn, SqlPersistT, runSqlConnWithIsolation, IsolationLevel(Serializable), rawQuery, rawSql, Entity)
-import Control.Monad.Logger
-    ( logInfoN, runStdoutLoggingT, runStderrLoggingT, runNoLoggingT)
+import Database.Persist.Postgresql (SqlBackend, SqlPersistT, runSqlConnWithIsolation, IsolationLevel(Serializable), rawSql, Entity)
 import Data.Text (Text)
-import Data.Traversable (forM)
+import Data.Traversable (forM, for)
 import Data.Word (Word64)
+import Data.List (foldl')
 import Data.ByteString (ByteString)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.ByteString.Char8 as BC
-import Data.Ratio (numerator)
-import Control.Monad.Trans.Resource
-import Cardano.Db
+import Cardano.Db (DbLovelace(DbLovelace), EntityField(TxId), TxId)
 import Database.Esqueleto (BackendCompatible, Single(Single))
-import System.IO
-import Data.Time
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Data.Map.Monoidal as MM
-import Data.Monoid (Sum(Sum), getSum, Last(Last), getLast, First(First), getFirst)
-import Data.Maybe (fromJust)
-import qualified Data.ByteString.Lazy.Char8 as BLC
+import Data.Monoid (Sum(Sum), getSum)
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
@@ -42,16 +32,12 @@ import qualified Cardano.API as Api
 import qualified Cardano.Api.Typed as Api (metadataFromJson)
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
-import Data.Map.Strict (Map)
-import Cardano.API.Extended (VotingKeyPublic, serialiseToBech32')
 import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.Types as Aeson
 import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
+import Registration (register, registry)
 
 import qualified Cardano.API.Jormungandr as Jormungandr
-
-import Control.Lens
 
 parseMetadataFromJson :: Aeson.Object -> Either Api.TxMetadataJsonError Api.TxMetadata
 parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonNoSchema . Aeson.Object
@@ -78,6 +64,16 @@ instance AsMetadataRetrievalError VoteRegistrationRetrievalError where
 
 instance AsMetadataParsingError VoteRegistrationRetrievalError where
   _MetadataParsingError = _VoteRegistrationMetadataParsingError
+
+-- | A simple helper type, takes two pieces of data and provides an
+-- Ord instance that only compares the first piece of data.
+data OrderedBy ord a = OrderedBy ord a
+
+instance Eq ord => Eq (OrderedBy ord a) where
+  (==) (OrderedBy ord1 _) (OrderedBy ord2 _) = ord1 == ord2
+
+instance Ord ord => Ord (OrderedBy ord a) where
+  compare (OrderedBy ord1 _) (OrderedBy ord2 _) = compare ord1 ord2
 
 queryStake
   :: ( MonadIO m
@@ -126,17 +122,23 @@ queryVotingFunds
   -> m VotingFunds
 queryVotingFunds nw mSlotNo = do
   regos <- queryVoteRegistration mSlotNo
-  m <- fmap mconcat $ forM regos $ \rego -> do
-    let
-      verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
-      votePub    = voteRegistrationPublicKey rego
-    pure $ MM.singleton verKeyHash (Last $ Just votePub)
+  let
+    addRego registry (txId, rego) =
+      let
+        verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
+        votePub    = voteRegistrationPublicKey rego
+      in
+        register verKeyHash (OrderedBy txId votePub) registry
 
-  mmap <- fmap mconcat $ forM (MM.toList m) $ \(verKeyHash, votePub) -> do
+  -- By the Registration algebra, registrations are naturally filtered
+  -- to only use the latest registration for each verification key.
+  let latestRegistrations = foldl' addRego mempty regos
+
+  addrStakeMap <- fmap mconcat $ forM (registry latestRegistrations) $ \(verKeyHash, (OrderedBy _txId votePub)) -> do
     stake <- queryStake mSlotNo verKeyHash
-    pure $ MM.singleton (Jormungandr.addressFromVotingKeyPublic nw (fromJust $ getLast votePub)) (Sum stake)
+    pure $ MM.singleton (Jormungandr.addressFromVotingKeyPublic nw votePub) (Sum stake)
 
-  pure . VotingFunds . M.fromList . MM.toList . fmap getSum $ mmap
+  pure . VotingFunds . M.fromList . MM.toList . fmap getSum $ addrStakeMap
 
 queryVoteRegistration
   :: ( MonadIO m
@@ -147,7 +149,7 @@ queryVoteRegistration
      , BackendCompatible SqlBackend backend
      )
   => Maybe SlotNo
-  -> m [Vote]
+  -> m [(TxId, Vote)]
 queryVoteRegistration mSlotNo =
   let
     sqlBase = "WITH meta_table AS (select tx_id, json AS metadata from tx_metadata where key = '" <> T.pack (show metadataMetaKey) <> "') , sig_table AS (select tx_id, json AS signature from tx_metadata where key = '" <> T.pack (show signatureMetaKey) <> "') SELECT tx.hash,tx_id,metadata,signature FROM meta_table INNER JOIN tx ON tx.id = meta_table.tx_id INNER JOIN sig_table USING(tx_id)"
@@ -157,7 +159,7 @@ queryVoteRegistration mSlotNo =
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
         Nothing   -> (sqlBase <> ";")
     r <- ask
-    (results :: [(Single ByteString, Single Word64, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
+    (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
       metadata  <- maybe (throwError $ _MetadataFailedToRetrieveMetadataField # ()) pure mMetadata
       signature <- maybe (throwError $ _MetadataFailedToRetrieveSignatureField # ()) pure mSignature
@@ -173,7 +175,7 @@ queryVoteRegistration mSlotNo =
           ]
 
       meta <- either (\err -> throwError $ (_MetadataFailedToDecodeTxMetadata # (metaObj, err))) pure $ parseMetadataFromJson metaObj
-      either (throwError . (_MetadataParsingError #)) pure $ fromTxMetadata meta
+      either (throwError . (_MetadataParsingError #)) pure $ fmap (txId,) $ fromTxMetadata meta
 
 runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a
 runQuery backend query = liftIO $ runSqlConnWithIsolation query backend Serializable

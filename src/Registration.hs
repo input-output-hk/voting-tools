@@ -18,7 +18,7 @@
 -- The constructors are used to construct values in the algebra.
 -- The observations are used to "get values out of" the algebra.
 -- All observations can be derived from the observation "registry",
--- therefore "registry" is the denotation of the algebra.
+-- i.e. "registry" is the denotation of the algebra.
 
 module Registration
   ( -- * Observations
