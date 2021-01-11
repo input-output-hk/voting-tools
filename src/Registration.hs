@@ -28,7 +28,7 @@ import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
 import           Ouroboros.Network.Point (fromWithOrigin)
 
 import           Cardano.API.Extended (readEnvSocketPath)
-import           Cardano.CLI.Voting (createVote, encodeVote, prettyTx, signTx)
+import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx, signTx)
 import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Metadata (voteSignature)
 import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)
@@ -50,10 +50,10 @@ main = do
           -- (minus a fee).
 
           -- Generate vote payload (vote information is encoded as metadata).
-          let vote = createVote voteSign votePub
+          let vote = createVoteRegistration voteSign votePub
 
           -- Encode the vote as a transaction and sign it
-          voteTx <- signTx paySign <$> encodeVote connectInfo ShelleyBasedEraShelley addr ttl vote
+          voteRegistrationTx <- signTx paySign <$> encodeVoteRegistration connectInfo ShelleyBasedEraShelley addr ttl vote
 
           -- Output helpful information
           liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
@@ -61,7 +61,7 @@ main = do
           liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
 
           -- Output our vote transaction
-          liftIO . writeFile outFile $ prettyTx voteTx
+          liftIO . writeFile outFile $ prettyTx voteRegistrationTx
       case eResult of
         Left  (err :: AppError) -> error $ show err
         Right ()                -> pure ()
