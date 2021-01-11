@@ -23,7 +23,7 @@ let
   haskellPackagesMusl64 = recRecurseIntoAttrs
     # the Haskell.nix package set, reduced to local packages.
     (selectProjectPackages pkgs.pkgsCross.musl64.votingToolsHaskellPackages);
-  votingToolsTarball = pkgs.runCommandNoCC "voter-registration-tarball" { buildInputs = [ pkgs.gnutar gzip ]; } ''
+  votingToolsTarball = pkgs.runCommandNoCC "voting-tools-tarball" { buildInputs = [ pkgs.gnutar gzip ]; } ''
     cp ${haskellPackagesMusl64.voting-tools.components.exes.voter-registration}/bin/voter-registration ./
     cp ${haskellPackagesMusl64.voting-tools.components.exes.fetch-registration}/bin/fetch-registration ./
     mkdir -p $out
