@@ -19,7 +19,6 @@ module Registration.Initial
 import Data.List (find, delete, sort)
 import Data.Traversable (for)
 import Data.Maybe (maybe)
-import Data.Maybe (maybe)
 
 data Registry id a where
   Empty      :: Registry id a

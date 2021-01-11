@@ -33,7 +33,7 @@ module Registration
   , Registry
   ) where
 
-import qualified Registration.Initial as R
+import qualified Registration.Efficient as R
 
 type Registry = R.Registry
 
@@ -47,7 +47,7 @@ type Registry = R.Registry
 -- "register/deregister":
 --   deregister ident (register ident info rs)
 --   = rs
-register :: id -> a -> Registry id a -> Registry id a
+register :: (Ord id, Ord a) => id -> a -> Registry id a -> Registry id a
 register = R.register
 
 -- | Deregister an identity.
@@ -55,7 +55,7 @@ register = R.register
 --   deregister ident (register ident info rs) = rs
 -- "deregister/idempotent":
 --   deregister ident (deregister ident rs) = deregister ident rs
-deregister :: id -> Registry id a -> Registry id a
+deregister :: Ord id => id -> Registry id a -> Registry id a
 deregister = R.deregister
 
 -- | Return all registrations and their info.

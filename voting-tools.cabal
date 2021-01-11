@@ -28,6 +28,7 @@ library
                      , Cardano.CLI.Voting.Signing
                      , Registration
                      , Registration.Initial
+                     , Registration.Efficient
 
   build-depends:       base
                      , aeson
