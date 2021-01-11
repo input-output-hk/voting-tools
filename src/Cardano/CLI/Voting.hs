@@ -92,7 +92,7 @@ import           Cardano.CLI.Voting.Fee
 import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload,
                      voteToTxMetadata)
 import           Cardano.CLI.Voting.Signing (VoteSigningKey, withVoteShelleySigningKey,
-                     withVoteSigningKey)
+                     withVoteSigningKey, withWitnessPaymentKey)
 import           Cardano.CLI.Voting.Signing (getVoteVerificationKey, sign, verify)
 
 import qualified Cardano.Ledger.Compactible
@@ -225,12 +225,12 @@ voteTx era addr txins (Lovelace value) ttl (Lovelace fee) meta =
 -- | Sign a transaction body to create a transaction.
 signTx
   :: IsShelleyBasedEra era
-  => SigningKey PaymentKey
+  => VotePaymentKey
   -> TxBody era
   -> Tx era
 signTx psk txbody =
   let
-    witness = makeShelleyKeyWitness txbody (WitnessPaymentKey psk)
+    witness = withWitnessPaymentKey psk $ makeShelleyKeyWitness txbody
   in
     makeSignedTransaction [witness] txbody
 

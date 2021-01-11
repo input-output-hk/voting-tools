@@ -19,6 +19,8 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , verify
                                   , readVoteSigningKeyFile
                                   , verificationKeyRawBytes
+                                  , withWitnessPaymentKey
+                                  , readVotePaymentKeyFile
                                   ) where
 
 import           Control.Monad.Except (MonadError)
@@ -60,6 +62,11 @@ data VoteVerificationKey
 data VoteVerificationKeyHash
   = AStakeVerificationKeyHash (Hash StakeKey)
   | AStakeExtendedVerificationKeyHash (Hash StakeExtendedKey)
+  deriving (Ord, Eq, Show)
+
+data VotePaymentKey
+  = APaymentSigningKey (SigningKey PaymentKey)
+  | APaymentExtendedSigningKey (SigningKey PaymentExtendedKey)
   deriving (Ord, Eq, Show)
 
 instance HasTypeProxy VoteVerificationKeyHash where
@@ -130,6 +137,38 @@ withVoteShelleySigningKey vsk f =
   case vsk of
     AStakeSigningKey (StakeSigningKey dsign)                -> f ( toShelleySigningKey $ WitnessStakeKey (StakeSigningKey dsign))
     AStakeExtendedSigningKey (StakeExtendedSigningKey xprv) -> f ( toShelleySigningKey $ WitnessStakeExtendedKey (StakeExtendedSigningKey xprv))
+
+withWitnessPaymentKey :: VotePaymentKey -> (ShelleyWitnessSigningKey -> a) -> a
+withWitnessPaymentKey vsk f =
+  case vsk of
+    APaymentSigningKey k         -> f $ WitnessPaymentKey k
+    APaymentExtendedSigningKey k -> f $ WitnessPaymentExtendedKey k
+
+readVotePaymentKeyFile
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e fileErr
+     , AsInputDecodeError fileErr
+     )
+  => SigningKeyFile
+  -> m VotePaymentKey
+readVotePaymentKeyFile skFile =
+  readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
+
+  where
+    textEnvFileTypes =
+      [ FromSomeType (AsSigningKey AsPaymentKey)
+                      APaymentSigningKey
+      , FromSomeType (AsSigningKey AsPaymentExtendedKey)
+                      APaymentExtendedSigningKey
+      ]
+
+    bech32FileTypes =
+      [ FromSomeType (AsSigningKey AsPaymentKey)
+                      APaymentSigningKey
+      , FromSomeType (AsSigningKey AsPaymentExtendedKey)
+                      APaymentExtendedSigningKey
+      ]
 
 readVoteSigningKeyFile
   :: ( MonadIO m
