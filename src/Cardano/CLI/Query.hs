@@ -26,7 +26,7 @@ import Data.Monoid (Sum(Sum), getSum)
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
-import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getVoteVerificationKeyHash, AsType(AsVoteVerificationKeyHash))
+import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash, AsType(AsVoteVerificationKeyHash))
 import Cardano.CLI.Fetching (Threshold, Fund, VotingFunds(VotingFunds), aboveThreshold, fundFromVotingFunds, chunkFund)
 import qualified Cardano.API as Api
 import Cardano.API.Extended (VotingKeyPublic)
@@ -83,7 +83,7 @@ queryStake
      , BackendCompatible SqlBackend backend
      )
   => Maybe SlotNo
-  -> VoteVerificationKeyHash
+  -> Api.Hash Api.StakeKey
   -> m Api.Lovelace
 queryStake mSlotRestriction stakeHash = do
   r <- ask
@@ -120,14 +120,14 @@ queryVoteRegistrationInfo
      , AsMetadataRetrievalError e
      )
   => Maybe SlotNo
-  -> m (Registry VoteVerificationKeyHash (OrderedBy TxId (VotingKeyPublic, Api.Lovelace)))
+  -> m (Registry (Api.Hash Api.StakeKey) (OrderedBy TxId (VotingKeyPublic, Api.Lovelace)))
 queryVoteRegistrationInfo mSlotNo = do
   regos <- queryVoteRegistration mSlotNo
 
   let
     addRego registry (txId, rego) = do
       let
-        verKeyHash = getVoteVerificationKeyHash . voteRegistrationVerificationKey $ rego
+        verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
         votePub    = voteRegistrationPublicKey rego
 
       stake <- queryStake mSlotNo verKeyHash
@@ -147,24 +147,31 @@ queryVotingProportion
      )
   => Api.NetworkId
   -> Maybe SlotNo
-  -> m (Map VoteVerificationKeyHash Double)
-queryVotingProportion nw mSlotNo = do
+  -> Threshold
+  -> m (Map (Api.Hash Api.StakeKey) Double)
+queryVotingProportion nw mSlotNo threshold = do
   latestRegistrations       <- queryVoteRegistrationInfo mSlotNo
-  (VotingFunds votingFunds) <- queryVotingFunds nw mSlotNo
+  (VotingFunds votingFunds) <- aboveThreshold threshold <$> queryVotingFunds nw mSlotNo
 
   let
-    x = foldl' (\acc (verKeyHash, (OrderedBy _txId (votePub, stake))) ->
+    (Api.Lovelace totalStake) = foldl' (+) 0 votingFunds
+
+    x = foldl' (\acc (verKeyHash, (OrderedBy _txId (votePub, stakePerUser))) ->
       let
         votingFundsAddr = Jormungandr.addressFromVotingKeyPublic nw votePub
       in
         case M.lookup votingFundsAddr votingFunds of
-          Just stakeTotal ->
+          Just stakePerKey ->
             let
-              (Api.Lovelace stakeL) = stake
-              (Api.Lovelace stakeTotalL) = stakeTotal
+              (Api.Lovelace stakePerUserL) = stakePerUser
+              (Api.Lovelace stakePerKeyL)  = stakePerKey
+              userPortion = fromIntegral stakePerUserL / fromIntegral stakePerKeyL
+              keyPortion  = fromIntegral stakePerKeyL / fromIntegral totalStake
+              overallUserPortion = userPortion * keyPortion
             in
-              M.insert verKeyHash (fromIntegral stakeL / fromIntegral stakeTotalL) acc
-          Nothing         -> acc) mempty (registry latestRegistrations)
+              M.insert verKeyHash overallUserPortion acc
+          Nothing         -> acc
+               ) mempty (registry latestRegistrations)
   pure x
 
 queryVotingFunds
@@ -203,7 +210,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> ";")
+        Nothing   -> (sqlBase <> "LIMIT 100;")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do

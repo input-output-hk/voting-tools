@@ -15,6 +15,7 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , withVoteVerificationKey
                                   , withVoteSigningKey
                                   , withVoteShelleySigningKey
+                                  , getStakeHash
                                   , sign
                                   , verify
                                   , readVoteSigningKeyFile
@@ -26,7 +27,7 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
 import           Cardano.API
-                     (StakeAddress, makeStakeAddress, Hash, AsType (AsHash, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                     (StakeAddress, castHash, makeStakeAddress, Hash, AsType (AsHash, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
                      FromSomeType, HasTypeProxy, Key,
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
                      SigningKey, StakeExtendedKey, StakeKey, NetworkId, VerificationKey, castVerificationKey, verificationKeyHash,
@@ -82,6 +83,9 @@ getVoteVerificationKey :: VoteSigningKey -> VoteVerificationKey
 getVoteVerificationKey (AStakeSigningKey skey)         = AStakeVerificationKey         $ getVerificationKey skey
 getVoteVerificationKey (AStakeExtendedSigningKey skey) = AStakeExtendedVerificationKey $ getVerificationKey skey
 
+getStakeHash :: VoteVerificationKey -> Hash StakeKey
+getStakeHash v = withVoteVerificationKey v (verificationKeyHash)
+
 withVoteVerificationKey :: VoteVerificationKey -> (VerificationKey StakeKey -> a) -> a
 withVoteVerificationKey ver f =
   let
@@ -90,14 +94,6 @@ withVoteVerificationKey ver f =
       (AStakeExtendedVerificationKey vkey) -> castVerificationKey vkey
   in
     f vkey
-
-withStakeKeyHash :: VoteVerificationKeyHash -> (Hash StakeKey -> a) -> a
-withStakeKeyHash ver f = withVoteVerificationKey ver $ \vkey ->
-  let
-    hash :: Hash StakeKey
-    hash = verificationKeyHash vkey
-  in
-    f hash
 
 toStakeAddr :: NetworkId -> Hash StakeKey -> StakeAddress
 toStakeAddr nw = makeStakeAddress nw . StakeCredentialByKey
