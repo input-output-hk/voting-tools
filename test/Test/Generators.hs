@@ -19,6 +19,8 @@ import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPubl
 import           Cardano.CLI.Fetching
 import Registration (Registry)
 import qualified Registration as Reg
+import Contribution (Contributions)
+import qualified Contribution as Contrib
 
 -- votingFunds :: Gen VotingFunds
 -- votingFunds = VotingFunds <$> Gen.map (Range.linear 0 16) ((,) <$> jaddr <*> lovelace)
@@ -58,4 +60,12 @@ registry = Gen.recursive Gen.choice
   [ Reg.register <$> Gen.int (Range.linear 0 maxBound) <*> orderedPayload <*> registry
   , Reg.deregister <$> Gen.int (Range.linear 0 maxBound) <*> registry
   , (<>) <$> registry <*> registry
+  ]
+
+contributions :: Gen (Contributions Word8 Word8 Int)
+contributions = Gen.recursive Gen.choice
+  [ mempty ]
+  [ Contrib.contribute <$> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> Gen.int (Range.linear 0 maxBound) <*> contributions
+  , Contrib.withdraw <$> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> contributions
+  , (<>) <$> contributions <*> contributions
   ]
