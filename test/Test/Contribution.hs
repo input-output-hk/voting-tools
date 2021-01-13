@@ -9,7 +9,9 @@ import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog
 import           Data.List (delete, find)
 import           Data.Word (Word8)
+import           Data.Monoid (Sum(Sum), getSum)
 import           Test.Tasty.HUnit (Assertion, assertEqual, testCase, (@?=))
+import           Data.Ratio (Ratio, (%))
 
 import Contribution
 import qualified Test.Generators as Gen
@@ -20,18 +22,24 @@ tests = testGroup "Contribution algebra"
       [ testProperty "semigroup/associativity" prop_contributions_semigroup_associativity
       , testProperty "monoid/identity"         prop_contributions_monoid_identity
       , testProperty "monoid/concatenation"    prop_contributions_monoid_concat
-      -- , testProperty "register/newest-wins"    prop_contributions_register_newestwins
-      -- , testProperty "register/commutative"    prop_contributions_register_commutative
-      -- , testProperty "register/deregister"     prop_contributions_register_deregister
-      -- , testProperty "deregister/idempotent"   prop_contributions_deregister_idempotent
-      -- , testProperty "getRegistration/obs"     prop_contributions_getRegistration
-      -- , testProperty "isRegistered/obs"        prop_contributions_isRegistered
-      -- , testProperty "isNotRegistered/obs"     prop_contributions_isNotRegistered
-      -- , testProperty "functor/identity"        prop_contributions_functor_identity
-      -- , testProperty "functor/composition"     prop_contributions_functor_composition
+      , testProperty "contribute/last-wins"    prop_contributions_contribute_lastwins
+      , testProperty "contribute/withdraw"     prop_contributions_contribute_withdraw
+      , testProperty "withdraw/idempotent"     prop_contributions_withdraw_idempotent
+      , testProperty "sumAmounts/denotation"   prop_contributions_denotation_sumAmounts
+      , testProperty "sumAmounts/contribute"   prop_contributions_sumAmounts_contribute
+      , testProperty "sumAmounts/withdraw "    prop_contributions_sumAmounts_withdraw
+      , testProperty "proportionalize/denotation" prop_contributions_denotation_proportionalize
+      , testProperty "proportionalize/sums-to-one" prop_contributions_proportionalize_sumOne
+      , testProperty "contributionsBy/denotation" prop_contributions_denotation_contributionsBy
+      , testProperty "contributionsFor/denotation" prop_contributions_denotation_contributionsFor
+      , testProperty "causeSumAmounts/denotation" prop_contributions_denotation_causeSumAmounts
       ]
   , testGroup "Unit tests"
       [ testCase "contribute adds a contribution" unit_contribution_adds
+      , testCase "proportionalize correctly assigns proportions" unit_proportionalize
+      , testCase "contributionsBy correctly finds contributions" unit_contributionsBy
+      , testCase "contributionsFor correctly finds contributions" unit_contributionsFor
+      , testCase "causeSumAmounts correctly sums cause amounts" unit_causeSumAmounts
       ]
   ]
 
@@ -39,6 +47,40 @@ unit_contribution_adds :: Assertion
 unit_contribution_adds = do
    (contributions $ contribute 1 1 3 mempty) @?= [(1, [(1, 3)])] 
    (contributions $ contribute 1 1 4 $ contribute 1 2 4 mempty) @?= [(1, [(1, 4), (2, 4)])] 
+
+unit_proportionalize :: Assertion
+unit_proportionalize = do
+  proportionalize mempty
+    @?= ([] :: [(Word8, [(Word8, Ratio Integer)])])
+  (proportionalize $ contribute 0 0 0 mempty) 
+    @?= ([(0, [(0, 0)])])
+  (proportionalize $ contribute 0 0 1 $ contribute 0 1 1 mempty)
+    @?= [(0, [(0, 1 % 2), (1, 1 % 2)])]
+  (proportionalize $ contribute 0 0 1 $ contribute 1 1 1 mempty)
+    @?= [(0, [(0, 1 % 2)]), (1, [(1, 1 % 2)])]
+  (proportionalize $ contribute 0 0 2 $ contribute 1 1 3 $ contribute 1 2 5 $ mempty)
+    @?= [(0, [(0, 2 % 10)]), (1, [(1, 3 % 10), (2, 5 % 10)])]
+
+unit_contributionsBy :: Assertion
+unit_contributionsBy = do
+   (contributionsBy 0 $ contribute 1 0 2 (contribute 0 0 1 mempty))
+     @?= [(0, 1), (1, 2)]
+   (contributionsBy 0 $ contribute 1 1 4 $ contribute 1 0 2 (contribute 0 0 1 mempty))
+     @?= [(0, 1), (1, 2)]
+   (contributionsBy 1 $ contribute 1 1 4 $ contribute 1 0 2 (contribute 0 0 1 mempty))
+     @?= [(1, 4)]
+
+unit_contributionsFor :: Assertion
+unit_contributionsFor = do
+   (contributionsFor 0 $ contribute 1 0 2 (contribute 0 0 1 mempty))
+     @?= [(0, 1)]
+
+unit_causeSumAmounts :: Assertion
+unit_causeSumAmounts = do
+   (causeSumAmounts $ contribute 1 0 2 (contribute 0 0 1 mempty))
+     @?= [(0, 1), (1, 2)]
+   (causeSumAmounts $ contribute 1 0 255 (contribute 1 1 255 mempty))
+     @?= [(1, 510)]
 
 prop_contributions_semigroup_associativity :: Property
 prop_contributions_semigroup_associativity = property $ do
@@ -63,44 +105,126 @@ prop_contributions_monoid_concat = property $ do
 
   mconcat xs === foldr (<>) mempty xs
 
--- prop_contributions_register_newestwins :: Property
--- prop_contributions_register_newestwins = property $ do
---   ident                               <- forAll $ Gen.int (Range.linear 0 maxBound)
---   a1@(Gen.OrderedPayload ord payload) <- forAll Gen.orderedPayload
---   a2 <- forAll $ Gen.frequency [ (1, pure $ Gen.OrderedPayload ord (succ payload))
---                                , (3, Gen.orderedPayload)
---                                ]
+prop_contributions_contribute_lastwins :: Property
+prop_contributions_contribute_lastwins = property $ do
+  cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt1  <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt2  <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  cs    <- forAll Gen.contributions
 
---   -- forall contributions in which ident is not registered
---   r  <- deregister ident <$> forAll Gen.contributions
+  contribute cause ident amt2 (contribute cause ident amt2 cs) === contribute cause ident amt2 cs
 
---   register ident a1 (register ident a2 r) === register ident (max a1 a2) r
+prop_contributions_contribute_withdraw :: Property
+prop_contributions_contribute_withdraw = property $ do
+  cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt   <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  -- forall contributions for which we have not already contributed.
+  cs    <- withdraw cause ident <$> forAll Gen.contributions
 
--- prop_contributions_register_commutative :: Property
--- prop_contributions_register_commutative = property $ do
---   ident <- forAll $ Gen.int (Range.linear 0 maxBound)
---   x    <- forAll Gen.orderedPayload
---   y    <- forAll Gen.orderedPayload
+  withdraw cause ident (contribute cause ident amt cs) === cs
 
---   -- forall contributions in which ident is not registered
---   r  <- deregister ident <$> forAll Gen.contributions
+prop_contributions_withdraw_idempotent :: Property
+prop_contributions_withdraw_idempotent = property $ do
+  cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt   <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  cs    <- forAll Gen.contributions
 
---   register ident x (register ident y r) === register ident y (register ident x r)
+  withdraw cause ident (contribute cause ident amt cs) === withdraw cause ident cs
 
--- prop_contributions_register_deregister :: Property
--- prop_contributions_register_deregister = property $ do
---   ident <- forAll $ Gen.int (Range.linear 0 maxBound)
---   x     <- forAll Gen.orderedPayload
---   r     <- forAll Gen.contributions
+prop_contributions_denotation_sumAmounts :: Property
+prop_contributions_denotation_sumAmounts = property $ do
+  cs    <- forAll Gen.contributions
 
---   deregister ident (register ident x r) === r
+  sumAmounts cs
+    === ( getSum
+        . foldMap (foldMap (foldMap (foldMap (Sum . toRational))))
+        . contributions $ cs
+        )
 
--- prop_contributions_deregister_idempotent :: Property
--- prop_contributions_deregister_idempotent = property $ do
---   ident <- forAll $ Gen.int (Range.linear 0 maxBound)
---   r     <- forAll Gen.contributions
+prop_contributions_sumAmounts_contribute :: Property
+prop_contributions_sumAmounts_contribute = property $ do
+  cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt   <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  -- forall contributions for which we have not already contributed.
+  cs    <- withdraw cause ident <$> forAll Gen.contributions
 
---   deregister ident (deregister ident r) === deregister ident r
+  let
+    cs' = contribute cause ident amt cs
+
+  sumAmounts cs' === sumAmounts cs + (toRational amt)
+
+prop_contributions_sumAmounts_withdraw :: Property
+prop_contributions_sumAmounts_withdraw = property $ do
+  cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt   <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  -- forall contributions for which we have contributed
+  cs    <- contribute cause ident amt <$> forAll Gen.contributions
+
+  let
+    cs' = withdraw cause ident cs
+
+  sumAmounts cs' === sumAmounts cs - (toRational amt)
+
+prop_contributions_denotation_proportionalize :: Property
+prop_contributions_denotation_proportionalize = property $ do
+  cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt   <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  -- forall contributions for which there is at least 1 contribution > 0
+  cs    <-
+    contribute cause ident (if amt == 0 then 1 else amt)
+    <$> forAll Gen.contributions
+
+  let
+    sumAmts = sumAmounts cs
+
+  proportionalize cs
+    ===
+      ((fmap (fmap (fmap (fmap (\amt -> if sumAmts == 0 then 0 else (toRational amt / sumAmts) ))))) $ contributions cs)
+
+prop_contributions_proportionalize_sumOne :: Property
+prop_contributions_proportionalize_sumOne = property $ do
+  cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt   <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  -- forall contributions for which there is at least 1 contribution > 0
+  cs    <-
+    contribute cause ident (if amt == 0 then 1 else amt)
+    <$> forAll Gen.contributions
+
+  let
+    sumProportions = getSum (foldMap (foldMap (foldMap (foldMap (Sum . toRational)))) (proportionalize cs))
+    sumAmts = sumAmounts cs
+
+  sumProportions === fromInteger 1
+
+prop_contributions_denotation_contributionsBy :: Property
+prop_contributions_denotation_contributionsBy = property $ do
+  ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  cs    <- forAll Gen.contributions
+
+  contributionsBy ident cs
+    === (foldMap (\(c, cs) -> foldMap (\(x, amt) -> if x == ident then [(c, amt)] else []) cs) $ contributions cs)
+
+prop_contributions_denotation_contributionsFor :: Property
+prop_contributions_denotation_contributionsFor = property $ do
+  cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  cs    <- forAll Gen.contributions
+
+  contributionsFor cause cs
+    === (foldMap (\(c, cs) -> if c == cause then cs else []) $ contributions cs)
+
+prop_contributions_denotation_causeSumAmounts :: Property
+prop_contributions_denotation_causeSumAmounts = property $ do
+  cs    <- forAll Gen.contributions
+
+  causeSumAmounts cs
+    === (fmap (fmap (getSum . foldMap (Sum . toRational . snd))) $ contributions cs)
   
 -- prop_contributions_getRegistration :: Property
 -- prop_contributions_getRegistration = property $ do
@@ -122,19 +246,3 @@ prop_contributions_monoid_concat = property $ do
 --   r     <- forAll Gen.contributions
 
 --   isNotRegistered ident r === (not $ isRegistered ident r)
-
--- prop_contributions_functor_identity :: Property
--- prop_contributions_functor_identity = property $ do
---   r     <- forAll Gen.contributions
-
---   fmap id r === r
-
--- prop_contributions_functor_composition :: Property
--- prop_contributions_functor_composition = property $ do
---   r     <- forAll Gen.contributions
-
---   let
---     f (Gen.OrderedPayload ord payload) = (Gen.OrderedPayload (succ ord) (succ payload))
---     g (Gen.OrderedPayload ord payload) = (Gen.OrderedPayload (succ . succ $ ord) (succ . succ $ payload))
-
---   fmap (f . g) r === fmap (g . f) r

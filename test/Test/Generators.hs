@@ -62,10 +62,17 @@ registry = Gen.recursive Gen.choice
   , (<>) <$> registry <*> registry
   ]
 
-contributions :: Gen (Contributions Word8 Word8 Int)
+-- | Generate random contributions.
+--
+-- Word8 was chosen because it is large enough to give us a decent
+-- range of values, but small enough that generating random Word8's is
+-- fairly likely to result in duplicate values, which are exactly the
+-- values we are interested in testing. You are also more likely to
+-- encounter overflow errors with such a small maximum bound.
+contributions :: Gen (Contributions Word8 Word8 Word8)
 contributions = Gen.recursive Gen.choice
   [ mempty ]
-  [ Contrib.contribute <$> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> Gen.int (Range.linear 0 maxBound) <*> contributions
+  [ Contrib.contribute <$> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> contributions
   , Contrib.withdraw <$> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> contributions
   , (<>) <$> contributions <*> contributions
   ]

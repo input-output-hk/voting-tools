@@ -23,6 +23,7 @@ import Cardano.Db (DbLovelace(DbLovelace), EntityField(TxId), TxId)
 import Database.Esqueleto (BackendCompatible, Single(Single))
 import qualified Data.Map.Monoidal as MM
 import Data.Monoid (Sum(Sum), getSum)
+import Data.Ratio
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
@@ -38,6 +39,7 @@ import qualified Data.Aeson as Aeson
 import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
 import Registration (register, registry, Registry)
+import Contribution
 
 import qualified Cardano.API.Jormungandr as Jormungandr
 
@@ -120,22 +122,27 @@ queryVoteRegistrationInfo
      , AsMetadataRetrievalError e
      )
   => Maybe SlotNo
-  -> m (Registry (Api.Hash Api.StakeKey) (OrderedBy TxId (VotingKeyPublic, Api.Lovelace)))
+  -> m (Contributions VotingKeyPublic (Api.Hash Api.StakeKey) Integer)
 queryVoteRegistrationInfo mSlotNo = do
   regos <- queryVoteRegistration mSlotNo
 
   let
-    addRego registry (txId, rego) = do
-      let
-        verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
-        votePub    = voteRegistrationPublicKey rego
+    -- Each stake key has one public voting key it can stake to
+    xs :: Map (Api.Hash Api.StakeKey) VotingKeyPublic
+    xs = foldMap (\(_txid, rego) ->
+             let
+               verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
+               votePub    = voteRegistrationPublicKey rego
+             in
+               M.insert verKeyHash votePub mempty
+           ) regos
 
-      stake <- queryStake mSlotNo verKeyHash
-      register verKeyHash (OrderedBy txId (votePub, stake)) <$> registry
 
-  -- By the Registration algebra, registrations are naturally filtered
-  -- to only use the latest registration for each verification key.
-  foldl' addRego (pure mempty) regos
+  fmap mconcat $ forM (M.toList xs) (\(verKeyHash, votepub) -> do
+    (Api.Lovelace stake) <- queryStake mSlotNo verKeyHash
+    -- To each votepub, a verKeyHash may contribute once
+    pure $ (contribute votepub verKeyHash stake mempty)
+    )
 
 queryVotingProportion
   :: ( MonadIO m
@@ -150,29 +157,19 @@ queryVotingProportion
   -> Threshold
   -> m (Map (Api.Hash Api.StakeKey) Double)
 queryVotingProportion nw mSlotNo threshold = do
-  latestRegistrations       <- queryVoteRegistrationInfo mSlotNo
-  (VotingFunds votingFunds) <- aboveThreshold threshold <$> queryVotingFunds nw mSlotNo
+  info <- queryVoteRegistrationInfo mSlotNo
 
   let
-    (Api.Lovelace totalStake) = foldl' (+) 0 votingFunds
+    proportions :: [((Api.Hash Api.StakeKey), Double)]
+    proportions =
+      fmap (fmap convertRatio)
+      $ foldMap (snd)
+      $ proportionalize info
 
-    x = foldl' (\acc (verKeyHash, (OrderedBy _txId (votePub, stakePerUser))) ->
-      let
-        votingFundsAddr = Jormungandr.addressFromVotingKeyPublic nw votePub
-      in
-        case M.lookup votingFundsAddr votingFunds of
-          Just stakePerKey ->
-            let
-              (Api.Lovelace stakePerUserL) = stakePerUser
-              (Api.Lovelace stakePerKeyL)  = stakePerKey
-              userPortion = fromIntegral stakePerUserL / fromIntegral stakePerKeyL
-              keyPortion  = fromIntegral stakePerKeyL / fromIntegral totalStake
-              overallUserPortion = userPortion * keyPortion
-            in
-              M.insert verKeyHash overallUserPortion acc
-          Nothing         -> acc
-               ) mempty (registry latestRegistrations)
-  pure x
+    convertRatio :: Ratio Integer -> Double
+    convertRatio ratio = (fromIntegral $ numerator ratio) / (fromIntegral $ denominator ratio)
+
+  pure $ M.fromList proportions
 
 queryVotingFunds
   :: ( MonadIO m
@@ -186,12 +183,17 @@ queryVotingFunds
   -> Maybe SlotNo
   -> m VotingFunds
 queryVotingFunds nw mSlotNo = do
-  latestRegistrations <- queryVoteRegistrationInfo mSlotNo
+  info <- queryVoteRegistrationInfo mSlotNo
 
-  addrStakeMap <- fmap mconcat $ forM (registry latestRegistrations) $ \(verKeyHash, (OrderedBy _txId (votePub, stake))) -> do
-    pure $ MM.singleton (Jormungandr.addressFromVotingKeyPublic nw votePub) (Sum stake)
-
-  pure . VotingFunds . M.fromList . MM.toList . fmap getSum $ addrStakeMap
+  pure
+    $ VotingFunds
+    $ M.fromList
+    $ fmap (\(votepub, amt) ->
+              ( Jormungandr.addressFromVotingKeyPublic nw votepub
+              , Api.Lovelace $ numerator amt
+              )
+           )
+    $ causeSumAmounts info
 
 queryVoteRegistration
   :: ( MonadIO m
