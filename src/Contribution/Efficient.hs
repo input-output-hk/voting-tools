@@ -148,7 +148,7 @@ causeSumAmounts =
   let
     sumAmts = getSum . foldMap (Sum . toRational . snd)
   in
-    foldMap (\(c, cs) -> (:[]) $ (c,) $ sumAmts cs) . contributions
+    fmap (fmap sumAmts) . contributions
 
 -- -- | Lift the contribution amounts into some monoid, and monoidally
 -- -- combine each contribution amount.
