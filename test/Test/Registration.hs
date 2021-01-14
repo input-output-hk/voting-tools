@@ -2,14 +2,14 @@ module Test.Registration
   ( tests
   ) where
 
-import           Hedgehog (Gen, Property, forAll, property, tripping, (===), MonadTest, annotate)
+import           Data.List (delete, find)
+import           Hedgehog (Gen, MonadTest, Property, annotate, forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog
-import           Data.List (delete, find)
 
-import Registration
+import           Registration
 import qualified Test.Generators as Gen
 
 tests :: TestTree
@@ -99,7 +99,7 @@ prop_registry_deregister_idempotent = property $ do
   r     <- forAll Gen.registry
 
   deregister ident (deregister ident r) === deregister ident r
-  
+
 prop_registry_getRegistration :: Property
 prop_registry_getRegistration = property $ do
   ident <- forAll $ Gen.int (Range.linear 0 maxBound)

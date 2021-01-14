@@ -21,8 +21,8 @@ import qualified Data.Set as Set
 import           Data.String (fromString)
 import           Data.Text (Text)
 
-import           Cardano.API (IsCardanoEra, Address, AddressAny, AddressInEra (AddressInEra),
-                     AsType (AsPaymentKey, AsStakeKey), IsShelleyBasedEra, Key,
+import           Cardano.API (Address, AddressAny, AddressInEra (AddressInEra),
+                     AsType (AsPaymentKey, AsStakeKey), IsCardanoEra, IsShelleyBasedEra, Key,
                      LocalNodeConnectInfo, Lovelace, MaryEra, NetworkId, PaymentCredential,
                      PaymentKey,
                      ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
@@ -91,8 +91,8 @@ import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Fee
 import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload,
                      voteToTxMetadata)
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, withVoteShelleySigningKey,
-                     withVoteSigningKey)
+import           Cardano.CLI.Voting.Signing (VotePaymentKey, VoteSigningKey,
+                     withVoteShelleySigningKey, withVoteSigningKey, withWitnessPaymentKey)
 import           Cardano.CLI.Voting.Signing (getVoteVerificationKey, sign, verify)
 
 import qualified Cardano.Ledger.Compactible
@@ -110,11 +110,11 @@ import qualified Shelley.Spec.Ledger.TxBody
 import qualified Shelley.Spec.Ledger.UTxO
 
 -- | Create a vote registration payload.
-createVote
+createVoteRegistration
   :: VoteSigningKey
   -> VotingKeyPublic
   -> Vote
-createVote skey votepub =
+createVoteRegistration skey votepub =
     let
       payload     = mkVotePayload votepub (getVoteVerificationKey skey)
       payloadCBOR = CBOR.serialize' payload
@@ -126,7 +126,7 @@ createVote skey votepub =
       signVotePayload payload payloadSig
 
 -- | Encode the vote registration payload as a transaction body.
-encodeVote
+encodeVoteRegistration
   :: ( MonadIO m
      , MonadError e m
      , AsShelleyQueryCmdLocalStateQueryError e
@@ -154,7 +154,7 @@ encodeVote
   -> SlotNo
   -> Vote
   -> m (TxBody era)
-encodeVote connectInfo era addr ttl vote = do
+encodeVoteRegistration connectInfo era addr ttl vote = do
   let
     addrShelley :: IsShelleyBasedEra era => AddressInEra era
     addrShelley = anyAddressInShelleyBasedEra addr
@@ -183,10 +183,10 @@ encodeVote connectInfo era addr ttl vote = do
             networkId era pparams slotTip txins addrShelley (Lovelace value) meta
 
       -- Create the vote transaction
-      pure $ voteTx era addrShelley txins (Lovelace $ value - fee) (slotTip + ttl) (Lovelace fee) meta
+      pure $ voteRegistrationTx era addrShelley txins (Lovelace $ value - fee) (slotTip + ttl) (Lovelace fee) meta
 
 -- | Helper for creating a transaction body.
-voteTx
+voteRegistrationTx
   :: IsShelleyBasedEra era
   => ShelleyBasedEra era
   -> AddressInEra era
@@ -196,7 +196,7 @@ voteTx
   -> Lovelace
   -> TxMetadata
   -> TxBody era
-voteTx era addr txins (Lovelace value) ttl (Lovelace fee) meta =
+voteRegistrationTx era addr txins (Lovelace value) ttl (Lovelace fee) meta =
  let
    txoutVal =
      case multiAssetSupportedInEra (liftShelleyBasedEra era) of
@@ -225,12 +225,12 @@ voteTx era addr txins (Lovelace value) ttl (Lovelace fee) meta =
 -- | Sign a transaction body to create a transaction.
 signTx
   :: IsShelleyBasedEra era
-  => SigningKey PaymentKey
+  => VotePaymentKey
   -> TxBody era
   -> Tx era
 signTx psk txbody =
   let
-    witness = makeShelleyKeyWitness txbody (WitnessPaymentKey psk)
+    witness = withWitnessPaymentKey psk $ makeShelleyKeyWitness txbody
   in
     makeSignedTransaction [witness] txbody
 

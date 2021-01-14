@@ -28,7 +28,8 @@ import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
 import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, readVoteSigningKeyFile)
+import           Cardano.CLI.Voting.Signing (VotePaymentKey, VoteSigningKey, readVotePaymentKeyFile,
+                     readVoteSigningKeyFile)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
@@ -40,7 +41,7 @@ import           Cardano.CLI.Voting.Error (AsTextEnvelopeError (_TextEnvelopeErr
 data Config = Config
     { cfgPaymentAddress    :: AddressAny
     , cfgVoteSigningKey    :: VoteSigningKey
-    , cfgPaymentSigningKey :: SigningKey PaymentKey
+    , cfgPaymentSigningKey :: VotePaymentKey
     , cfgVotePublicKey     :: VotingKeyPublic
     , cfgNetworkId         :: NetworkId
     , cfgTTL               :: SlotNo
@@ -77,7 +78,7 @@ mkConfig
   -> ExceptT ConfigError IO Config
 mkConfig (Opts pskf addr vpkf sskf networkId ttl outFile) = do
   stkSign <- readVoteSigningKeyFile (SigningKeyFile sskf)
-  paySign <- readSigningKeyFile Api.AsPaymentKey (SigningKeyFile pskf)
+  paySign <- readVotePaymentKeyFile (SigningKeyFile pskf)
   votepk  <- readVotePublicKey vpkf
 
   pure $ Config addr stkSign paySign votepk networkId ttl outFile

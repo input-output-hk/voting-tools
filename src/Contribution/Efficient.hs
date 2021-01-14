@@ -16,14 +16,14 @@ module Contribution.Efficient
   , Contributions
   ) where
 
-import Data.Traversable (for)
-import Data.Maybe (maybe, fromMaybe)
-import Data.Monoid (Sum(Sum), getSum)
-import Data.List (foldl')
-import Data.Ratio
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
+import           Data.List (foldl')
 import qualified Data.Map.Merge.Strict as M
+import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
+import           Data.Maybe (fromMaybe, maybe)
+import           Data.Monoid (Sum (Sum), getSum)
+import           Data.Ratio
+import           Data.Traversable (for)
 
 data Contributions cause id amt = Contributions (Map cause (Map id amt))
    deriving Show
@@ -52,16 +52,16 @@ instance (Ord cause, Ord id) => Semigroup (Contributions cause id amt) where
 
 instance Foldable (Contributions cause id) where
   foldMap f (Contributions cs) = foldMap (foldMap f) cs
-      
+
 contributions :: Contributions cause id amt -> [(cause, [(id, amt)])]
 contributions (Contributions cs) = M.toList . fmap M.toList $ cs
 
 contribute :: forall cause id amt . (Ord cause, Ord id) => cause -> id -> amt -> Contributions cause id amt -> Contributions cause id amt
-contribute cause ident amt (Contributions cs) = 
+contribute cause ident amt (Contributions cs) =
   let
     mod = case M.lookup cause cs of
       Nothing       -> M.singleton ident amt
-      Just existing -> M.insert ident amt existing 
+      Just existing -> M.insert ident amt existing
   in
     Contributions $ M.insert cause mod cs
 
@@ -91,7 +91,7 @@ withdraw cause ident (Contributions cs) =
 -- allow fractional types.
 sumAmounts
   :: forall cause id amt
-   . (Num amt, Real amt) 
+   . (Num amt, Real amt)
   => Contributions cause id amt -> Ratio Integer
 sumAmounts = getSum . foldMap (Sum . toRational)
 
@@ -115,7 +115,7 @@ proportionalize cs =
         if amtR == 0 || totalValue == 0
         then fromInteger 0
         else amtR / totalValue
-  in 
+  in
     fmap (fmap (fmap (fmap toRatio))) $ contributions cs
 
 -- | Get the contributions made by a particular identity.
@@ -156,7 +156,7 @@ causeSumAmounts =
 -- --   foldMapAmounts Sum getSum cs
 -- -- will provide the sum of all contribution amounts.
 -- combineAmounts
---   :: Monoid m 
+--   :: Monoid m
 --   => (amt -> m)
 --   -> Contributions cause id amt
 --   -> m

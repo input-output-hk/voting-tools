@@ -1,14 +1,15 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , VoteVerificationKey
                                   , VoteVerificationKeyHash
+                                  , VotePaymentKey
                                   , AsType(AsVoteVerificationKey, AsVoteVerificationKeyHash)
                                   , getVoteVerificationKeyHash
                                   , getVoteVerificationKey
@@ -20,22 +21,25 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , verify
                                   , readVoteSigningKeyFile
                                   , verificationKeyRawBytes
+                                  , withWitnessPaymentKey
+                                  , readVotePaymentKeyFile
                                   ) where
 
 import           Control.Monad.Except (MonadError)
 import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
-import           Cardano.API
-                     (StakeAddress, castHash, makeStakeAddress, Hash, AsType (AsHash, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
-                     FromSomeType, HasTypeProxy, Key,
+import           Cardano.API (AsType (AsHash, AsPaymentExtendedKey, AsPaymentKey, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                     FromSomeType, HasTypeProxy, Hash, Key, NetworkId, PaymentExtendedKey,
+                     PaymentKey,
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
-                     SigningKey, StakeExtendedKey, StakeKey, NetworkId, VerificationKey, castVerificationKey, verificationKeyHash,
-                     getVerificationKey, proxyToAsType, serialiseToRawBytes)
+                     SigningKey, StakeAddress, StakeExtendedKey, StakeKey, VerificationKey,
+                     castHash, castVerificationKey, getVerificationKey, makeStakeAddress,
+                     proxyToAsType, serialiseToRawBytes, verificationKeyHash)
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
-import           Cardano.Api.Typed (StakeCredential(StakeCredentialByKey), FromSomeType (FromSomeType), ShelleySigningKey,
-                     ShelleyWitnessSigningKey (WitnessStakeExtendedKey, WitnessStakeKey),
+import           Cardano.Api.Typed (FromSomeType (FromSomeType), ShelleySigningKey, ShelleyWitnessSigningKey (WitnessPaymentExtendedKey, WitnessPaymentKey, WitnessStakeExtendedKey, WitnessStakeKey),
                      SigningKey (StakeExtendedSigningKey, StakeSigningKey),
+                     StakeCredential (StakeCredentialByKey),
                      VerificationKey (StakeVerificationKey), getShelleyKeyWitnessVerificationKey,
                      makeShelleySignature, toShelleySigningKey)
 import           Cardano.CLI.Types (SigningKeyFile)
@@ -61,6 +65,11 @@ data VoteVerificationKeyHash
   = AStakeVerificationKeyHash (Hash StakeKey)
   | AStakeExtendedVerificationKeyHash (Hash StakeExtendedKey)
   deriving (Ord, Eq, Show)
+
+data VotePaymentKey
+  = APaymentSigningKey (SigningKey PaymentKey)
+  | APaymentExtendedSigningKey (SigningKey PaymentExtendedKey)
+  deriving (Show)
 
 instance HasTypeProxy VoteVerificationKeyHash where
   data AsType VoteVerificationKeyHash = AsVoteVerificationKeyHash
@@ -101,6 +110,38 @@ toStakeAddr nw = makeStakeAddress nw . StakeCredentialByKey
 verificationKeyRawBytes :: VoteSigningKey -> ByteString
 verificationKeyRawBytes (AStakeSigningKey k)         = serialiseToRawBytes $ getVerificationKey k
 verificationKeyRawBytes (AStakeExtendedSigningKey k) = serialiseToRawBytes $ getVerificationKey k
+
+withWitnessPaymentKey :: VotePaymentKey -> (ShelleyWitnessSigningKey -> a) -> a
+withWitnessPaymentKey vsk f =
+  case vsk of
+    APaymentSigningKey k         -> f $ WitnessPaymentKey k
+    APaymentExtendedSigningKey k -> f $ WitnessPaymentExtendedKey k
+
+readVotePaymentKeyFile
+  :: ( MonadIO m
+     , MonadError e m
+     , AsFileError e fileErr
+     , AsInputDecodeError fileErr
+     )
+  => SigningKeyFile
+  -> m VotePaymentKey
+readVotePaymentKeyFile skFile =
+  readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
+
+  where
+    textEnvFileTypes =
+      [ FromSomeType (AsSigningKey AsPaymentKey)
+                      APaymentSigningKey
+      , FromSomeType (AsSigningKey AsPaymentExtendedKey)
+                      APaymentExtendedSigningKey
+      ]
+
+    bech32FileTypes =
+      [ FromSomeType (AsSigningKey AsPaymentKey)
+                      APaymentSigningKey
+      , FromSomeType (AsSigningKey AsPaymentExtendedKey)
+                      APaymentExtendedSigningKey
+      ]
 
 sign
   :: Crypto.SignableRepresentation tosign

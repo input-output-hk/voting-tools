@@ -37,7 +37,7 @@ import           Cardano.API (Address, AddressInEra, AsType (AsPaymentKey, AsSta
                      TxOutValue (TxOutAdaOnly, TxOutValue),
                      TxUpdateProposal (TxUpdateProposalNone),
                      TxValidityLowerBound (TxValidityNoLowerBound),
-                     TxValidityUpperBound (TxValidityUpperBound), TxValidityUpperBound,
+                     TxValidityUpperBound (TxValidityUpperBound),
                      TxWithdrawals (TxWithdrawalsNone),
                      ValidityUpperBoundSupportedInEra (ValidityUpperBoundInAllegraEra, ValidityUpperBoundInMaryEra, ValidityUpperBoundInShelleyEra),
                      VerificationKey, estimateTransactionFee, getVerificationKey,

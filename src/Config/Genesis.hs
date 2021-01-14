@@ -36,12 +36,11 @@ import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, pNetworkId, readSigningKeyFile,
-                     readerFromAttoParser)
+                     VotingKeyPublic, pNetworkId, readSigningKeyFile, readerFromAttoParser)
 import           Cardano.CLI.Fetching (Threshold, VotingFunds)
 import           Cardano.CLI.Voting.Error ()
 
-import Config.Common (DatabaseConfig(DatabaseConfig), pSlotNo)
+import           Config.Common (DatabaseConfig (DatabaseConfig), pSlotNo)
 
 data Config = Config
     { cfgNetworkId         :: NetworkId

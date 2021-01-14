@@ -1,44 +1,49 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
 module Cardano.CLI.Query where
 
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Except (runExceptT, MonadError, throwError)
-import Control.Monad.Reader (MonadReader, asks, runReaderT, ask)
-import Database.Persist.Postgresql (SqlBackend, SqlPersistT, runSqlConnWithIsolation, IsolationLevel(Serializable), rawSql, Entity)
-import Data.Text (Text)
-import Data.Traversable (forM, for)
-import Data.Word (Word64)
-import Data.List (foldl')
-import Data.ByteString (ByteString)
+import           Cardano.Db (DbLovelace (DbLovelace), EntityField (TxId), TxId)
+import           Control.Monad.Except (MonadError, runExceptT, throwError)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.Reader (MonadReader, ask, asks, runReaderT)
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BC
+import           Data.Function ((&))
+import           Data.List (foldl')
+import           Data.Monoid (Sum (Sum), getSum)
+import           Data.Ratio (Ratio, denominator, numerator)
+import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import qualified Data.ByteString.Char8 as BC
-import Cardano.Db (DbLovelace(DbLovelace), EntityField(TxId), TxId)
-import Database.Esqueleto (BackendCompatible, Single(Single))
-import Data.Monoid (Sum(Sum), getSum)
-import Data.Function ((&))
-import Data.Ratio (Ratio, numerator, denominator)
+import           Data.Traversable (for, forM)
+import           Data.Word (Word64)
+import           Database.Esqueleto (BackendCompatible, Single (Single))
+import           Database.Persist.Postgresql (Entity, IsolationLevel (Serializable), SqlBackend,
+                     SqlPersistT, rawSql, runSqlConnWithIsolation)
 
-import Cardano.API (SlotNo)
-import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
-import Cardano.CLI.Voting.Signing (VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash, AsType(AsVoteVerificationKeyHash))
-import Cardano.CLI.Fetching (Threshold, Fund, VotingFunds(VotingFunds), aboveThreshold, fundFromVotingFunds, chunkFund)
+import           Cardano.API (SlotNo)
 import qualified Cardano.API as Api
-import Cardano.API.Extended (VotingKeyPublic)
-import qualified Cardano.Api.Typed as Api (metadataFromJson, Lovelace(Lovelace))
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
-import qualified Data.HashMap.Strict as HM
+import           Cardano.API.Extended (VotingKeyPublic)
+import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace), metadataFromJson)
+import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
+                     chunkFund, fundFromVotingFunds)
+import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), MetadataParsingError,
+                     Vote, fromTxMetadata, metadataMetaKey, signatureMetaKey,
+                     voteRegistrationPublicKey, voteRegistrationVerificationKey, withMetaKey)
+import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKeyHash),
+                     VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash)
+import           Contribution (Contributions, causeSumAmounts, contribute, proportionalize)
+import           Control.Lens (( # ))
+import           Control.Lens.TH (makeClassyPrisms)
 import qualified Data.Aeson as Aeson
-import Control.Lens ((#))
-import Control.Lens.TH (makeClassyPrisms)
-import Contribution (Contributions, contribute, proportionalize, causeSumAmounts)
+import qualified Data.HashMap.Strict as HM
+import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 
 import qualified Cardano.API.Jormungandr as Jormungandr
 

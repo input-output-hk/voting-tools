@@ -5,22 +5,22 @@ module Test.Generators where
 import           Control.Monad.Except
 import           Control.Monad.IO.Class
 import qualified Data.Map.Strict as M
+import           Data.Word
 import           Hedgehog (Gen, Property, forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog
-import           Data.Word
 
 import           Cardano.API (Lovelace, deserialiseFromRawBytes)
 import qualified Data.Aeson as Aeson
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Fetching
-import Registration (Registry)
-import qualified Registration as Reg
-import Contribution (Contributions)
+import           Contribution (Contributions)
 import qualified Contribution as Contrib
+import           Registration (Registry)
+import qualified Registration as Reg
 
 -- votingFunds :: Gen VotingFunds
 -- votingFunds = VotingFunds <$> Gen.map (Range.linear 0 16) ((,) <$> jaddr <*> lovelace)

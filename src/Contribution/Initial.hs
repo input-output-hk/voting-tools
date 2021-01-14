@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Initial encoding for the Contribution algebra.
@@ -20,11 +20,11 @@ module Contribution.Initial
   , deleteExisting
   ) where
 
-import Data.List (find, delete, sort, foldl', sortOn)
-import Data.Traversable (for)
-import Data.Maybe (maybe)
-import Data.Function ((&))
-import Debug.Trace (trace)
+import           Data.Function ((&))
+import           Data.List (delete, find, foldl', sort, sortOn)
+import           Data.Maybe (maybe)
+import           Data.Traversable (for)
+import           Debug.Trace (trace)
 
 data Contributions cause id amt where
   Empty      :: Contributions cause id amt
@@ -38,7 +38,7 @@ instance (Show cause, Show id, Show amt) => Show (Contributions cause id amt) wh
   show (Append x y)                 = "( " <> show x <> " ) <> ( " <> show y <> " )"
   show (Contribute cause ident amt xs) = "contribute (" <> show cause <> ") (" <> show ident <> ") (" <> show amt <> ") (" <> show xs <> ")"
   show (Withdraw cause ident xs)       = "withdraw (" <> show cause <> ") (" <> show ident <> ") (" <> show xs <> ")"
-  show (Fmap f xs)                   = "fmap _ _" 
+  show (Fmap f xs)                   = "fmap _ _"
 
 instance (Ord id, Ord cause, Eq amt) => Eq (Contributions cause id amt) where
   (==) x y = contributions x == contributions y
@@ -108,7 +108,7 @@ sortContributions = sortOn fst . fmap (fmap (sortOn fst))
 
 deleteExisting :: (Eq cause, Eq id, Eq amt) => cause -> id -> [(cause, [(id, amt)])] -> [(cause, [(id, amt)])]
 deleteExisting cause ident =
-  foldl' (\acc (c :: cause, cs :: [(id, amt)]) -> 
+  foldl' (\acc (c :: cause, cs :: [(id, amt)]) ->
           if c == cause
           then
             case findContribution ident cs of
@@ -116,7 +116,7 @@ deleteExisting cause ident =
               Nothing -> ((c, cs) :) acc
           else
             ((c, cs) :) acc
-        ) mempty 
+        ) mempty
 
 findContribution :: Eq id => id -> [(id, amt)] -> Maybe amt
 findContribution ident = fmap snd . find ((== ident) . fst)

@@ -1,8 +1,8 @@
 module Config.Common where
 
-import           Options.Applicative (Parser, option, metavar, long, help, auto)
-import           Database.Persist.Postgresql (ConnectionString)
 import qualified Data.ByteString.Char8 as BC
+import           Database.Persist.Postgresql (ConnectionString)
+import           Options.Applicative (Parser, auto, help, long, metavar, option)
 
 import           Cardano.Api.Typed (SlotNo (SlotNo))
 

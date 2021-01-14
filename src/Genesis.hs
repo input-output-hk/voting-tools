@@ -1,16 +1,17 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Genesis where
 
+import           Control.Lens ((%~), (.~))
 import qualified Data.Aeson as Aeson
-import Data.Time (UTCTime(UTCTime), TimeOfDay(TimeOfDay), getCurrentTime, timeToTimeOfDay, timeOfDayToTime)
+import           Data.Aeson.Lens (key, _Object)
 import qualified Data.HashMap.Strict as HM
-import Control.Lens ((%~), (.~))
-import Data.Aeson.Lens (_Object, key)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import           Data.Time (TimeOfDay (TimeOfDay), UTCTime (UTCTime), getCurrentTime,
+                     timeOfDayToTime, timeToTimeOfDay)
+import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 
-import Cardano.CLI.Fetching (Fund)
+import           Cardano.CLI.Fetching (Fund)
 
 decodeGenesisTemplateJSON :: IO (Aeson.Value)
 decodeGenesisTemplateJSON = do

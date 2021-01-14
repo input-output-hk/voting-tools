@@ -2,18 +2,18 @@ module Test.Contribution
   ( tests
   ) where
 
-import           Hedgehog (Gen, Property, forAll, property, tripping, (===), MonadTest, annotate)
+import           Data.List (delete, find)
+import           Data.Monoid (Sum (Sum), getSum)
+import           Data.Ratio (Ratio, (%))
+import           Data.Word (Word8)
+import           Hedgehog (Gen, MonadTest, Property, annotate, forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog
-import           Data.List (delete, find)
-import           Data.Word (Word8)
-import           Data.Monoid (Sum(Sum), getSum)
 import           Test.Tasty.HUnit (Assertion, assertEqual, testCase, (@?=))
-import           Data.Ratio (Ratio, (%))
 
-import Contribution
+import           Contribution
 import qualified Test.Generators as Gen
 
 tests :: TestTree
@@ -45,14 +45,14 @@ tests = testGroup "Contribution algebra"
 
 unit_contribution_adds :: Assertion
 unit_contribution_adds = do
-   (contributions $ contribute 1 1 3 mempty) @?= [(1, [(1, 3)])] 
-   (contributions $ contribute 1 1 4 $ contribute 1 2 4 mempty) @?= [(1, [(1, 4), (2, 4)])] 
+   (contributions $ contribute 1 1 3 mempty) @?= [(1, [(1, 3)])]
+   (contributions $ contribute 1 1 4 $ contribute 1 2 4 mempty) @?= [(1, [(1, 4), (2, 4)])]
 
 unit_proportionalize :: Assertion
 unit_proportionalize = do
   proportionalize mempty
     @?= ([] :: [(Word8, [(Word8, Ratio Integer)])])
-  (proportionalize $ contribute 0 0 0 mempty) 
+  (proportionalize $ contribute 0 0 0 mempty)
     @?= ([(0, [(0, 0)])])
   (proportionalize $ contribute 0 0 1 $ contribute 0 1 1 mempty)
     @?= [(0, [(0, 1 % 2), (1, 1 % 2)])]
@@ -225,7 +225,7 @@ prop_contributions_denotation_causeSumAmounts = property $ do
 
   causeSumAmounts cs
     === (fmap (fmap (getSum . foldMap (Sum . toRational . snd))) $ contributions cs)
-  
+
 -- prop_contributions_getRegistration :: Property
 -- prop_contributions_getRegistration = property $ do
 --   ident <- forAll $ Gen.int (Range.linear 0 maxBound)

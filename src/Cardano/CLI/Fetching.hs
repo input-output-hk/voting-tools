@@ -8,6 +8,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BC
+import           Data.Char (toLower)
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import           Data.Int (Int64)
@@ -17,10 +18,9 @@ import           Data.Scientific (toBoundedInteger)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
+import           Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import Data.Text.Lazy.Encoding as TL
-import Data.Char (toLower)
-import GHC.Generics
+import           GHC.Generics
 
 import           Cardano.API (Lovelace, Quantity)
 import qualified Cardano.API as Api
@@ -28,8 +28,8 @@ import qualified Cardano.API as Api
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32', serialiseToBech32', pNetworkId,
-                     readSigningKeyFile, readerFromAttoParser)
+                     VotingKeyPublic, deserialiseFromBech32', pNetworkId, readSigningKeyFile,
+                     readerFromAttoParser, serialiseToBech32')
 import qualified Cardano.API.Jormungandr as Jormungandr
 
 type Threshold = Api.Lovelace

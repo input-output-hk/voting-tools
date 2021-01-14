@@ -20,7 +20,7 @@ import           Cardano.API (deserialiseFromRawBytes, deserialiseFromRawBytesHe
 import           Cardano.Api.Typed
 import           Cardano.API.Voting (AsType (AsVotingKeyPublic))
 import qualified Cardano.API.Voting as Voting
-import           Cardano.CLI.Voting (createVote)
+import           Cardano.CLI.Voting (createVoteRegistration)
 import           Cardano.CLI.Voting.Error (AppError)
 
 tests :: TestTree
@@ -37,7 +37,7 @@ unitGenerateVoteMetadata = do
     votePub   <- either (error . show) pure $
       Voting.deserialiseFromBech32 AsVotingKeyPublic "ed25519e_sk1cpxudluugmp8wgl2jrl0hcatlgmgzhwte8cguhqjmq642gzytf3mj05q5f8etx8pv47qadxvsgxjj2pygtf4xglu3emspqt95drxpwg9wqqr4"
 
-    createVote stkSign votePub
+    createVoteRegistration stkSign votePub
 
   case eMetadata of
     Left err   -> assertFailure $ show err

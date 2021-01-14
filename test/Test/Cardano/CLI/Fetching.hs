@@ -19,8 +19,8 @@ import           Test.Tasty.HUnit (Assertion, assertEqual, testCase)
 
 import           Cardano.API (Lovelace, deserialiseFromRawBytes)
 
-import           Cardano.API.Extended (AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32')
+import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic,
+                     deserialiseFromBech32')
 import           Cardano.CLI.Fetching
 import qualified Test.Generators as Gen
 
