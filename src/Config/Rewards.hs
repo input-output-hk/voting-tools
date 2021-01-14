@@ -43,14 +43,16 @@ data Config = Config
     -- ^ Slot to view state of, defaults to tip of chain
     , cfgTotalRewards      :: Lovelace
     -- ^ Total rewards to distribute between voters
+    , cfgOutFile           :: FilePath
+    -- ^ File to write rewards info to
     }
   deriving (Eq, Show)
 
 mkConfig
   :: Opts
   -> Config
-mkConfig (Opts networkId dbName dbUser dbHost mSlotNo threshold totalRewards) = do
-  Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo totalRewards
+mkConfig (Opts networkId dbName dbUser dbHost mSlotNo threshold totalRewards outfile) = do
+  Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo totalRewards outfile
 
 data Opts = Opts
     { optNetworkId      :: NetworkId
@@ -60,6 +62,7 @@ data Opts = Opts
     , optSlotNo         :: Maybe SlotNo
     , optThreshold      :: Threshold
     , optTotalRewards   :: Lovelace
+    , optOutFile        :: FilePath
     }
     deriving (Eq, Show)
 
@@ -72,6 +75,7 @@ parseOpts = Opts
   <*> optional pSlotNo
   <*> fmap fromIntegral (option auto (long "threshold" <> metavar "INT64" <> showDefault <> value 8000000000 <> help "Minimum threshold of funds required to vote (Lovelace)"))
   <*> fmap fromIntegral (option auto (long "total-rewards" <> metavar "INT64" <> help "Total rewards to distribute between voters"))
+  <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
 
 opts =
   info

@@ -54,6 +54,8 @@ data Config = Config
     -- ^ Slot to view state of, defaults to tip of chain
     , cfgExtraFunds        :: VotingFunds
     -- ^ Extra funds to consider in the threshold test
+    , cfgOutFile           :: FilePath
+    -- ^ File to output genesis to
     }
   deriving (Eq, Show)
 
@@ -65,13 +67,13 @@ makeClassyPrisms ''ConfigError
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
-mkConfig (Opts networkId dbName dbUser dbHost mExtraFundsFp mSlotNo threshold) = do
+mkConfig (Opts networkId dbName dbUser dbHost mExtraFundsFp mSlotNo threshold outfile) = do
   extraFunds <-
     case mExtraFundsFp of
       Nothing             -> pure mempty
       (Just extraFundsFp) -> readExtraFundsFile extraFundsFp
 
-  pure $ Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo extraFunds
+  pure $ Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo extraFunds outfile
 
 readExtraFundsFile
   :: ( MonadIO m
@@ -91,6 +93,7 @@ data Opts = Opts
     , optExtraFundsFile :: Maybe FilePath
     , optSlotNo         :: Maybe SlotNo
     , optThreshold      :: Threshold
+    , optOutFile        :: FilePath
     }
     deriving (Eq, Show)
 
@@ -103,6 +106,7 @@ parseOpts = Opts
   <*> optional (strOption (long "extra-funds" <> metavar "FILE" <> help "File containing extra funds to include in the query (JSON)"))
   <*> optional pSlotNo
   <*> fmap fromIntegral (option auto (long "threshold" <> metavar "INT64" <> showDefault <> value 8000000000 <> help "Minimum threshold of funds required to vote (Lovelace)"))
+  <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
 
 opts =
   info

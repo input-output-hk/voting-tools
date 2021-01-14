@@ -42,12 +42,11 @@ import           Cardano.CLI.Voting.Error (AppError)
 main :: IO ()
 main = do
   options <- Opt.execParser opts
-  putStrLn $ show options
 
   case options of
     -- Rewards
     Rewards rOpts -> do
-      let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards)) = Rewards.mkConfig rOpts
+      let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile) = Rewards.mkConfig rOpts
 
       (votingProportions :: Map (Hash StakeKey) Double) <-
         runQuery db $ Query.queryVotingProportion networkId slotNo threshold
@@ -65,7 +64,7 @@ main = do
         toRewards :: [(Hash StakeKey, Double)] -> Map Text Double
         toRewards = M.fromList . fmap (\(hash, proportion) -> (toBech32Addr hash, ofRewards proportion))
 
-      BLC.putStr . toJSON . toRewards $ raw
+      BLC.writeFile outfile . toJSON . toRewards $ raw
 
     -- Genesis
     Genesis gOpts -> do
@@ -73,7 +72,7 @@ main = do
       case eCfg of
         Left (err :: Genesis.ConfigError) ->
           fail $ show err
-        Right (Genesis.Config networkId threshold db slotNo extraFunds) -> do
+        Right (Genesis.Config networkId threshold db slotNo extraFunds outfile) -> do
           votingFunds <-
             runQuery db $ Query.queryVotingFunds networkId slotNo threshold
 
@@ -90,7 +89,7 @@ main = do
                 & setInitialFunds (chunkFund 100 $ allFunds)
                 & setBlockZeroDate blockZeroDate
         
-          BLC.putStr . toJSON $ genesis
+          BLC.writeFile outfile . toJSON $ genesis
 
     -- Voter Registration
     Register regOpts -> do
@@ -102,9 +101,9 @@ main = do
           eResult <- runExceptT $ do
             SocketPath sockPath <-  readEnvSocketPath
             withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
-              -- Create a transaction, encoding our vote as transaction
-              -- metadata. The transaction sends some unspent ADA back to us
-              -- (minus a fee).
+              -- Create a vote registration, encoding our registration
+              -- as transaction metadata. The transaction sends some
+              -- unspent ADA back to us (minus a fee).
     
               -- Generate vote payload (vote information is encoded as metadata).
               let vote = createVote voteSign votePub

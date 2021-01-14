@@ -26,9 +26,6 @@ library
                      , Cardano.CLI.Voting.Fee
                      , Cardano.CLI.Voting.Metadata
                      , Cardano.CLI.Voting.Signing
-                     , Registration
-                     , Registration.Initial
-                     , Registration.Efficient
                      , Contribution
                      , Contribution.Initial
                      , Contribution.Efficient
@@ -86,91 +83,6 @@ library
                      , transformers-except
                      , turtle
                      , unordered-containers
-
-executable voter-registration
-  main-is:             Register.hs
-  other-modules:       Config.Registration
-  build-depends:       base
-                     , aeson
-                     , aeson-pretty
-                     , unordered-containers
-                     , attoparsec
-                     , base16-bytestring
-                     , bech32
-                     , bytestring
-                     , cardano-api
-                     , cardano-binary
-                     , cardano-cli
-                     , cardano-crypto-class
-                     , cardano-ledger
-                     , cardano-crypto
-                     , containers
-                     , lens
-                     , mtl
-                     , nothunks
-                     , cardano-ledger-shelley-ma
-                     , optparse-applicative
-                     , ouroboros-consensus
-                     , ouroboros-consensus-cardano
-                     , ouroboros-consensus-shelley
-                     , ouroboros-network
-                     , ouroboros-network-framework
-                     , safe-exceptions
-                     , shelley-spec-ledger
-                     , text
-                     , transformers-except
-                     , voting-tools
-
-  hs-source-dirs:      src/
-  default-language:    Haskell2010
-
-executable fetch-registration
-  main-is:             Fetch.hs
-  other-modules:       Config.Fetch
-  build-depends:       base
-                     , aeson
-                     , aeson-pretty
-                     , unordered-containers
-                     , attoparsec
-                     , base16-bytestring
-                     , bech32
-                     , bytestring
-                     , conduit
-                     , lens-aeson
-                     , binary
-                     , cardano-api
-                     , cardano-binary
-                     , cardano-cli
-                     , cardano-crypto-class
-                     , cardano-ledger
-                     , cardano-crypto
-                     , containers
-                     , esqueleto
-                     , time
-                     , cardano-db
-                     , resourcet
-                     , monad-logger
-                     , monoidal-containers
-                     , lens
-                     , mtl
-                     , nothunks
-                     , cardano-ledger-shelley-ma
-                     , persistent-postgresql
-                     , optparse-applicative
-                     , ouroboros-consensus
-                     , ouroboros-consensus-cardano
-                     , ouroboros-consensus-shelley
-                     , ouroboros-network
-                     , ouroboros-network-framework
-                     , safe-exceptions
-                     , shelley-spec-ledger
-                     , scientific
-                     , text
-                     , transformers-except
-                     , voting-tools
-
-  hs-source-dirs:      src/
-  default-language:    Haskell2010
 
 executable voting-tools
   main-is:             Main.hs
