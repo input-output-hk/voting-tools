@@ -21,9 +21,9 @@ import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.ByteString.Char8 as BC
 import Cardano.Db (DbLovelace(DbLovelace), EntityField(TxId), TxId)
 import Database.Esqueleto (BackendCompatible, Single(Single))
-import qualified Data.Map.Monoidal as MM
 import Data.Monoid (Sum(Sum), getSum)
-import Data.Ratio
+import Data.Function ((&))
+import Data.Ratio (Ratio, numerator, denominator)
 
 import Cardano.API (SlotNo)
 import Cardano.CLI.Voting.Metadata (Vote, AsMetadataParsingError(..), withMetaKey, fromTxMetadata, metadataMetaKey, signatureMetaKey, MetadataParsingError, voteRegistrationVerificationKey, voteRegistrationPublicKey)
@@ -38,8 +38,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Aeson as Aeson
 import Control.Lens ((#))
 import Control.Lens.TH (makeClassyPrisms)
-import Registration (register, registry, Registry)
-import Contribution
+import Contribution (Contributions, contribute, proportionalize, causeSumAmounts)
 
 import qualified Cardano.API.Jormungandr as Jormungandr
 
@@ -166,9 +165,9 @@ queryVotingProportion nw mSlotNo threshold = do
   let
     proportions :: [((Api.Hash Api.StakeKey), Double)]
     proportions =
-      fmap (fmap convertRatio)
-      $ foldMap (snd)
-      $ proportionalize info
+      proportionalize info
+      & foldMap snd
+      & fmap (fmap convertRatio)
 
     convertRatio :: Ratio Integer -> Double
     convertRatio ratio = (fromIntegral $ numerator ratio) / (fromIntegral $ denominator ratio)
@@ -217,7 +216,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> "LIMIT 100;")
+        Nothing   -> (sqlBase <> ";")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do

@@ -72,34 +72,34 @@ main = do
     Left err ->
       putStrLn $ show err
     Right cfg@(Config networkId threshold dbCfg slotNo extraFunds) -> do
-      p <- getVotingProportion networkId dbCfg threshold slotNo
-      putStrLn $ show p
---       (votingFunds :: VotingFunds) <- getVotingFunds networkId dbCfg threshold slotNo
---       let
---         allFunds :: Fund
---         allFunds = fundFromVotingFunds $ votingFunds <> extraFunds
+      -- p <- getVotingProportion networkId dbCfg threshold slotNo
+      -- putStrLn $ show p
+      (votingFunds :: VotingFunds) <- getVotingFunds networkId dbCfg threshold slotNo
+      let
+        allFunds :: Fund
+        allFunds = fundFromVotingFunds $ votingFunds <> extraFunds
 
---       genesisTemplate <- decodeGenesisTemplateJSON
---       blockZeroDate   <- getBlockZeroDate
+      genesisTemplate <- decodeGenesisTemplateJSON
+      blockZeroDate   <- getBlockZeroDate
 
---       let
---         genesis = 
---           genesisTemplate
---             & setInitialFunds (chunkFund 100 $ allFunds)
---             & setBlockZeroDate blockZeroDate
+      let
+        genesis = 
+          genesisTemplate
+            & setInitialFunds (chunkFund 100 $ allFunds)
+            & setBlockZeroDate blockZeroDate
 
---       BLC.putStr $ Aeson.encode genesis
+      BLC.putStr $ Aeson.encode genesis
 
--- getVotingFunds :: Api.NetworkId -> DatabaseConfig -> Threshold -> Maybe SlotNo -> IO VotingFunds
--- getVotingFunds networkId dbConfig threshold slotNo = runNoLoggingT $ do
---   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
---   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
---     (results) <-
---       runQuery backend $ runExceptT $ do
---         aboveThreshold threshold <$> queryVotingFunds networkId slotNo
---     case results of
---       Left (err :: VoteRegistrationRetrievalError) -> error $ show err
---       Right (votingFunds) -> pure votingFunds
+getVotingFunds :: Api.NetworkId -> DatabaseConfig -> Threshold -> Maybe SlotNo -> IO VotingFunds
+getVotingFunds networkId dbConfig threshold slotNo = runNoLoggingT $ do
+  logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
+  withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
+    (results) <-
+      runQuery backend $ runExceptT $ do
+        queryVotingFunds networkId slotNo threshold
+    case results of
+      Left (err :: VoteRegistrationRetrievalError) -> error $ show err
+      Right (votingFunds) -> pure votingFunds
 
 getVotingProportion :: Api.NetworkId -> DatabaseConfig -> Threshold -> Maybe SlotNo -> IO (Map (Api.Hash Api.StakeKey) Double)
 getVotingProportion networkId dbConfig threshold slotNo = runNoLoggingT $ do
