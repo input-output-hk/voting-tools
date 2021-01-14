@@ -120,20 +120,26 @@ queryVoteRegistrationInfo
   -> m (Contributions VotingKeyPublic (Api.Hash Api.StakeKey) Integer)
 queryVoteRegistrationInfo mSlotNo (Api.Lovelace threshold) = do
   regos <- queryVoteRegistration mSlotNo
+  liftIO $ putStrLn $ show $ length regos
 
   let
     -- Each stake key has one public voting key it can stake to
     xs :: Map (Api.Hash Api.StakeKey) VotingKeyPublic
-    xs = foldMap (\(_txid, rego) ->
+    xs = fmap snd $ foldl' (\acc (txid, rego) ->
              let
                verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
                votePub    = voteRegistrationPublicKey rego
              in
-               M.insert verKeyHash votePub mempty
-           ) regos
+               case M.lookup verKeyHash acc of
+                 Nothing      -> M.insert verKeyHash (txid, votePub) acc
+                 Just (t, v)  -> if txid >= t
+                                 then M.insert verKeyHash (txid, votePub) acc
+                                 else acc
+           ) mempty regos
 
+  liftIO $ putStrLn $ show $ length xs
 
-  fmap mconcat $ forM (M.toList xs) (\(verKeyHash, votepub) -> do
+  fmap mconcat $ forM (M.toList $ xs) (\(verKeyHash, votepub) -> do
     (Api.Lovelace stake) <- queryStake mSlotNo verKeyHash
 
     pure $
@@ -211,7 +217,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> "LIMIT 100;")
+        Nothing   -> (sqlBase <> ";")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do

@@ -19,3 +19,6 @@ style: ## Apply stylish-haskell on all *.hs files
 
 test-integration:
 	nix-build -A integration-tests
+
+test:
+	nix-build default.nix -A haskellPackages.voting-tools.checks.unit-tests
