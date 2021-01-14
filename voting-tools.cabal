@@ -33,8 +33,11 @@ library
                      , Contribution.Initial
                      , Contribution.Efficient
                      , Config
-                     , Config.Fetch
+                     , Config.Genesis
                      , Config.Registration
+                     , Config.Rewards
+                     , Config.Common
+                     , Genesis
 
   build-depends:       base
                      , aeson

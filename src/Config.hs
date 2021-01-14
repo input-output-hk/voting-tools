@@ -1,21 +1,28 @@
-module Config where
+module Config
+  ( module Config.Common
+  , Command(..)
+  , parseOpts
+  , opts
+  ) where
 
 import           Options.Applicative
 
-import qualified Config.Fetch as Fetch
+import Config.Common
+import qualified Config.Genesis as Genesis
+import qualified Config.Rewards as Rewards
 import qualified Config.Registration as Register
 
 data Command
   = Register Register.Opts
-  | Genesis Fetch.Opts
-  | Rewards Fetch.Opts
+  | Genesis Genesis.Opts
+  | Rewards Rewards.Opts
   deriving (Eq, Show)
 
 parseOpts :: Parser Command
 parseOpts = hsubparser
   (  command "register" (Register <$> Register.opts)
-  <> command "genesis"  (Genesis  <$> Fetch.opts)
-  <> command "rewards"  (Rewards  <$> Fetch.opts)
+  <> command "genesis"  (Genesis  <$> Genesis.opts)
+  <> command "rewards"  (Rewards  <$> Rewards.opts)
   )
 
 opts :: ParserInfo Command

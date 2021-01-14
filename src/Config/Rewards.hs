@@ -1,14 +1,4 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
-
--- | Handles configuration, which involves parsing command line
--- arguments and reading key files.
-
-module Config.Fetch (Config(Config), opts, mkConfig, DatabaseConfig(..), pgConnectionString, Opts(Opts), parseOpts) where
+module Config.Rewards (Config(Config), opts, mkConfig, Opts(Opts), parseOpts) where
 
 import           Control.Exception.Safe (try)
 import           Control.Lens (( # ))
@@ -40,16 +30,7 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      readerFromAttoParser)
 import           Cardano.CLI.Fetching (Threshold, VotingFunds)
 import           Cardano.CLI.Voting.Error ()
-
-data DatabaseConfig
-  = DatabaseConfig { _dbName       :: String
-                   , _dbUser       :: String
-                   , _dbHost       :: String
-                   }
-  deriving (Eq, Show)
-
-pgConnectionString :: DatabaseConfig -> ConnectionString
-pgConnectionString (DatabaseConfig dbName dbUser dbHost) = BC.pack $ "host=" <> dbHost <> " dbname=" <> dbName <> " user=" <> dbUser
+import           Config.Common (DatabaseConfig(DatabaseConfig), pSlotNo)
 
 data Config = Config
     { cfgNetworkId         :: NetworkId
@@ -60,45 +41,25 @@ data Config = Config
     -- ^ cardano-db-sync database configuration
     , cfgSlot              :: Maybe SlotNo
     -- ^ Slot to view state of, defaults to tip of chain
-    , cfgExtraFunds        :: VotingFunds
-    -- ^ Extra funds to consider in the threshold test
+    , cfgTotalRewards      :: Lovelace
+    -- ^ Total rewards to distribute between voters
     }
   deriving (Eq, Show)
 
-data ConfigError = ConfigFileJSONDecodeError FilePath String
-    deriving (Show)
-
-makeClassyPrisms ''ConfigError
-
 mkConfig
   :: Opts
-  -> ExceptT ConfigError IO Config
-mkConfig (Opts networkId dbName dbUser dbHost mExtraFundsFp mSlotNo threshold) = do
-  extraFunds <-
-    case mExtraFundsFp of
-      Nothing             -> pure mempty
-      (Just extraFundsFp) -> readExtraFundsFile extraFundsFp
-
-  pure $ Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo extraFunds
-
-readExtraFundsFile
-  :: ( MonadIO m
-     , MonadError e m
-     , AsConfigError e
-     )
-  => FilePath -> m VotingFunds
-readExtraFundsFile fp = do
-  result <- liftIO . Aeson.eitherDecodeFileStrict' $ fp
-  either (\e -> throwError . (_ConfigFileJSONDecodeError #) $ (fp, e)) pure result
+  -> Config
+mkConfig (Opts networkId dbName dbUser dbHost mSlotNo threshold totalRewards) = do
+  Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo totalRewards
 
 data Opts = Opts
     { optNetworkId      :: NetworkId
     , optDbName         :: String
     , optDbUser         :: String
     , optDbHost         :: FilePath
-    , optExtraFundsFile :: Maybe FilePath
     , optSlotNo         :: Maybe SlotNo
     , optThreshold      :: Threshold
+    , optTotalRewards   :: Lovelace
     }
     deriving (Eq, Show)
 
@@ -108,22 +69,14 @@ parseOpts = Opts
   <*> strOption (long "db" <> metavar "DB_NAME" <> showDefault <> value "cexplorer" <> help "Name of the cardano-db-sync database")
   <*> strOption (long "db-user" <> metavar "DB_USER" <> showDefault <> value "cexplorer" <> help "User to connect to the cardano-db-sync database with")
   <*> strOption (long "db-host" <> metavar "DB_HOST" <> showDefault <> value "/run/postgresql" <> help "Host for the cardano-db-sync database connection")
-  <*> optional (strOption (long "extra-funds" <> metavar "FILE" <> help "File containing extra funds to include in the query (JSON)"))
   <*> optional pSlotNo
   <*> fmap fromIntegral (option auto (long "threshold" <> metavar "INT64" <> showDefault <> value 8000000000 <> help "Minimum threshold of funds required to vote (Lovelace)"))
+  <*> fmap fromIntegral (option auto (long "total-rewards" <> metavar "INT64" <> help "Total rewards to distribute between voters"))
 
 opts =
   info
-    ( parseOpts <**> helper )
+    ( parseOpts )
     ( fullDesc
-    <> progDesc "Fetch valid voter registrations"
-    <> header "rego-fetch - a tool to fetch voter registrations"
+    <> progDesc "Generate a file describing how rewards should be distributed between voters"
+    <> header "rewards - a tool for distributing rewards"
     )
-
-pSlotNo :: Parser SlotNo
-pSlotNo = SlotNo
-    <$> option auto
-          ( long "slot-no"
-          <> metavar "WORD64"
-          <> help "Slot number to query"
-          )

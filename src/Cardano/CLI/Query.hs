@@ -55,28 +55,18 @@ data MetadataRetrievalError
 
 makeClassyPrisms ''MetadataRetrievalError
 
-data VoteRegistrationRetrievalError
-  = VoteRegistrationMetadataRetrievalError !MetadataRetrievalError
-  | VoteRegistrationMetadataParsingError !MetadataParsingError
+data MetadataError
+  = MetadataErrorRetrieval !MetadataRetrievalError
+  | MetadataErrorParsing !MetadataParsingError
   deriving (Eq, Show)
 
-makeClassyPrisms ''VoteRegistrationRetrievalError
+makeClassyPrisms ''MetadataError
 
-instance AsMetadataRetrievalError VoteRegistrationRetrievalError where
-  _MetadataRetrievalError = _VoteRegistrationMetadataRetrievalError
+instance AsMetadataRetrievalError MetadataError where
+  _MetadataRetrievalError = _MetadataErrorRetrieval
 
-instance AsMetadataParsingError VoteRegistrationRetrievalError where
-  _MetadataParsingError = _VoteRegistrationMetadataParsingError
-
--- | A simple helper type, takes two pieces of data and provides an
--- Ord instance that only compares the first piece of data.
-data OrderedBy ord a = OrderedBy ord a
-
-instance Eq ord => Eq (OrderedBy ord a) where
-  (==) (OrderedBy ord1 _) (OrderedBy ord2 _) = ord1 == ord2
-
-instance Ord ord => Ord (OrderedBy ord a) where
-  compare (OrderedBy ord1 _) (OrderedBy ord2 _) = compare ord1 ord2
+instance AsMetadataParsingError MetadataError where
+  _MetadataParsingError = _MetadataErrorParsing
 
 queryStake
   :: ( MonadIO m
@@ -216,7 +206,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show slot) <> ";")
-        Nothing   -> (sqlBase <> ";")
+        Nothing   -> (sqlBase <> "LIMIT 100;")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
