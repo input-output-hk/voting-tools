@@ -23,3 +23,6 @@ pSlotNo = SlotNo
           <> metavar "WORD64"
           <> help "Slot number to query"
           )
+
+defaultThreshold :: Integer
+defaultThreshold = 8000000000 

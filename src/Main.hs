@@ -68,7 +68,7 @@ main = do
         toRewards :: [(Hash StakeKey, Double)] -> Map Text Double
         toRewards = M.fromList . fmap (\(hash, proportion) -> (toBech32Addr hash, ofRewards proportion))
 
-      BLC.writeFile outfile . toJSON . toRewards $ raw
+      BLC.writeFile outfile . toJSON Aeson.Decimal . toRewards $ raw
 
     -- Genesis
     Genesis gOpts -> do
@@ -93,7 +93,7 @@ main = do
                 & setInitialFunds (chunkFund 100 $ allFunds)
                 & setBlockZeroDate blockZeroDate
 
-          BLC.writeFile outfile . toJSON $ genesis
+          BLC.writeFile outfile . toJSON Aeson.Generic $ genesis
 
     -- Voter Registration
     Register regOpts -> do
@@ -126,8 +126,8 @@ main = do
             Left  (err :: AppError) -> fail $ show err
             Right ()                -> pure ()
 
-toJSON :: Aeson.ToJSON a => a -> BLC.ByteString
-toJSON = Aeson.encodePretty' (Aeson.defConfig { Aeson.confCompare = Aeson.compare, Aeson.confNumFormat = Aeson.Decimal })
+toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString
+toJSON numFormat = Aeson.encodePretty' (Aeson.defConfig { Aeson.confCompare = Aeson.compare, Aeson.confNumFormat = numFormat })
 
 runQuery :: DatabaseConfig -> ExceptT MetadataError (SqlPersistT IO) a -> IO a
 runQuery dbConfig q = runNoLoggingT $ do

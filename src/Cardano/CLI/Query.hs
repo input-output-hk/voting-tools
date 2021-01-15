@@ -7,6 +7,7 @@
 module Cardano.CLI.Query where
 
 import           Cardano.Db (DbLovelace (DbLovelace), EntityField (TxId), TxId)
+import           Control.Monad (foldM)
 import           Control.Monad.Except (MonadError, runExceptT, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Reader (MonadReader, ask, asks, runReaderT)
@@ -25,10 +26,11 @@ import           Data.Word (Word64)
 import           Database.Esqueleto (BackendCompatible, Single (Single))
 import           Database.Persist.Postgresql (Entity, IsolationLevel (Serializable), SqlBackend,
                      SqlPersistT, rawSql, runSqlConnWithIsolation)
+import           System.IO (hPutStr, hPutStrLn, stderr)
 
 import           Cardano.API (SlotNo)
 import qualified Cardano.API as Api
-import           Cardano.API.Extended (VotingKeyPublic)
+import           Cardano.API.Extended (VotingKeyPublic, serialiseToBech32')
 import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace), metadataFromJson)
 import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
                      chunkFund, fundFromVotingFunds)
@@ -37,7 +39,7 @@ import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), Metad
                      voteRegistrationPublicKey, voteRegistrationVerificationKey, withMetaKey)
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKeyHash),
                      VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash)
-import           Contribution (Contributions, causeSumAmounts, contribute, proportionalize)
+import           Contribution (Contributions, causeSumAmounts, contribute, proportionalize, filterAmounts) 
 import           Control.Lens (( # ))
 import           Control.Lens.TH (makeClassyPrisms)
 import qualified Data.Aeson as Aeson
@@ -116,11 +118,11 @@ queryVoteRegistrationInfo
      , AsMetadataRetrievalError e
      )
   => Maybe SlotNo
-  -> Threshold
   -> m (Contributions VotingKeyPublic (Api.Hash Api.StakeKey) Integer)
-queryVoteRegistrationInfo mSlotNo (Api.Lovelace threshold) = do
+queryVoteRegistrationInfo mSlotNo  = do
   regos <- queryVoteRegistration mSlotNo
-  liftIO $ putStrLn $ show $ length regos
+
+  liftIO $ hPutStr stderr $ "\nRaw DB query rows returned: " <> show (length regos)
 
   let
     -- Each stake key has one public voting key it can stake to
@@ -137,16 +139,17 @@ queryVoteRegistrationInfo mSlotNo (Api.Lovelace threshold) = do
                                  else acc
            ) mempty regos
 
-  liftIO $ putStrLn $ show $ length xs
+  liftIO $ hPutStr stderr $ "\nKeys eligible: " <> show (length xs)
 
-  fmap mconcat $ forM (M.toList $ xs) (\(verKeyHash, votepub) -> do
+  let
+    xs' = zip [1..] (M.toList xs)
+
+  foldM (\acc (idx, (verKeyHash, votepub)) -> do
     (Api.Lovelace stake) <- queryStake mSlotNo verKeyHash
 
-    pure $
-      if stake > threshold
-      then contribute votepub verKeyHash stake mempty
-      else mempty
-    )
+    liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show idx <> " of : " <> show (length xs)
+    pure $ contribute votepub verKeyHash stake acc
+        ) mempty xs'
 
 queryVotingProportion
   :: ( MonadIO m
@@ -160,8 +163,8 @@ queryVotingProportion
   -> Maybe SlotNo
   -> Threshold
   -> m (Map (Api.Hash Api.StakeKey) Double)
-queryVotingProportion nw mSlotNo threshold = do
-  info <- queryVoteRegistrationInfo mSlotNo threshold
+queryVotingProportion nw mSlotNo (Api.Lovelace threshold) = do
+  info <- filterAmounts (> threshold) <$> queryVoteRegistrationInfo mSlotNo
 
   let
     proportions :: [((Api.Hash Api.StakeKey), Double)]
@@ -187,8 +190,8 @@ queryVotingFunds
   -> Maybe SlotNo
   -> Threshold
   -> m VotingFunds
-queryVotingFunds nw mSlotNo threshold = do
-  info <- queryVoteRegistrationInfo mSlotNo threshold
+queryVotingFunds nw mSlotNo (Api.Lovelace threshold) = do
+  info <- filterAmounts (> threshold) <$> queryVoteRegistrationInfo mSlotNo
 
   pure
     $ VotingFunds

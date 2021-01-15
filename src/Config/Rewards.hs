@@ -29,7 +29,7 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      VotingKeyPublic, pNetworkId, readSigningKeyFile, readerFromAttoParser)
 import           Cardano.CLI.Fetching (Threshold, VotingFunds)
 import           Cardano.CLI.Voting.Error ()
-import           Config.Common (DatabaseConfig (DatabaseConfig), pSlotNo)
+import           Config.Common (DatabaseConfig (DatabaseConfig), pSlotNo, defaultThreshold)
 
 data Config = Config
     { cfgNetworkId         :: NetworkId
@@ -72,7 +72,7 @@ parseOpts = Opts
   <*> strOption (long "db-user" <> metavar "DB_USER" <> showDefault <> value "cexplorer" <> help "User to connect to the cardano-db-sync database with")
   <*> strOption (long "db-host" <> metavar "DB_HOST" <> showDefault <> value "/run/postgresql" <> help "Host for the cardano-db-sync database connection")
   <*> optional pSlotNo
-  <*> fmap fromIntegral (option auto (long "threshold" <> metavar "INT64" <> showDefault <> value 8000000000 <> help "Minimum threshold of funds required to vote (Lovelace)"))
+  <*> fmap fromIntegral (option auto (long "threshold" <> metavar "INT64" <> showDefault <> value defaultThreshold <> help "Minimum threshold of funds required to vote (Lovelace)"))
   <*> fmap fromIntegral (option auto (long "total-rewards" <> metavar "INT64" <> help "Total rewards to distribute between voters"))
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
 

@@ -10,6 +10,7 @@ module Contribution.Efficient
   , contributionsBy
   , contributionsFor
     -- * Constructors
+  , filterAmounts
   , contribute
   , withdraw
     -- * Types
@@ -149,6 +150,9 @@ causeSumAmounts =
     sumAmts = getSum . foldMap (Sum . toRational . snd)
   in
     fmap (fmap sumAmts) . contributions
+
+filterAmounts :: (Ord cause, Ord id) => (amt -> Bool) -> Contributions cause id amt -> Contributions cause id amt
+filterAmounts f = Contributions . M.fromList . fmap (fmap (M.fromList . filter (f . snd))) . contributions
 
 -- -- | Lift the contribution amounts into some monoid, and monoidally
 -- -- combine each contribution amount.
