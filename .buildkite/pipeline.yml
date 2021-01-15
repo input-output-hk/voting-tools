@@ -6,9 +6,9 @@ steps:
       system: x86_64-linux
 
     command:
-      - 'nix-build -A voterRegistrationTarball'
+      - 'nix-build -A votingToolsTarball'
     artifact_paths:
-      - "result/voter-registration.tar.gz"
+      - "result/voting-tools.tar.gz"
     agents:
       system: x86_64-linux
 

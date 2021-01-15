@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -5,9 +7,8 @@
 
 module Cardano.CLI.Voting.Error where
 
-import           Cardano.API (Address, Bech32DecodeError, FileError, Lovelace (Lovelace))
-import           Cardano.Api.TextView (TextViewError)
-import           Cardano.Api.Typed (Shelley)
+import           Cardano.API (Address, AddressAny, Bech32DecodeError, FileError, Lovelace)
+import           Cardano.Api.Typed (Shelley, TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError (..))
 import qualified Codec.Binary.Bech32 as Bech32
 import           Control.Lens.TH (makeClassyPrisms)
@@ -17,13 +18,15 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsEnvSocketError (_EnvSocketError), AsFileError (__FileError),
                      AsShelleyQueryCmdLocalStateQueryError (_ShelleyQueryCmdLocalStateQueryError),
                      Bech32HumanReadablePartError, ShelleyQueryCmdLocalStateQueryError)
+import           Cardano.CLI.Voting.Fee (AsNotEnoughFundsError (_NotEnoughFundsError),
+                     NotEnoughFundsError)
 
 -- | Address doesn't have enough UTxOs to pay the requested amount.
-data AddressUTxOError = AddressNotEnoughUTxOs (Address Shelley) Lovelace
+data AddressUTxOError = AddressNotEnoughUTxOs AddressAny Lovelace
     deriving Show
 
 makeClassyPrisms ''AddressUTxOError
-makeClassyPrisms ''TextViewError
+makeClassyPrisms ''TextEnvelopeError
 
 data AppError = AppEnvSocketError !EnvSocketError
     | AppShelleyQueryError !ShelleyQueryCmdLocalStateQueryError
@@ -31,6 +34,7 @@ data AppError = AppEnvSocketError !EnvSocketError
     | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
     | AppAddressUTxOError !AddressUTxOError
     | AppWriteTxError !(FileError ())
+    | AppNotEnoughFundsError !NotEnoughFundsError
     deriving (Show)
 
 makeClassyPrisms ''AppError
@@ -52,3 +56,6 @@ instance AsBech32HumanReadablePartError AppError where
 
 instance AsAddressUTxOError AppError where
   _AddressUTxOError = _AppAddressUTxOError
+
+instance AsNotEnoughFundsError AppError where
+  _NotEnoughFundsError = _AppNotEnoughFundsError

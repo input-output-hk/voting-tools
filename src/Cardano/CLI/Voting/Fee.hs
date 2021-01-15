@@ -1,3 +1,9 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 -- | Tools used to estimate the fee associated with a vote transaction
 -- and ensure that the unspent value of the TxIns are enough to cover
 -- the fee associated with submitting the transaction.
@@ -20,27 +26,44 @@ module Cardano.CLI.Voting.Fee where
 
 import           Data.String (fromString)
 
-import           Cardano.API (Address, AsType (AsPaymentKey, AsStakeKey), Key, LocalNodeConnectInfo,
-                     Lovelace (Lovelace), NetworkId, PaymentCredential, PaymentKey, SigningKey,
-                     StakeAddressReference, StakeCredential, StakeKey, TTL, Tx, TxBody,
-                     TxIn (TxIn), TxMetadata, VerificationKey, estimateTransactionFee,
-                     getVerificationKey, localNodeNetworkId, makeShelleyAddress,
-                     makeShelleyKeyWitness, makeShelleyTransaction, makeSignedTransaction,
-                     makeTransactionMetadata, serialiseToRawBytes, serialiseToRawBytesHex,
-                     txExtraContentEmpty, verificationKeyHash)
-import           Cardano.Api.Typed (PaymentCredential (PaymentCredentialByKey), Shelley,
-                     ShelleyWitnessSigningKey (WitnessPaymentKey),
+import           Cardano.API (Address, AddressInEra, AsType (AsPaymentKey, AsStakeKey),
+                     IsCardanoEra, IsShelleyBasedEra, Key, LocalNodeConnectInfo, Lovelace,
+                     NetworkId, PaymentCredential, PaymentKey,
+                     ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
+                     ShelleyEra, SigningKey, SlotNo, StakeAddressReference, StakeCredential,
+                     StakeKey, Tx, TxAuxScripts (TxAuxScriptsNone), TxBody,
+                     TxBodyContent (TxBodyContent), TxCertificates (TxCertificatesNone),
+                     TxIn (TxIn), TxMetadata, TxMintValue (TxMintNone),
+                     TxOutValue (TxOutAdaOnly, TxOutValue),
+                     TxUpdateProposal (TxUpdateProposalNone),
+                     TxValidityLowerBound (TxValidityNoLowerBound),
+                     TxValidityUpperBound (TxValidityUpperBound),
+                     TxWithdrawals (TxWithdrawalsNone),
+                     ValidityUpperBoundSupportedInEra (ValidityUpperBoundInAllegraEra, ValidityUpperBoundInMaryEra, ValidityUpperBoundInShelleyEra),
+                     VerificationKey, estimateTransactionFee, getVerificationKey,
+                     localNodeNetworkId, lovelaceToValue, makeShelleyAddress,
+                     makeShelleyAddressInEra, makeShelleyKeyWitness, makeSignedTransaction,
+                     makeTransactionBody, makeTransactionMetadata, multiAssetSupportedInEra,
+                     serialiseToRawBytes, serialiseToRawBytesHex, verificationKeyHash)
+import           Cardano.API.Extended (liftShelleyBasedEra, liftShelleyBasedMetadata,
+                     liftShelleyBasedTxFee)
+import           Cardano.Api.Typed (Lovelace (Lovelace), PaymentCredential (PaymentCredentialByKey),
+                     Shelley, ShelleyWitnessSigningKey (WitnessPaymentKey),
                      StakeAddressReference (StakeAddressByValue),
                      StakeCredential (StakeCredentialByKey), StandardShelley, TxId (TxId),
                      TxIx (TxIx), TxMetadataValue (TxMetaBytes, TxMetaMap, TxMetaText),
                      TxOut (TxOut), deterministicSigningKey, deterministicSigningKeySeedSize,
-                     txCertificates, txMetadata, txUpdateProposal, txWithdrawals)
+                     makeShelleyTransaction, txCertificates, txMetadata, txUpdateProposal,
+                     txWithdrawals)
 import           Cardano.Api.Typed (Shelley, StandardShelley)
 import qualified Cardano.Binary as CBOR
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import qualified Cardano.Crypto.Seed as Crypto
+import           Control.Lens.TH (makeClassyPrisms)
 import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
+import qualified Shelley.Spec.Ledger.Tx as Ledger
+import qualified Shelley.Spec.Ledger.UTxO as Ledger
 
 -- | Fee characteristics of a transaction
 data FeeParams = FeeParams
@@ -49,6 +72,7 @@ data FeeParams = FeeParams
     , feePerTxIn :: Lovelace
     -- ^ The increase in fees for adding a TxIn
     }
+  deriving (Eq, Show)
 
 -- | Transactions that aren't fully spent.
 type UnspentSources
@@ -57,6 +81,11 @@ type UnspentSources
      , Lovelace
      -- ^ Unspent amount
      )]
+
+data NotEnoughFundsError = NotEnoughFundsToMeetFeeError !UnspentSources
+  deriving (Eq, Show)
+
+makeClassyPrisms ''NotEnoughFundsError
 
 -- | Total amount of unspent value.
 unspentValue :: UnspentSources -> Lovelace
@@ -71,28 +100,41 @@ unspentSources = foldr (\(txin, _) -> (txin:)) mempty
 
 -- | Estimate the fee required for a vote transaction.
 estimateVoteTxFee
-  :: NetworkId
+  :: IsShelleyBasedEra era
+  => NetworkId
+  -> ShelleyBasedEra era
   -> PParams StandardShelley
-  -> TTL
+  -> SlotNo
   -> [TxIn]
-  -> Address Shelley
+  -> AddressInEra era
   -> Lovelace
   -> TxMetadata
   -> Lovelace
-estimateVoteTxFee networkId pparams ttl txins addr txBaseValue meta =
+estimateVoteTxFee networkId era pparams ttl txins addr txBaseValue meta =
   let
-    txoutsNoFee = [TxOut addr txBaseValue]
-    txBody = makeShelleyTransaction
-               txExtraContentEmpty {
-                 txCertificates   = [],
-                 txWithdrawals    = [],
-                 txMetadata       = Just meta,
-                 txUpdateProposal = Nothing
-               }
-               ttl
-               (toEnum 0)
-               txins
+    txBaseValue' =
+      case multiAssetSupportedInEra (liftShelleyBasedEra era) of
+        Left adaOnlyInEra -> TxOutAdaOnly adaOnlyInEra txBaseValue
+        Right multiAssetInEra -> TxOutValue multiAssetInEra (lovelaceToValue txBaseValue)
+    txoutsNoFee = [TxOut addr txBaseValue']
+
+    validityUpperBound = case era of
+      ShelleyBasedEraShelley -> TxValidityUpperBound ValidityUpperBoundInShelleyEra ttl
+      ShelleyBasedEraAllegra -> TxValidityUpperBound ValidityUpperBoundInAllegraEra ttl
+      ShelleyBasedEraMary    -> TxValidityUpperBound ValidityUpperBoundInMaryEra ttl
+
+    txBody = either (error . show) id $ makeTransactionBody
+               (TxBodyContent txins
                txoutsNoFee
+               (liftShelleyBasedTxFee era $ fromInteger 0)
+               (TxValidityNoLowerBound, validityUpperBound)
+               (liftShelleyBasedMetadata era meta)
+               TxAuxScriptsNone
+               TxWithdrawalsNone
+               TxCertificatesNone
+               TxUpdateProposalNone
+               TxMintNone
+               )
     tx = makeSignedTransaction [] txBody
   in
     estimateTransactionFee
@@ -108,13 +150,15 @@ estimateVoteTxFee networkId pparams ttl txins addr txBaseValue meta =
 -- | Estimate the fee characteristics of a vote transaction. The base
 -- fee, and the how the fee changes as we add more transaction inputs.
 estimateVoteFeeParams
-  :: NetworkId
+  :: IsShelleyBasedEra era
+  => NetworkId
+  -> ShelleyBasedEra era
   -> PParams StandardShelley
   -> TxMetadata
   -> FeeParams
-estimateVoteFeeParams networkId pparams meta =
+estimateVoteFeeParams networkId era pparams meta =
   let
-    mockTTL :: TTL
+    mockTTL :: SlotNo
     mockTTL = 1
 
     mockSkey :: Key keyrole => AsType keyrole -> SigningKey keyrole
@@ -135,14 +179,14 @@ estimateVoteFeeParams networkId pparams meta =
     mockStakeAddressRef :: StakeAddressReference
     mockStakeAddressRef = StakeAddressByValue mockStakeCredential
 
-    mockAddr :: Address Shelley
-    mockAddr = makeShelleyAddress networkId mockPaymentCredential mockStakeAddressRef
+    mockAddr :: IsShelleyBasedEra era => AddressInEra era
+    mockAddr = makeShelleyAddressInEra networkId mockPaymentCredential mockStakeAddressRef
 
     -- Start with a base estimate
-    (Lovelace feeBase)    = estimateVoteTxFee networkId pparams mockTTL [] mockAddr (Lovelace 0) meta
+    (Lovelace feeBase)    = estimateVoteTxFee networkId era pparams mockTTL [] mockAddr (Lovelace 0) meta
     -- Estimate the fee per extra txin
     mockTxIn   = TxIn (TxId $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
-    (Lovelace feeWithMockTxIn) = estimateVoteTxFee networkId pparams mockTTL [mockTxIn] mockAddr (Lovelace 0) meta
+    (Lovelace feeWithMockTxIn) = estimateVoteTxFee networkId era pparams mockTTL [mockTxIn] mockAddr (Lovelace 0) meta
     feePerTxIn = Lovelace $ feeWithMockTxIn - feeBase
   in
     FeeParams (Lovelace feeBase) feePerTxIn

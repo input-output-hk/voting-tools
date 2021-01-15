@@ -20,7 +20,7 @@ import           Cardano.API (deserialiseFromRawBytes, deserialiseFromRawBytesHe
 import           Cardano.Api.Typed
 import           Cardano.API.Voting (AsType (AsVotingKeyPublic))
 import qualified Cardano.API.Voting as Voting
-import           Cardano.CLI.Voting (createVote)
+import           Cardano.CLI.Voting (createVoteRegistration)
 import           Cardano.CLI.Voting.Error (AppError)
 
 tests :: TestTree
@@ -29,7 +29,7 @@ tests = do
     unitGenerateVoteMetadata
 
 unitGenerateVoteMetadata = do
-  (eMetadata :: Either AppError TxMetadata) <- runExceptT $ do
+  (eMetadata :: Either (AppError era) TxMetadata) <- runExceptT $ do
     stkSign   <- maybe (error "Failed to deserialise stake signing key") pure $
       deserialiseFromRawBytesHex (AsSigningKey AsStakeKey) "efb3df51bee6858af75927ce0f4828e55876d8c3111831f87ca4058b7da58a69"
     stkVerify <- maybe (error "Failed to deserialise stake verification key") pure $
@@ -37,7 +37,7 @@ unitGenerateVoteMetadata = do
     votePub   <- either (error . show) pure $
       Voting.deserialiseFromBech32 AsVotingKeyPublic "ed25519e_sk1cpxudluugmp8wgl2jrl0hcatlgmgzhwte8cguhqjmq642gzytf3mj05q5f8etx8pv47qadxvsgxjj2pygtf4xglu3emspqt95drxpwg9wqqr4"
 
-    createVote stkSign votePub
+    createVoteRegistration stkSign votePub
 
   case eMetadata of
     Left err   -> assertFailure $ show err

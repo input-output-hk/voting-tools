@@ -1,4 +1,28 @@
 {
+    "haskell.nix": {
+        "branch": "master",
+        "description": "Alternative Haskell Infrastructure for Nixpkgs",
+        "homepage": "https://input-output-hk.github.io/haskell.nix",
+        "owner": "input-output-hk",
+        "repo": "haskell.nix",
+        "rev": "b8584ac62977097b81160104ae577cc3fb66aafd",
+        "sha256": "0lnwgk3pk8wz6mvg6dfy3iszafndw9085l4blbvwiigc9pxfwnwx",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/haskell.nix/archive/b8584ac62977097b81160104ae577cc3fb66aafd.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "iohk-nix": {
+        "branch": "master",
+        "description": "nix scripts shared across projects",
+        "homepage": null,
+        "owner": "input-output-hk",
+        "repo": "iohk-nix",
+        "rev": "5b86d63a0b59b7666d19901b654d8fbde27d9500",
+        "sha256": "1mfb93nnw0x4gyq93v6lh6h7imliw4j0wp5l9gpdafy3rw621xzb",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/iohk-nix/archive/5b86d63a0b59b7666d19901b654d8fbde27d9500.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
     "niv": {
         "branch": "master",
         "description": "Easy dependency management for Nix projects",
@@ -11,28 +35,16 @@
         "url": "https://github.com/nmattia/niv/archive/9d35b9e4837ab88517210b1701127612c260eccf.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
-    "haskell.nix": {
-        "branch": "master",
-        "description": "Alternative Haskell Infrastructure for Nixpkgs",
-        "homepage": "https://input-output-hk.github.io/haskell.nix",
+    "cardano-node": {
+        "branch": "cardano-lib-metadata",
+        "description": "The core component that is used to participate in a Cardano decentralised blockchain.",
+        "homepage": "https://cardano.org",
         "owner": "input-output-hk",
-        "repo": "haskell.nix",
-        "rev": "72d21e014f69664dbf6d5c135b5219171d0bbc8b",
-        "sha256": "13ypzv6x7778jwpkm6zkgyqyr17g6w0ii25jqadmwwqppw7hy9y1",
+        "repo": "cardano-node",
+        "rev": "cbd7dcc58be81a5174f6aca9431f93ed370b3993",
+        "sha256": "1fx0sy5hgfqaim1lv1ajx2ih87nb7m4z996cfs7bbmyjchg9nqyy",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/haskell.nix/archive/72d21e014f69664dbf6d5c135b5219171d0bbc8b.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
-    "iohk-nix": {
-        "branch": "master",
-        "description": "nix scripts shared across projects",
-        "homepage": null,
-        "owner": "input-output-hk",
-        "repo": "iohk-nix",
-        "rev": "f2dee151a917aac96121246ed76fb17e3f9026b0",
-        "sha256": "1d8ygzczk4zbzz04j1yrwzbfld59bc6a6ar7bmlfx1j5m6fhjb8k",
-        "type": "tarball",
-        "url": "https://github.com/input-output-hk/iohk-nix/archive/f2dee151a917aac96121246ed76fb17e3f9026b0.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/cbd7dcc58be81a5174f6aca9431f93ed370b3993.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }
