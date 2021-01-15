@@ -147,7 +147,7 @@ queryVoteRegistrationInfo mSlotNo  = do
   foldM (\acc (idx, (verKeyHash, votepub)) -> do
     (Api.Lovelace stake) <- queryStake mSlotNo verKeyHash
 
-    liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show idx <> " of : " <> show (length xs)
+    liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show idx <> " of " <> show (length xs)
     pure $ contribute votepub verKeyHash stake acc
         ) mempty xs'
 
