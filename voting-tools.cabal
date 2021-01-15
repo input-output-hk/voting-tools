@@ -155,6 +155,5 @@ test-suite unit-tests
                       , cardano-api
 
   other-modules:        Test.Cardano.CLI.Fetching
-                        Test.Registration
                         Test.Contribution
                         Test.Generators

@@ -19,8 +19,6 @@ import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPubl
 import           Cardano.CLI.Fetching
 import           Contribution (Contributions)
 import qualified Contribution as Contrib
-import           Registration (Registry)
-import qualified Registration as Reg
 
 -- votingFunds :: Gen VotingFunds
 -- votingFunds = VotingFunds <$> Gen.map (Range.linear 0 16) ((,) <$> jaddr <*> lovelace)
@@ -51,16 +49,6 @@ instance Ord OrderedPayload where
 
 orderedPayload :: Gen OrderedPayload
 orderedPayload = OrderedPayload <$> Gen.int (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound)
-
-registry :: Gen (Registry Int OrderedPayload)
-registry = Gen.recursive Gen.choice
-  -- Non-recursive generators
-  [ mempty ]
-  -- Recursive generators
-  [ Reg.register <$> Gen.int (Range.linear 0 maxBound) <*> orderedPayload <*> registry
-  , Reg.deregister <$> Gen.int (Range.linear 0 maxBound) <*> registry
-  , (<>) <$> registry <*> registry
-  ]
 
 -- | Generate random contributions.
 --

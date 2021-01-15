@@ -55,7 +55,10 @@ instance Foldable (Contributions cause id) where
   foldMap f (Contributions cs) = foldMap (foldMap f) cs
 
 contributions :: Contributions cause id amt -> [(cause, [(id, amt)])]
-contributions (Contributions cs) = M.toList . fmap M.toList $ cs
+contributions (Contributions cs) = foldMap removeEmpty . M.toList . fmap M.toList $ cs
+  where
+    removeEmpty (c, []) = []
+    removeEmpty (c, cs) = [(c, cs)]
 
 contribute :: forall cause id amt . (Ord cause, Ord id) => cause -> id -> amt -> Contributions cause id amt -> Contributions cause id amt
 contribute cause ident amt (Contributions cs) =

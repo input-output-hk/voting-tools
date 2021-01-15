@@ -192,7 +192,9 @@ queryVotingFunds
   -> Threshold
   -> m VotingFunds
 queryVotingFunds nw mSlotNo (Api.Lovelace threshold) = do
-  info <- filterAmounts (> threshold) <$> queryVoteRegistrationInfo mSlotNo
+  info <- queryVoteRegistrationInfo mSlotNo
+
+  let info' = filterAmounts (> threshold) info
 
   pure
     $ VotingFunds
@@ -202,7 +204,7 @@ queryVotingFunds nw mSlotNo (Api.Lovelace threshold) = do
               , Api.Lovelace $ numerator amt
               )
            )
-    $ causeSumAmounts info
+    $ causeSumAmounts info'
 
 queryVoteRegistration
   :: ( MonadIO m
