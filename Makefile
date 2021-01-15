@@ -5,7 +5,7 @@ dev:
 repl:
 	nix-shell --run "cabal repl $(target) --project-file=cabal-nix.project"
 
-build-voting-tools:
+build:
 	nix-build default.nix -A haskellPackages.voting-tools.components.exes.voting-tools -o voting-tools
 
 style: ## Apply stylish-haskell on all *.hs files
