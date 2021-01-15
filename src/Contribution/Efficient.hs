@@ -151,8 +151,12 @@ causeSumAmounts =
   in
     fmap (fmap sumAmts) . contributions
 
-filterAmounts :: (Ord cause, Ord id) => (amt -> Bool) -> Contributions cause id amt -> Contributions cause id amt
-filterAmounts f = Contributions . M.fromList . fmap (fmap (M.fromList . filter (f . snd))) . contributions
+filterAmounts :: (Ord cause, Ord id, Num amt) => (amt -> Bool) -> Contributions cause id amt -> Contributions cause id amt
+filterAmounts f = Contributions . M.fromList . fmap (fmap (M.fromList . z)) . contributions
+  where
+    z xs = if f (getSum (foldMap (\(_ident, amt) -> Sum amt) xs))
+           then xs
+           else []
 
 -- -- | Lift the contribution amounts into some monoid, and monoidally
 -- -- combine each contribution amount.
