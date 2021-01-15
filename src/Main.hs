@@ -32,7 +32,8 @@ import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Fetching (Fund, chunkFund, fundFromVotingFunds)
 import           Cardano.CLI.Query (MetadataError)
 import qualified Cardano.CLI.Query as Query
-import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx, signTx)
+import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
+                     signTx)
 import           Cardano.CLI.Voting.Error (AppError)
 import           Cardano.CLI.Voting.Metadata (voteSignature)
 import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)

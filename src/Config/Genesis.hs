@@ -40,7 +40,7 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
 import           Cardano.CLI.Fetching (Threshold, VotingFunds)
 import           Cardano.CLI.Voting.Error ()
 
-import           Config.Common (DatabaseConfig (DatabaseConfig), pSlotNo, defaultThreshold)
+import           Config.Common (DatabaseConfig (DatabaseConfig), defaultThreshold, pSlotNo)
 
 data Config = Config
     { cfgNetworkId         :: NetworkId

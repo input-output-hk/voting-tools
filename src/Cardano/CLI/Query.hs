@@ -39,7 +39,8 @@ import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), Metad
                      voteRegistrationPublicKey, voteRegistrationVerificationKey, withMetaKey)
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKeyHash),
                      VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash)
-import           Contribution (Contributions, causeSumAmounts, contribute, proportionalize, filterAmounts) 
+import           Contribution (Contributions, causeSumAmounts, contribute, filterAmounts,
+                     proportionalize)
 import           Control.Lens (( # ))
 import           Control.Lens.TH (makeClassyPrisms)
 import qualified Data.Aeson as Aeson

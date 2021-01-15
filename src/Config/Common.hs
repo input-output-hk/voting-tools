@@ -25,4 +25,4 @@ pSlotNo = SlotNo
           )
 
 defaultThreshold :: Integer
-defaultThreshold = 8000000000 
+defaultThreshold = 8000000000
