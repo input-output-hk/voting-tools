@@ -5,12 +5,6 @@ dev:
 repl:
 	nix-shell --run "cabal repl $(target) --project-file=cabal-nix.project"
 
-build-registration:
-	nix-build default.nix -A haskellPackages.voting-tools.components.exes.voter-registration -o voter-registration
-
-build-fetch:
-	nix-build default.nix -A haskellPackages.voting-tools.components.exes.fetch-registration -o fetch-registration
-
 build-voting-tools:
 	nix-build default.nix -A haskellPackages.voting-tools.components.exes.voting-tools -o voting-tools
 
