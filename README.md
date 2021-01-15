@@ -29,6 +29,7 @@ CARDANO_NODE_SOCKET_PATH=state-node-testnet/node.socket \
 ```
 # Launch a ghcid session for the given target
 make dev target=lib:voting-tools
+make dev target=exe:voting-tools
 # Launch a ghci session for the given target
 make repl target=lib:voting-tools
 ```
