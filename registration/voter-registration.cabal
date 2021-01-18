@@ -1,0 +1,60 @@
+cabal-version:       >=1.10
+name:                voter-registration
+version:             0.1.0.0
+-- synopsis:
+-- description:
+-- bug-reports:
+-- license:
+license-file:        LICENSE
+author:              Samuel Evans-Powell
+maintainer:          mail@sevanspowell.net
+-- copyright:
+-- category:
+build-type:          Simple
+extra-source-files:  CHANGELOG.md
+
+executable voter-registration
+  main-is:             Main.hs
+  build-depends:       base
+                     , aeson
+                     , aeson-pretty
+                     , unordered-containers
+                     , attoparsec
+                     , base16-bytestring
+                     , bech32
+                     , bytestring
+                     , conduit
+                     , lens-aeson
+                     , binary
+                     , cardano-api
+                     , cardano-binary
+                     , cardano-cli
+                     , cardano-crypto-class
+                     , cardano-ledger
+                     , cardano-crypto
+                     , containers
+                     , esqueleto
+                     , time
+                     , cardano-db
+                     , resourcet
+                     , monad-logger
+                     , monoidal-containers
+                     , lens
+                     , mtl
+                     , nothunks
+                     , cardano-ledger-shelley-ma
+                     , optparse-applicative
+                     , ouroboros-consensus
+                     , ouroboros-consensus-cardano
+                     , ouroboros-consensus-shelley
+                     , ouroboros-network
+                     , ouroboros-network-framework
+                     , safe-exceptions
+                     , shelley-spec-ledger
+                     , scientific
+                     , text
+                     , transformers-except
+                     , voting-tools
+
+  hs-source-dirs:      src/
+  default-language:    Haskell2010
