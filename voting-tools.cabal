@@ -20,7 +20,6 @@ library
                      , Cardano.API.Extended.Raw
                      , Cardano.API.Jormungandr
                      , Cardano.CLI.Fetching
-                     , Cardano.CLI.Query
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
@@ -52,7 +51,6 @@ library
                      , cardano-api
                      , cardano-binary
                      , cardano-db
-                     , persistent-postgresql
                      , monad-logger
                      , monoidal-containers
                      , lens-aeson
@@ -86,6 +84,7 @@ library
 
 executable voting-tools
   main-is:             Main.hs
+  other-modules:       Cardano.CLI.Query
   build-depends:       base
                      , aeson
                      , aeson-pretty
@@ -115,6 +114,52 @@ executable voting-tools
                      , nothunks
                      , cardano-ledger-shelley-ma
                      , persistent-postgresql
+                     , optparse-applicative
+                     , ouroboros-consensus
+                     , ouroboros-consensus-cardano
+                     , ouroboros-consensus-shelley
+                     , ouroboros-network
+                     , ouroboros-network-framework
+                     , safe-exceptions
+                     , shelley-spec-ledger
+                     , scientific
+                     , text
+                     , transformers-except
+                     , voting-tools
+
+  hs-source-dirs:      src/
+  default-language:    Haskell2010
+
+executable voter-registration 
+  main-is:             MainRegister.hs
+  build-depends:       base
+                     , aeson
+                     , aeson-pretty
+                     , unordered-containers
+                     , attoparsec
+                     , base16-bytestring
+                     , bech32
+                     , bytestring
+                     , conduit
+                     , lens-aeson
+                     , binary
+                     , cardano-api
+                     , cardano-binary
+                     , cardano-cli
+                     , cardano-crypto-class
+                     , cardano-ledger
+                     , cardano-crypto
+                     , containers
+                     , esqueleto
+                     , time
+                     , cardano-db
+                     , resourcet
+                     , monad-logger
+                     , monoidal-containers
+                     , lens
+                     , mtl
+                     , nothunks
+                     , cardano-ledger-shelley-ma
                      , optparse-applicative
                      , ouroboros-consensus
                      , ouroboros-consensus-cardano

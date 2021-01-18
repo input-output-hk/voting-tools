@@ -12,6 +12,7 @@ import           Cardano.CLI.Types (QueryFilter (FilterByAddress), SocketPath (S
 import qualified Cardano.Crypto.DSIGN as Crypto
 import           Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
 import           Control.Monad.IO.Class (liftIO)
+import           Database.Persist.Postgresql (ConnectionString)
 import           Control.Monad.Logger (logInfoN, runNoLoggingT, runStderrLoggingT,
                      runStdoutLoggingT)
 import qualified Data.Aeson as Aeson
@@ -139,3 +140,6 @@ runQuery dbConfig q = runNoLoggingT $ do
     case result of
       Left (err :: MetadataError) -> fail $ show err
       Right x                     -> pure x
+
+pgConnectionString :: DatabaseConfig -> ConnectionString
+pgConnectionString (DatabaseConfig dbName dbUser dbHost) = BSC.pack $ "host=" <> dbHost <> " dbname=" <> dbName <> " user=" <> dbUser
