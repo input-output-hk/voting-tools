@@ -60,13 +60,13 @@ main = do
         raw :: [(Hash StakeKey, Double)]
         raw = M.toList votingProportions
 
-        ofRewards :: Double -> Double
-        ofRewards = ((fromIntegral totalRewards) *)
+        ofRewards :: Double -> Integer
+        ofRewards = round . ((fromIntegral totalRewards) *)
 
         toBech32Addr :: Hash StakeKey -> Text
         toBech32Addr = serialiseToBech32 . makeStakeAddress networkId . StakeCredentialByKey
 
-        toRewards :: [(Hash StakeKey, Double)] -> Map Text Double
+        toRewards :: [(Hash StakeKey, Double)] -> Map Text Integer
         toRewards = M.fromList . fmap (\(hash, proportion) -> (toBech32Addr hash, ofRewards proportion))
 
       BLC.writeFile outfile . toJSON Aeson.Decimal . toRewards $ raw
