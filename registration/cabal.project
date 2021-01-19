@@ -2,9 +2,8 @@ index-state: 2020-11-15T00:00:00Z
 
 packages:
   ./.
-  ./registration
 
-package voting-tools
+package voting-tools-lib
   tests: True
 
 package voter-registration
@@ -33,6 +32,12 @@ package cardano-wallet-jormungandr
 
 package ouroboros-consensus-cardano
   tests: False
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/voting-tools-lib
+  tag: a80e64947ed9834f2400ebde54c12f786bd3bffd
+  --sha256: 1zlmnf08vxdl2phy5b1k6lbkyb20cfcvf8c1rxmmcr6y3248sl62
 
 source-repository-package
   type: git

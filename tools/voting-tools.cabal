@@ -1,20 +1,21 @@
 cabal-version:       >=1.10
-name:                voter-registration
+name:                voting-tools
 version:             0.1.0.0
 -- synopsis:
 -- description:
 -- bug-reports:
 -- license:
-license-file:        LICENSE
+license-file:        ../LICENSE
 author:              Samuel Evans-Powell
 maintainer:          mail@sevanspowell.net
 -- copyright:
--- category:
+-- cate gory:
 build-type:          Simple
 extra-source-files:  ../CHANGELOG.md
 
-executable voter-registration
+executable voting-tools
   main-is:             Main.hs
+  other-modules:       Cardano.CLI.Query
   build-depends:       base
                      , aeson
                      , aeson-pretty
@@ -43,6 +44,7 @@ executable voter-registration
                      , mtl
                      , nothunks
                      , cardano-ledger-shelley-ma
+                     , persistent-postgresql
                      , optparse-applicative
                      , ouroboros-consensus
                      , ouroboros-consensus-cardano
@@ -54,7 +56,7 @@ executable voter-registration
                      , scientific
                      , text
                      , transformers-except
-                     , voting-tools-lib
+                     , voting-tools
 
   hs-source-dirs:      src/
   default-language:    Haskell2010

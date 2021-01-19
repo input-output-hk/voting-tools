@@ -1,6 +1,6 @@
 # our packages overlay
 pkgs: _: with pkgs; {
-  votingToolsHaskellPackages = import ./haskell.nix {
+  voterRegistrationHaskellPackages = import ./voter-registration-haskell.nix {
     inherit config
       lib
       stdenv

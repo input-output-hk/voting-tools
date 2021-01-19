@@ -11,18 +11,18 @@
 # }'
 , sourcesOverride ? {}
 # pinned version of nixpkgs augmented with overlays (iohk-nix and our packages).
-, pkgs ? import ./nix { inherit system crossSystem config sourcesOverride; }
-, gitrev ? pkgs.iohkNix.commitIdFromGitRepoOrZero ./.git
+, pkgs ? import ../nix { inherit system crossSystem config sourcesOverride; }
+, gitrev ? pkgs.iohkNix.commitIdFromGitRepoOrZero ../.git
 }:
 with pkgs; with commonLib;
 let
 
   haskellPackages = recRecurseIntoAttrs
     # the Haskell.nix package set, reduced to local packages.
-    (selectProjectPackages votingToolsHaskellPackages);
+    (selectProjectPackages voterRegistrationHaskellPackages);
   haskellPackagesMusl64 = recRecurseIntoAttrs
     # the Haskell.nix package set, reduced to local packages.
-    (selectProjectPackages pkgs.pkgsCross.musl64.votingToolsHaskellPackages);
+    (selectProjectPackages pkgs.pkgsCross.musl64.voterRegistrationHaskellPackages);
   voterRegistrationTarball = pkgs.runCommandNoCC "voter-registration-tarball" { buildInputs = [ pkgs.gnutar gzip ]; } ''
     cp ${haskellPackagesMusl64.voter-registration.components.exes.voter-registration}/bin/voter-registration ./
     mkdir -p $out
@@ -30,7 +30,7 @@ let
   '';
 
   self = {
-    inherit votingToolsHaskellPackages voterRegistrationTarball;
+    inherit voterRegistrationHaskellPackages voterRegistrationTarball;
     inherit haskellPackages hydraEvalErrors;
 
     inherit (pkgs.iohkNix) checkCabalProject;
@@ -49,7 +49,5 @@ let
       inherit pkgs;
       withHoogle = true;
     };
-
-    integration-tests = import ./test/integration/vm.nix { inherit pkgs; };
   };
 in self

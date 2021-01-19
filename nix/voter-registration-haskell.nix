@@ -15,8 +15,8 @@
 }:
 let
   src = haskell-nix.haskellLib.cleanGit {
-    name = "voting-tools";
-    src = ../.;
+    name = "voter-registration";
+    src = ../registration;
   };
 
   projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages

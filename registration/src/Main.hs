@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module MainRegister where
+module Main where
 
 import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley))
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
