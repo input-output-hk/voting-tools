@@ -20,7 +20,6 @@ library
                      , Cardano.API.Extended.Raw
                      , Cardano.API.Jormungandr
                      , Cardano.CLI.Fetching
-                     , Cardano.CLI.Query
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Fee
@@ -42,8 +41,6 @@ library
                      , attoparsec
                      , base16-bytestring
                      , resourcet
-                     , esqueleto
-                     , cardano-db
                      , time
                      , binary
                      , binary-strict
@@ -51,8 +48,6 @@ library
                      , bytestring
                      , cardano-api
                      , cardano-binary
-                     , cardano-db
-                     , persistent-postgresql
                      , monad-logger
                      , monoidal-containers
                      , lens-aeson
@@ -86,6 +81,7 @@ library
 
 executable voting-tools
   main-is:             Main.hs
+  other-modules:       Cardano.CLI.Query
   build-depends:       base
                      , aeson
                      , aeson-pretty
