@@ -7,7 +7,7 @@
 -- | Handles configuration, which involves parsing command line
 -- arguments and reading key files.
 
-module Config (Config(Config), ConfigError, opts, mkConfig, Opts(Opts), parseOpts) where
+module Config.Registration (Config(Config), ConfigError, opts, mkConfig, Opts(Opts), parseOpts) where
 
 import           Control.Exception.Safe (try)
 import           Control.Lens (( # ))

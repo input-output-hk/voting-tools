@@ -29,9 +29,10 @@ library
                      , Contribution.Initial
                      , Contribution.Efficient
                      , Config
-                     , Config.Genesis
-                     , Config.Rewards
                      , Config.Common
+                     , Config.Genesis
+                     , Config.Registration
+                     , Config.Rewards
                      , Genesis
 
   build-depends:       base

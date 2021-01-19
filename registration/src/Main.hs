@@ -33,7 +33,7 @@ import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistrat
 import           Cardano.CLI.Voting.Error (AppError)
 import           Cardano.CLI.Voting.Metadata (voteSignature)
 import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)
-import           Config (mkConfig, opts, ConfigError, Config(Config))
+import           Config.Registration (mkConfig, opts, ConfigError, Config(Config))
 import           Genesis (decodeGenesisTemplateJSON, getBlockZeroDate, setBlockZeroDate,
                      setInitialFunds)
 

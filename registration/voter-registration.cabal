@@ -14,7 +14,7 @@ build-type:          Simple
 
 executable voter-registration
   main-is:             Main.hs
-  other-modules:       Config
+  -- other-modules:       Config
   build-depends:       base
                      , aeson
                      , aeson-pretty
