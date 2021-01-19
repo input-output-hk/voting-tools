@@ -5,7 +5,7 @@ version:             0.1.0.0
 -- description:
 -- bug-reports:
 -- license:
-license-file:        ../LICENSE
+license-file:        LICENSE
 author:              Samuel Evans-Powell
 maintainer:          mail@sevanspowell.net
 -- copyright:
@@ -15,6 +15,7 @@ extra-source-files:  ../CHANGELOG.md
 
 executable voter-registration
   main-is:             Main.hs
+  other-modules:       Config
   build-depends:       base
                      , aeson
                      , aeson-pretty

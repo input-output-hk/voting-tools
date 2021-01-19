@@ -10,7 +10,6 @@ import qualified Data.ByteString.Char8 as BC
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
-import           Database.Persist.Postgresql (ConnectionString)
 
 import           Options.Applicative
 

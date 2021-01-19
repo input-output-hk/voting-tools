@@ -9,19 +9,16 @@ import           Options.Applicative
 
 import           Config.Common
 import qualified Config.Genesis as Genesis
-import qualified Config.Registration as Register
 import qualified Config.Rewards as Rewards
 
 data Command
-  = Register Register.Opts
-  | Genesis Genesis.Opts
+  = Genesis Genesis.Opts
   | Rewards Rewards.Opts
   deriving (Eq, Show)
 
 parseOpts :: Parser Command
 parseOpts = hsubparser
-  (  command "register" (Register <$> Register.opts)
-  <> command "genesis"  (Genesis  <$> Genesis.opts)
+  (  command "genesis"  (Genesis  <$> Genesis.opts)
   <> command "rewards"  (Rewards  <$> Rewards.opts)
   )
 

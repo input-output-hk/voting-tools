@@ -30,7 +30,6 @@ library
                      , Contribution.Efficient
                      , Config
                      , Config.Genesis
-                     , Config.Registration
                      , Config.Rewards
                      , Config.Common
                      , Genesis

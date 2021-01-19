@@ -4,6 +4,7 @@ module Main where
 
 import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley))
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
+import           Database.Persist.Postgresql (ConnectionString)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
                      StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,
                      serialiseToBech32, serialiseToRawBytesHex)
@@ -139,3 +140,7 @@ runQuery dbConfig q = runNoLoggingT $ do
     case result of
       Left (err :: MetadataError) -> fail $ show err
       Right x                     -> pure x
+
+
+pgConnectionString :: DatabaseConfig -> ConnectionString
+pgConnectionString (DatabaseConfig dbName dbUser dbHost) = BC.pack $ "host=" <> dbHost <> " dbname=" <> dbName <> " user=" <> dbUser

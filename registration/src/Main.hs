@@ -33,21 +33,18 @@ import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistrat
 import           Cardano.CLI.Voting.Error (AppError)
 import           Cardano.CLI.Voting.Metadata (voteSignature)
 import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)
-import           Config
-import qualified Config.Genesis as Genesis
-import qualified Config.Registration as Register
-import qualified Config.Rewards as Rewards
+import           Config (mkConfig, opts, ConfigError, Config(Config))
 import           Genesis (decodeGenesisTemplateJSON, getBlockZeroDate, setBlockZeroDate,
                      setInitialFunds)
 
 main :: IO ()
 main = do
-  regOpts <- Opt.execParser Register.opts
-  eCfg    <- runExceptT (Register.mkConfig regOpts)
+  regOpts <- Opt.execParser opts
+  eCfg    <- runExceptT (mkConfig regOpts)
   case eCfg of
-    Left (err :: Register.ConfigError) ->
+    Left (err :: ConfigError) ->
       fail $ show err
-    Right (Register.Config addr voteSign paySign votePub networkId ttl outFile) -> do
+    Right (Config addr voteSign paySign votePub networkId ttl outFile) -> do
       eResult <- runExceptT $ do
         SocketPath sockPath <-  readEnvSocketPath
         withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
