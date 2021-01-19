@@ -33,9 +33,7 @@ executable voter-registration
                      , cardano-ledger
                      , cardano-crypto
                      , containers
-                     , esqueleto
                      , time
-                     , cardano-db
                      , resourcet
                      , monad-logger
                      , monoidal-containers
