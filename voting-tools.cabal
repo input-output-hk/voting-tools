@@ -85,43 +85,44 @@ executable voting-tools
   build-depends:       base
                      , aeson
                      , aeson-pretty
-                     , unordered-containers
                      , attoparsec
                      , base16-bytestring
                      , bech32
-                     , bytestring
-                     , conduit
-                     , lens-aeson
                      , binary
+                     , bytestring
                      , cardano-api
                      , cardano-binary
                      , cardano-cli
-                     , cardano-crypto-class
-                     , cardano-ledger
                      , cardano-crypto
-                     , containers
-                     , esqueleto
-                     , time
+                     , cardano-crypto-class
                      , cardano-db
-                     , resourcet
+                     , cardano-ledger
+                     , cardano-ledger-shelley-ma
+                     , conduit
+                     , containers
+                     , directory
+                     , esqueleto
+                     , lens
+                     , lens-aeson
                      , monad-logger
                      , monoidal-containers
-                     , lens
                      , mtl
                      , nothunks
-                     , cardano-ledger-shelley-ma
-                     , persistent-postgresql
                      , optparse-applicative
                      , ouroboros-consensus
                      , ouroboros-consensus-cardano
                      , ouroboros-consensus-shelley
                      , ouroboros-network
                      , ouroboros-network-framework
+                     , persistent-postgresql
+                     , resourcet
                      , safe-exceptions
-                     , shelley-spec-ledger
                      , scientific
+                     , shelley-spec-ledger
                      , text
+                     , time
                      , transformers-except
+                     , unordered-containers
                      , voting-tools
 
   hs-source-dirs:      src/

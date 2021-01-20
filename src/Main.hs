@@ -2,7 +2,8 @@
 
 module Main where
 
-import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley))
+import           Data.Foldable (forM_)
+import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley), Certificate, makeMIRCertificate, serialiseToCBOR)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Database.Persist.Postgresql (ConnectionString)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
@@ -28,9 +29,11 @@ import qualified Data.Text as T
 import           Database.Persist.Postgresql (Entity, IsolationLevel (Serializable), SqlBackend,
                      SqlPersistT, rawQuery, rawSql, runSqlConnWithIsolation, withPostgresqlConn)
 import qualified Options.Applicative as Opt
+import           Shelley.Spec.Ledger.TxBody (MIRPot (..))
+import           System.Directory (createDirectoryIfMissing)
 
 import           Cardano.API.Extended (readEnvSocketPath)
-import           Cardano.CLI.Fetching (Fund, chunkFund, fundFromVotingFunds)
+import           Cardano.CLI.Fetching (Fund, chunkFund, chunk, fundFromVotingFunds)
 import           Cardano.CLI.Query (MetadataError)
 import qualified Cardano.CLI.Query as Query
 import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
@@ -52,7 +55,7 @@ main = do
   case options of
     -- Rewards
     Rewards rOpts -> do
-      let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile) = Rewards.mkConfig rOpts
+      let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile mMirDir) = Rewards.mkConfig rOpts
 
       (votingProportions :: Map (Hash StakeKey) Double) <-
         runQuery db $ Query.queryVotingProportion networkId slotNo threshold
@@ -67,10 +70,29 @@ main = do
         toBech32Addr :: Hash StakeKey -> Text
         toBech32Addr = serialiseToBech32 . makeStakeAddress networkId . StakeCredentialByKey
 
-        toRewards :: [(Hash StakeKey, Double)] -> Map Text Double
-        toRewards = M.fromList . fmap (\(hash, proportion) -> (toBech32Addr hash, ofRewards proportion))
+        toRewards :: [(Hash StakeKey, Double)] -> [(Hash StakeKey, Integer)]
+        toRewards = fmap (\(hash, proportion) -> (hash, proportion & ofRewards & round))
 
-      BLC.writeFile outfile . toJSON Aeson.Decimal . toRewards $ raw
+        rewards :: [(Hash StakeKey, Integer)]
+        rewards = toRewards raw
+
+        toAddrLovelaceMap :: [(Hash StakeKey, Integer)] -> Map Text Integer
+        toAddrLovelaceMap = M.fromList . fmap (\(hash, reward) -> (toBech32Addr hash, reward))
+
+      BLC.writeFile outfile . toJSON Aeson.Decimal . toAddrLovelaceMap $ rewards
+
+      case mMirDir of
+        Nothing     -> pure ()
+        Just mirDir -> do
+          createDirectoryIfMissing True mirDir
+          let mirPot = TreasuryMIR
+          forM_ (zip [1..] $ chunk 200 rewards) $ \(idx, ch) -> do
+            let
+              x = (\(hash, value) -> (StakeCredentialByKey hash, fromInteger value)) <$> ch
+              mirCert :: Certificate
+              mirCert = makeMIRCertificate mirPot x
+
+            BSC.writeFile (mirDir <> "/mir-" <> show idx <> ".cert") . serialiseToCBOR $ mirCert
 
     -- Genesis
     Genesis gOpts -> do

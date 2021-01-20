@@ -100,13 +100,15 @@ instance FromJSON Fund where
 
 jsonParserOptions = Aeson.defaultOptions { Aeson.fieldLabelModifier = (fmap toLower) . (drop 2)
                                          }
-
 chunkFund :: Int -> Fund -> [Fund]
-chunkFund x f
-  | x <= 0            = []
-chunkFund x (Fund []) = []
-chunkFund x (Fund fs) =
+chunkFund c (Fund fs) = Fund <$> chunk c fs
+
+chunk :: Int -> [a] -> [[a]]
+chunk c xs
+  | c <= 0 = []
+chunk c [] = []
+chunk c xs =
   let
-    (chunk, rest) = splitAt x fs
+    (ch, rest) = splitAt c xs
   in
-    [Fund chunk] <> chunkFund x (Fund rest)
+    [ch] <> chunk c rest

@@ -142,7 +142,7 @@ queryVoteRegistrationInfo mSlotNo  = do
                                  else acc
            ) mempty regos
 
-  liftIO $ hPutStr stderr $ "\nKeys eligible: " <> show (length xs)
+  liftIO $ hPutStrLn stderr $ "\nKeys eligible: " <> show (length xs)
 
   let
     xs' = zip [1..] (M.toList xs)
