@@ -1,10 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Main where
 
-import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraMary))
+import           Cardano.Api (AnyCardanoEra(AnyCardanoEra), cardanoEraStyle, CardanoEraStyle(ShelleyBasedEra), ShelleyBasedEra(..), shelleyBasedEra, CardanoEra(..))
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
-import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
+import           Cardano.Api.Modes
+import           Cardano.Api.IPC
+import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace), ShelleyLedgerEra,
                      StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,
                      serialiseToBech32, serialiseToRawBytesHex)
 import           Cardano.Chain.Slotting (EpochSlots (..))
@@ -25,6 +29,7 @@ import qualified Data.Map.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Options.Applicative as Opt
+import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Fetching (Fund, chunkFund, fundFromVotingFunds)
@@ -40,6 +45,14 @@ import qualified Config.Rewards as Rewards
 import           Genesis (decodeGenesisTemplateJSON, getBlockZeroDate, setBlockZeroDate,
                      setInitialFunds)
 
+obtainLedgerEraClassConstraints
+  :: ShelleyLedgerEra era ~ ledgerera
+  => ShelleyBasedEra era
+  -> (Consensus.ShelleyBasedEra ledgerera => a) -> a
+obtainLedgerEraClassConstraints ShelleyBasedEraShelley f = f
+obtainLedgerEraClassConstraints ShelleyBasedEraAllegra f = f
+obtainLedgerEraClassConstraints ShelleyBasedEraMary    f = f
+
 main :: IO ()
 main = do
   regOpts <- Opt.execParser Register.opts
@@ -47,27 +60,28 @@ main = do
   case eCfg of
     Left (err :: Register.ConfigError) ->
       fail $ show err
-    Right (Register.Config addr voteSign paySign votePub networkId ttl outFile) -> do
+    Right (Register.Config addr voteSign paySign votePub networkId ttl outFile (AnyCardanoEra era) (AnyConsensusModeParams consensusModeParams)) -> do
       eResult <- runExceptT $ do
         SocketPath sockPath <-  readEnvSocketPath
-        withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
-          -- Create a vote registration, encoding our registration
-          -- as transaction metadata. The transaction sends some
-          -- unspent ADA back to us (minus a fee).
+        let connectInfo = LocalNodeConnectInfo consensusModeParams networkId sockPath
+        -- Create a vote registration, encoding our registration
+        -- as transaction metadata. The transaction sends some
+        -- unspent ADA back to us (minus a fee).
 
-          -- Generate vote payload (vote information is encoded as metadata).
-          let vote = createVoteRegistration voteSign votePub addr
+        -- Generate vote payload (vote information is encoded as metadata).
+        let vote = createVoteRegistration voteSign votePub addr
 
-          -- Encode the vote as a transaction and sign it
-          voteRegistrationTx <- signTx paySign <$> encodeVoteRegistration connectInfo ShelleyBasedEraMary addr ttl vote
+        -- Encode the vote as a transaction and sign it
+        case cardanoEraStyle era of
+          ShelleyBasedEra era' -> do
+            liftIO $ (writeFile outFile =<<) $ (prettyTx . signTx paySign) <$> encodeVoteRegistration connectInfo era' addr ttl vote
 
-          -- Output helpful information
-          liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
-          liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (verificationKeyRawBytes voteSign)
-          liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
+            -- Output helpful information
+            liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
+            liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (verificationKeyRawBytes voteSign)
+            liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
+          otherwise            -> error "Byron protocol not supported"
 
-          -- Output our vote transaction
-          liftIO . writeFile outFile $ prettyTx voteRegistrationTx
       case eResult of
         Left  (err :: AppError) -> fail $ show err
         Right ()                -> pure ()

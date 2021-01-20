@@ -2,8 +2,8 @@
 
 module Main where
 
-import           Cardano.API (AddressAny, Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
-                     makeMIRCertificate, serialiseToCBOR, serialiseAddress)
+import           Cardano.Api (AddressAny, serialiseAddress, Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
+                     makeMIRCertificate, serialiseToCBOR)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
                      StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,

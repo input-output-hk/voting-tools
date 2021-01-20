@@ -30,8 +30,8 @@ import           System.IO (hPutStr, hPutStrLn, stderr)
 
 import           Ouroboros.Network.Block (unSlotNo)
 
-import           Cardano.API (SlotNo)
-import qualified Cardano.API as Api
+import           Cardano.Api (SlotNo)
+import qualified Cardano.Api as Api
 import           Cardano.API.Extended (VotingKeyPublic, serialiseToBech32')
 import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace), metadataFromJson)
 import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
@@ -90,7 +90,7 @@ queryStake mSlotRestriction stakeHash = do
     Nothing             ->
       pure $ "SELECT SUM(utxo_view.value) FROM utxo_view WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "';"
     Just slotNo -> do
-      -- Get first tx is slot after one we've asked to restrict the
+      -- Get first tx in slot after one we've asked to restrict the
       -- query to, we don't want to get this Tx or any later Txs.
       let
         firstUnwantedTxIdSql = "SELECT tx.id FROM tx LEFT OUTER JOIN block ON block.id = tx.block_id WHERE block.slot_no > " <> T.pack (show $ unSlotNo slotNo) <> " LIMIT 1";

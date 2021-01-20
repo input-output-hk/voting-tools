@@ -29,7 +29,7 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , parseMetadataFromJson
                                    ) where
 
-import           Cardano.API (StakeKey, TxMetadata (TxMetadata), VerificationKey,
+import           Cardano.Api (StakeKey, TxMetadata (TxMetadata), VerificationKey,
                      makeTransactionMetadata, serialiseToRawBytes)
 import           Cardano.Api.Typed (TxMetadata,
                      TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText),

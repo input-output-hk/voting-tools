@@ -31,7 +31,7 @@ import           Control.Monad.Except (MonadError)
 import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 
-import           Cardano.API (AsType (AsHash, AsPaymentExtendedKey, AsPaymentKey, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+import           Cardano.Api (AsType (AsHash, AsPaymentExtendedKey, AsPaymentKey, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
                      FromSomeType, HasTypeProxy, Hash, Key, NetworkId, PaymentExtendedKey,
                      PaymentKey,
                      SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),

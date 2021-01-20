@@ -15,11 +15,11 @@ import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty)
 
-import           Cardano.API (deserialiseFromRawBytes, deserialiseFromRawBytesHex,
+import           Cardano.Api (deserialiseFromRawBytes, deserialiseFromRawBytesHex,
                      makeTransactionMetadata)
 import           Cardano.Api.Typed
-import           Cardano.API.Voting (AsType (AsVotingKeyPublic))
-import qualified Cardano.API.Voting as Voting
+import           Cardano.Api.Voting (AsType (AsVotingKeyPublic))
+import qualified Cardano.Api.Voting as Voting
 import           Cardano.CLI.Voting (createVoteRegistration)
 import           Cardano.CLI.Voting.Error (AppError)
 

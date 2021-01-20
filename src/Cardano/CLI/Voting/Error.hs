@@ -7,7 +7,7 @@
 
 module Cardano.CLI.Voting.Error where
 
-import           Cardano.API (Address, AddressAny, Bech32DecodeError, FileError, Lovelace)
+import           Cardano.Api (Address, AddressAny, Bech32DecodeError, FileError, Lovelace)
 import           Cardano.Api.Typed (Shelley, TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError (..))
 import qualified Codec.Binary.Bech32 as Bech32
@@ -16,8 +16,7 @@ import           Control.Lens.TH (makeClassyPrisms)
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsBech32HumanReadablePartError (__Bech32HumanReadablePartError),
                      AsEnvSocketError (_EnvSocketError), AsFileError (__FileError),
-                     AsShelleyQueryCmdLocalStateQueryError (_ShelleyQueryCmdLocalStateQueryError),
-                     Bech32HumanReadablePartError, ShelleyQueryCmdLocalStateQueryError)
+                     Bech32HumanReadablePartError)
 import           Cardano.CLI.Voting.Fee (AsNotEnoughFundsError (_NotEnoughFundsError),
                      NotEnoughFundsError)
 
@@ -29,7 +28,6 @@ makeClassyPrisms ''AddressUTxOError
 makeClassyPrisms ''TextEnvelopeError
 
 data AppError = AppEnvSocketError !EnvSocketError
-    | AppShelleyQueryError !ShelleyQueryCmdLocalStateQueryError
     | AppBech32DecodeError !Bech32DecodeError
     | AppBech32HumanReadablePartError !Bech32HumanReadablePartError
     | AppAddressUTxOError !AddressUTxOError
@@ -44,9 +42,6 @@ instance AsFileError AppError () where
 
 instance AsEnvSocketError AppError where
   _EnvSocketError = _AppEnvSocketError
-
-instance AsShelleyQueryCmdLocalStateQueryError AppError where
-  _ShelleyQueryCmdLocalStateQueryError = _AppShelleyQueryError
 
 instance AsBech32DecodeError AppError where
   _Bech32DecodeError = _AppBech32DecodeError

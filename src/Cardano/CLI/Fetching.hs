@@ -22,9 +22,9 @@ import           Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import           GHC.Generics
 
-import           Cardano.API (Lovelace, Quantity)
-import           Cardano.Api.Typed (Lovelace(Lovelace))
-import qualified Cardano.API as Api
+import           Cardano.Api (Lovelace, Quantity)
+import           Cardano.Api.Typed (Lovelace(Lovelace), Quantity)
+import qualified Cardano.Api as Api
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),

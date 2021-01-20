@@ -14,11 +14,11 @@ import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog
 
-import           Cardano.API (AsType(AsPaymentKey), AddressAny, Lovelace, deserialiseFromRawBytes, TxMetadata(TxMetadata), TxMetadataValue(TxMetaNumber, TxMetaBytes, TxMetaText, TxMetaList, TxMetaMap), AsType(AsStakeKey, AsStakeExtendedKey), getVerificationKey, verificationKeyHash, toAddressAny, makeShelleyAddress, NetworkId(Testnet, Mainnet), PaymentCredential(PaymentCredentialByKey), StakeAddressReference(NoStakeAddress))
+import           Cardano.Api (AsType(AsPaymentKey), AddressAny, Lovelace, deserialiseFromRawBytes, TxMetadata(TxMetadata), TxMetadataValue(TxMetaNumber, TxMetaBytes, TxMetaText, TxMetaList, TxMetaMap), AsType(AsStakeKey, AsStakeExtendedKey), getVerificationKey, verificationKeyHash, toAddressAny, makeShelleyAddress, NetworkId(Testnet, Mainnet), PaymentCredential(PaymentCredentialByKey), StakeAddressReference(NoStakeAddress))
 import           Cardano.Api.Typed (generateSigningKey, NetworkMagic(NetworkMagic))
 import qualified Data.Aeson as Aeson
 
-import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
+import           Cardano.Api.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Voting.Signing (VoteVerificationKey(..), VoteSigningKey(..), voteSigningKeyFromStakeSigningKey, voteSigningKeyFromStakeExtendedSigningKey, getVoteVerificationKey)
 import           Cardano.CLI.Voting
 import Cardano.CLI.Voting.Metadata (mkVotePayload, VotePayload, Vote, signVotePayload)
