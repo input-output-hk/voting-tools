@@ -1,7 +1,7 @@
 # Catalyst Voting Tools
 
-A library and series of executables for aiding programmers and users
-to interact with the voting capabilities of Catalyst.
+A library and series of executables to aid programmers and users to
+interact with the voting capabilities of Catalyst.
 
 The "voter-registration" executable aids the user in registering to
 vote. The executable creates a transaction, with the vote registration
