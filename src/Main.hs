@@ -2,10 +2,9 @@
 
 module Main where
 
-import           Data.Foldable (forM_)
-import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley), Certificate, makeMIRCertificate, serialiseToCBOR)
+import           Cardano.API (Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
+                     makeMIRCertificate, serialiseToCBOR)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
-import           Database.Persist.Postgresql (ConnectionString)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
                      StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,
                      serialiseToBech32, serialiseToRawBytesHex)
@@ -21,11 +20,13 @@ import qualified Data.Aeson.Encode.Pretty as Aeson
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy.Char8 as BLC
+import           Data.Foldable (forM_)
 import           Data.Function ((&))
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Database.Persist.Postgresql (ConnectionString)
 import           Database.Persist.Postgresql (Entity, IsolationLevel (Serializable), SqlBackend,
                      SqlPersistT, rawQuery, rawSql, runSqlConnWithIsolation, withPostgresqlConn)
 import qualified Options.Applicative as Opt
@@ -33,7 +34,7 @@ import           Shelley.Spec.Ledger.TxBody (MIRPot (..))
 import           System.Directory (createDirectoryIfMissing)
 
 import           Cardano.API.Extended (readEnvSocketPath)
-import           Cardano.CLI.Fetching (Fund, chunkFund, chunk, fundFromVotingFunds)
+import           Cardano.CLI.Fetching (Fund, chunk, chunkFund, fundFromVotingFunds)
 import           Cardano.CLI.Query (MetadataError)
 import qualified Cardano.CLI.Query as Query
 import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
