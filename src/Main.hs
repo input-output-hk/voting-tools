@@ -4,6 +4,7 @@ module Main where
 
 import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley))
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
+import           Database.Persist.Postgresql (ConnectionString)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
                      StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,
                      serialiseToBech32, serialiseToRawBytesHex)
@@ -96,37 +97,6 @@ main = do
 
           BLC.writeFile outfile . toJSON Aeson.Generic $ genesis
 
-    -- Voter Registration
-    Register regOpts -> do
-      eCfg <- runExceptT (Register.mkConfig regOpts)
-      case eCfg of
-        Left (err :: Register.ConfigError) ->
-          fail $ show err
-        Right (Register.Config addr voteSign paySign votePub networkId ttl outFile) -> do
-          eResult <- runExceptT $ do
-            SocketPath sockPath <-  readEnvSocketPath
-            withlocalNodeConnectInfo (CardanoProtocol $ EpochSlots 21600) networkId sockPath $ \connectInfo -> do
-              -- Create a vote registration, encoding our registration
-              -- as transaction metadata. The transaction sends some
-              -- unspent ADA back to us (minus a fee).
-
-              -- Generate vote payload (vote information is encoded as metadata).
-              let vote = createVoteRegistration voteSign votePub
-
-              -- Encode the vote as a transaction and sign it
-              voteRegistrationTx <- signTx paySign <$> encodeVoteRegistration connectInfo ShelleyBasedEraShelley addr ttl vote
-
-              -- Output helpful information
-              liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
-              liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (verificationKeyRawBytes voteSign)
-              liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
-
-              -- Output our vote transaction
-              liftIO . writeFile outFile $ prettyTx voteRegistrationTx
-          case eResult of
-            Left  (err :: AppError) -> fail $ show err
-            Right ()                -> pure ()
-
 toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString
 toJSON numFormat = Aeson.encodePretty' (Aeson.defConfig { Aeson.confCompare = Aeson.compare, Aeson.confNumFormat = numFormat })
 
@@ -139,3 +109,7 @@ runQuery dbConfig q = runNoLoggingT $ do
     case result of
       Left (err :: MetadataError) -> fail $ show err
       Right x                     -> pure x
+
+
+pgConnectionString :: DatabaseConfig -> ConnectionString
+pgConnectionString (DatabaseConfig dbName dbUser dbHost) = BSC.pack $ "host=" <> dbHost <> " dbname=" <> dbName <> " user=" <> dbUser
