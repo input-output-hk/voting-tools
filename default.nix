@@ -31,9 +31,13 @@ let
 
   self = {
     inherit votingToolsHaskellPackages voterRegistrationTarball;
-    inherit haskellPackages hydraEvalErrors;
+    inherit haskellPackages hydraEvalErrors check-hydra;
 
     inherit (pkgs.iohkNix) checkCabalProject;
+
+    inherit (haskellPackages.voter-registration.identifier) version;
+    # Grab the executable component of our package.
+    inherit (haskellPackages.voter-registration.components.exes) voter-registration;
 
     # `tests` are the test suites which have been built.
     tests = collectComponents' "tests" haskellPackages;
@@ -50,6 +54,6 @@ let
       withHoogle = true;
     };
 
-    integration-tests = import ./test/integration/vm.nix { inherit pkgs; };
+    # integration-tests = import ./test/integration/vm.nix { inherit pkgs; };
   };
 in self
