@@ -46,6 +46,8 @@ data Config = Config
     -- ^ Network (mainnet / testnet magic)
     , cfgThreshold         :: Threshold
     -- ^ Minimum threshold of funds required to vote
+    , cfgScale             :: Double
+    -- ^ Scale the voting funds by this amount to arrive at the voting power
     , cfgDb                :: DatabaseConfig
     -- ^ cardano-db-sync database configuration
     , cfgSlot              :: Maybe SlotNo
@@ -65,13 +67,13 @@ makeClassyPrisms ''ConfigError
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
-mkConfig (Opts networkId dbName dbUser dbHost mExtraFundsFp mSlotNo threshold outfile) = do
+mkConfig (Opts networkId dbName dbUser dbHost mExtraFundsFp mSlotNo threshold scale outfile) = do
   extraFunds <-
     case mExtraFundsFp of
       Nothing             -> pure mempty
       (Just extraFundsFp) -> readExtraFundsFile extraFundsFp
 
-  pure $ Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo extraFunds outfile
+  pure $ Config networkId threshold scale (DatabaseConfig dbName dbUser dbHost) mSlotNo extraFunds outfile
 
 readExtraFundsFile
   :: ( MonadIO m
@@ -91,6 +93,7 @@ data Opts = Opts
     , optExtraFundsFile :: Maybe FilePath
     , optSlotNo         :: Maybe SlotNo
     , optThreshold      :: Threshold
+    , optScale          :: Double
     , optOutFile        :: FilePath
     }
     deriving (Eq, Show)
@@ -104,6 +107,7 @@ parseOpts = Opts
   <*> optional (strOption (long "extra-funds" <> metavar "FILE" <> help "File containing extra funds to include in the query (JSON)"))
   <*> optional pSlotNo
   <*> fmap fromIntegral (option auto (long "threshold" <> metavar "INT64" <> showDefault <> value defaultThreshold <> help "Minimum threshold of funds required to vote (Lovelace)"))
+  <*> fmap fromIntegral (option auto (long "scale" <> metavar "DOUBLE" <> showDefault <> value 1 <> help "Scale the voting funds by this amount to arrive at the voting power"))
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
 
 opts =

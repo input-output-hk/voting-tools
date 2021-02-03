@@ -56,7 +56,7 @@ main = do
           -- unspent ADA back to us (minus a fee).
 
           -- Generate vote payload (vote information is encoded as metadata).
-          let vote = createVoteRegistration voteSign votePub
+          let vote = createVoteRegistration voteSign votePub addr
 
           -- Encode the vote as a transaction and sign it
           voteRegistrationTx <- signTx paySign <$> encodeVoteRegistration connectInfo ShelleyBasedEraShelley addr ttl vote

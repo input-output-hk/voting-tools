@@ -136,3 +136,4 @@ prop_registry_functor_composition = property $ do
     g (Gen.OrderedPayload ord payload) = (Gen.OrderedPayload (succ . succ $ ord) (succ . succ $ payload))
 
   fmap (f . g) r === fmap (g . f) r
+λ> λ> 

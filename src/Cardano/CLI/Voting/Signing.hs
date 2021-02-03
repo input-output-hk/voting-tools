@@ -16,6 +16,8 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , withVoteVerificationKey
                                   , withVoteSigningKey
                                   , withVoteShelleySigningKey
+                                  , voteSigningKeyFromStakeSigningKey
+                                  , voteSigningKeyFromStakeExtendedSigningKey
                                   , getStakeHash
                                   , sign
                                   , verify
@@ -177,6 +179,12 @@ withVoteShelleySigningKey vsk f =
   case vsk of
     AStakeSigningKey (StakeSigningKey dsign)                -> f ( toShelleySigningKey $ WitnessStakeKey (StakeSigningKey dsign))
     AStakeExtendedSigningKey (StakeExtendedSigningKey xprv) -> f ( toShelleySigningKey $ WitnessStakeExtendedKey (StakeExtendedSigningKey xprv))
+
+voteSigningKeyFromStakeSigningKey :: SigningKey StakeKey -> VoteSigningKey
+voteSigningKeyFromStakeSigningKey sk = AStakeSigningKey sk
+
+voteSigningKeyFromStakeExtendedSigningKey :: SigningKey StakeExtendedKey -> VoteSigningKey
+voteSigningKeyFromStakeExtendedSigningKey sk = AStakeExtendedSigningKey sk
 
 readVoteSigningKeyFile
   :: ( MonadIO m
