@@ -52,9 +52,6 @@ import qualified Data.Map.Strict as M
 
 import qualified Cardano.API.Jormungandr as Jormungandr
 
-parseMetadataFromJson :: Aeson.Object -> Either Api.TxMetadataJsonError Api.TxMetadata
-parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonNoSchema . Aeson.Object
-
 data MetadataRetrievalError
   = MetadataFailedToRetrieveMetadataField
   | MetadataFailedToRetrieveSignatureField
@@ -121,7 +118,7 @@ queryVoteRegistrationInfo
      , AsMetadataRetrievalError e
      )
   => Maybe SlotNo
-  -> m (Contributions VotingKeyPublic (Api.Hash Api.StakeKey) Integer)
+  -> m (Contributions VotingKeyPublic (AddressAny, Api.Hash Api.StakeKey) Integer)
 queryVoteRegistrationInfo mSlotNo  = do
   regos <- queryVoteRegistration mSlotNo
 
@@ -129,16 +126,17 @@ queryVoteRegistrationInfo mSlotNo  = do
 
   let
     -- Each stake key has one public voting key it can stake to
-    xs :: Map (Api.Hash Api.StakeKey) VotingKeyPublic
+    xs :: Map (Api.Hash Api.StakeKey) (VotingKeyPublic, AddressAny)
     xs = fmap snd $ foldl' (\acc (txid, rego) ->
              let
                verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
                votePub    = voteRegistrationPublicKey rego
+               rewardsAddr = voteRegistrationRewardsAddr rego
              in
                case M.lookup verKeyHash acc of
-                 Nothing      -> M.insert verKeyHash (txid, votePub) acc
-                 Just (t, v)  -> if txid >= t
-                                 then M.insert verKeyHash (txid, votePub) acc
+                 Nothing      -> M.insert verKeyHash (txid, (votePub, rewardsAddr)) acc
+                 Just (t, _)  -> if txid >= t
+                                 then M.insert verKeyHash (txid, (votePub, rewardsAddr)) acc
                                  else acc
            ) mempty regos
 
@@ -147,11 +145,11 @@ queryVoteRegistrationInfo mSlotNo  = do
   let
     xs' = zip [1..] (M.toList xs)
 
-  foldM (\acc (idx, (verKeyHash, votepub)) -> do
+  foldM (\acc (idx, (verKeyHash, (votepub, rewardsAddr))) -> do
     (Api.Lovelace stake) <- queryStake mSlotNo verKeyHash
 
     liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show idx <> " of " <> show (length xs)
-    pure $ contribute votepub verKeyHash stake acc
+    pure $ contribute votepub (rewardsAddr, verKeyHash) stake acc
         ) mempty xs'
 
 queryVotingProportion
@@ -165,12 +163,12 @@ queryVotingProportion
   => Api.NetworkId
   -> Maybe SlotNo
   -> Threshold
-  -> m (Map (Api.Hash Api.StakeKey) Double)
+  -> m (Map (AddressAny, Api.Hash Api.StakeKey) Double)
 queryVotingProportion nw mSlotNo (Api.Lovelace threshold) = do
   info <- filterAmounts (> threshold) <$> queryVoteRegistrationInfo mSlotNo
 
   let
-    proportions :: [((Api.Hash Api.StakeKey), Double)]
+    proportions :: [((AddressAny, Api.Hash Api.StakeKey), Double)]
     proportions =
       proportionalize info
       & foldMap snd

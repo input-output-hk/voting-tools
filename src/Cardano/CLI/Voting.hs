@@ -89,7 +89,7 @@ import           Cardano.API.Extended (AsBech32DecodeError, AsBech32HumanReadabl
                      queryUTxOFromLocalState)
 import           Cardano.CLI.Voting.Error
 import           Cardano.CLI.Voting.Fee
-import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload,
+import           Cardano.CLI.Voting.Metadata (RewardsAddress, Vote, VotePayload, mkVotePayload, signVotePayload,
                      voteToTxMetadata)
 import           Cardano.CLI.Voting.Signing (VotePaymentKey, VoteSigningKey,
                      withVoteShelleySigningKey, withVoteSigningKey, withWitnessPaymentKey)
@@ -113,10 +113,11 @@ import qualified Shelley.Spec.Ledger.UTxO
 createVoteRegistration
   :: VoteSigningKey
   -> VotingKeyPublic
+  -> RewardsAddress
   -> Vote
-createVoteRegistration skey votepub =
+createVoteRegistration skey votepub rewardsAddr =
     let
-      payload     = mkVotePayload votepub (getVoteVerificationKey skey)
+      payload     = mkVotePayload votepub (getVoteVerificationKey skey) rewardsAddr
       payloadCBOR = CBOR.serialize' payload
 
       payloadSig  :: SigDSIGN (DSIGN StandardCrypto)

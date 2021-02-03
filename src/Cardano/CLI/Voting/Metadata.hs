@@ -11,19 +11,21 @@
 -- considered a valid vote.
 module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , Vote
+                                   , RewardsAddress
                                    , mkVotePayload
                                    , signVotePayload
                                    , voteToTxMetadata
-                                   , votePayloadToTxMetadata
                                    , voteSignature
                                    , MetadataParsingError(..)
                                    , AsMetadataParsingError(..)
-                                   , fromTxMetadata
+                                   , voteFromTxMetadata
                                    , withMetaKey
                                    , metadataMetaKey
                                    , signatureMetaKey
                                    , voteRegistrationPublicKey
                                    , voteRegistrationVerificationKey
+                                   , metadataToJson
+                                   , parseMetadataFromJson
                                    ) where
 
 import           Cardano.API (StakeKey, TxMetadata (TxMetadata), VerificationKey,
@@ -56,11 +58,14 @@ import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPubl
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKey), VoteVerificationKey,
                      verify)
 
+type RewardsAddress = Api.AddressAny
+
 -- | The payload of a vote (vote public key and stake verification
 -- key).
 data VotePayload
-  = VotePayload { _votePayloadVoteKey :: VotingKeyPublic
+  = VotePayload { _votePayloadVoteKey         :: VotingKeyPublic
                 , _votePayloadVerificationKey :: VoteVerificationKey
+                , _votePayloadRewardsAddr     :: RewardsAddress
                 }
   deriving (Eq, Show)
 
@@ -72,10 +77,13 @@ data Vote
   deriving (Eq, Show)
 
 voteRegistrationPublicKey :: Vote -> VotingKeyPublic
-voteRegistrationPublicKey (Vote (VotePayload pubkey _) _) = pubkey
+voteRegistrationPublicKey = _votePayloadVoteKey . _voteMeta
 
 voteRegistrationVerificationKey :: Vote -> VoteVerificationKey
-voteRegistrationVerificationKey (Vote (VotePayload _ vkey) _) = vkey
+voteRegistrationVerificationKey = _votePayloadVerificationKey . _voteMeta
+
+voteRegistrationRewardsAddress :: Vote -> RewardsAddress
+voteRegistrationRewardsAddress = _votePayloadRewardsAddr . _voteMeta
 
 data MetadataParsingError
   = MetadataMissingField TxMetadata Word64
@@ -84,6 +92,7 @@ data MetadataParsingError
   | DeserialiseSigDSIGNFailure ByteString
   | DeserialiseVerKeyDSIGNFailure ByteString
   | DeserialiseVotePublicKeyFailure ByteString
+  | DeserialisePaymentAddressFailure ByteString
   | MetadataSignatureInvalid VotePayload (Crypto.SigDSIGN (DSIGN StandardCrypto))
   deriving (Eq, Show)
 
@@ -111,15 +120,16 @@ instance ToCBOR VotePayload where
 instance ToCBOR Vote where
   toCBOR = CBOR.toCBOR . voteToTxMetadata
 
-
 mkVotePayload
   :: VotingKeyPublic
   -- ^ Voting public key
   -> VoteVerificationKey
   -- ^ Vote verification key
+  -> RewardsAddress
+  -- ^ Address used to pay for the vote registration
   -> VotePayload
   -- ^ Payload of the vote
-mkVotePayload votepub vkey = VotePayload votepub vkey
+mkVotePayload votepub vkey rewardsAddr = VotePayload votepub vkey rewardsAddr
 
 signVotePayload
   :: VotePayload
@@ -128,7 +138,7 @@ signVotePayload
   -- ^ Signature
   -> Maybe Vote
   -- ^ Signed vote
-signVotePayload payload@(VotePayload votePub vkey) sig =
+signVotePayload payload@(VotePayload { _votePayloadVerificationKey = vkey }) sig =
   let
     payloadCBOR = CBOR.serialize' payload
   in
@@ -137,10 +147,11 @@ signVotePayload payload@(VotePayload votePub vkey) sig =
     else Just $ Vote payload sig
 
 votePayloadToTxMetadata :: VotePayload -> TxMetadata
-votePayloadToTxMetadata (VotePayload votepub stkVerify) =
+votePayloadToTxMetadata (VotePayload votepub stkVerify paymentAddr) =
   makeTransactionMetadata $ M.fromList [ (61284, TxMetaMap
     [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
     , (TxMetaNumber 2, TxMetaBytes $ serialiseToRawBytes stkVerify)
+    , (TxMetaNumber 3, TxMetaBytes $ serialiseToRawBytes paymentAddr)
     ])]
 
 voteToTxMetadata :: Vote -> TxMetadata
@@ -153,14 +164,18 @@ voteToTxMetadata (Vote payload sig) =
   in
     payloadMeta <> sigMeta
 
-parseMetadataFromJson :: Aeson.Value -> Either Api.TxMetadataJsonError TxMetadata
-parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonDetailedSchema
+parseMetadataFromJson :: Aeson.Value -> Either Api.TxMetadataJsonError Api.TxMetadata
+parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonNoSchema
 
-fromTxMetadata :: TxMetadata -> Either MetadataParsingError Vote
-fromTxMetadata meta = do
-  votePubRaw   <- metaKey 61284 meta >>= metaNum 1 >>= asBytes
-  stkVerifyRaw <- metaKey 61284 meta >>= metaNum 2 >>= asBytes
-  sigBytes     <- metaKey 61285 meta >>= metaNum 1 >>= asBytes
+metadataToJson :: TxMetadata -> Aeson.Value
+metadataToJson = Api.metadataToJson Api.TxMetadataJsonNoSchema
+
+voteFromTxMetadata :: TxMetadata -> Either MetadataParsingError Vote
+voteFromTxMetadata meta = do
+  votePubRaw     <- metaKey 61284 meta >>= metaNum 1 >>= asBytes
+  stkVerifyRaw   <- metaKey 61284 meta >>= metaNum 2 >>= asBytes
+  paymentAddrRaw <- metaKey 61284 meta >>= metaNum 3 >>= asBytes
+  sigBytes       <- metaKey 61285 meta >>= metaNum 1 >>= asBytes
 
   sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
     Nothing -> throwError (_DeserialiseSigDSIGNFailure # sigBytes)
@@ -171,9 +186,12 @@ fromTxMetadata meta = do
   votePub   <- case Api.deserialiseFromRawBytes AsVotingKeyPublic votePubRaw of
     Nothing -> throwError (_DeserialiseVotePublicKeyFailure # votePubRaw)
     Just x  -> pure x
+  paymentAddr <- case Api.deserialiseFromRawBytes Api.AsAddressAny paymentAddrRaw of
+    Nothing -> throwError (_DeserialisePaymentAddressFailure # paymentAddrRaw)
+    Just x  -> pure x
 
   let
-    payload = mkVotePayload votePub stkVerify
+    payload = mkVotePayload votePub stkVerify paymentAddr
 
   case payload `signVotePayload` sig of
     Nothing   -> throwError (_MetadataSignatureInvalid # (payload, sig))

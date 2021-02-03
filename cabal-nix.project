@@ -1,4 +1,5 @@
 packages:
   ./.
+  ./registration
 tests: True
 benchmarks: True

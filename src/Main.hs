@@ -58,27 +58,24 @@ main = do
     Rewards rOpts -> do
       let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile mMirDir) = Rewards.mkConfig rOpts
 
-      (votingProportions :: Map (Hash StakeKey) Double) <-
+      (votingProportions :: Map (AddressAny, Hash StakeKey) Double) <-
         runQuery db $ Query.queryVotingProportion networkId slotNo threshold
 
       let
-        raw :: [(Hash StakeKey, Double)]
-        raw = M.toList votingProportions
+        raw :: [(AddressAny, Double)]
+        raw = fmap (\((rewardsAddr, _stk), amt) -> (rewards, amt)) $ M.toList votingProportions
 
         ofRewards :: Double -> Double
         ofRewards = ((fromIntegral totalRewards) *)
 
-        toBech32Addr :: Hash StakeKey -> Text
-        toBech32Addr = serialiseToBech32 . makeStakeAddress networkId . StakeCredentialByKey
+        toRewards :: [(AddressAny, Double)] -> [(AddressAny, Integer)]
+        toRewards = fmap (\(rewardsAddr, proportion) -> (rewardsAddr, proportion & ofRewards & round))
 
-        toRewards :: [(Hash StakeKey, Double)] -> [(Hash StakeKey, Integer)]
-        toRewards = fmap (\(hash, proportion) -> (hash, proportion & ofRewards & round))
-
-        rewards :: [(Hash StakeKey, Integer)]
+        rewards :: [(AddressAny, Integer)]
         rewards = toRewards raw
 
-        toAddrLovelaceMap :: [(Hash StakeKey, Integer)] -> Map Text Integer
-        toAddrLovelaceMap = M.fromList . fmap (\(hash, reward) -> (toBech32Addr hash, reward))
+        toAddrLovelaceMap :: [(AddressAny, Integer)] -> Map Text Integer
+        toAddrLovelaceMap = M.fromList . fmap (\(addr, reward) -> (serialiseToBech32 addr, reward))
 
       BLC.writeFile outfile . toJSON Aeson.Decimal . toAddrLovelaceMap $ rewards
 
