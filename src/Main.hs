@@ -56,7 +56,7 @@ main = do
   case options of
     -- Rewards
     Rewards rOpts -> do
-      let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile mMirDir) = Rewards.mkConfig rOpts
+      let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile) = Rewards.mkConfig rOpts
 
       (votingProportions :: Map (AddressAny, Hash StakeKey) Double) <-
         runQuery db $ Query.queryVotingProportion networkId slotNo threshold
@@ -78,19 +78,6 @@ main = do
         toAddrLovelaceMap = M.fromList . fmap (\(addr, reward) -> (serialiseAddress addr, reward))
 
       BLC.writeFile outfile . toJSON Aeson.Decimal . toAddrLovelaceMap $ rewards
-
-      -- case mMirDir of
-      --   Nothing     -> pure ()
-      --   Just mirDir -> do
-      --     createDirectoryIfMissing True mirDir
-      --     let mirPot = TreasuryMIR
-      --     forM_ (zip [1..] $ chunk 200 rewards) $ \(idx, ch) -> do
-      --       let
-      --         x = (\(addr, value) -> (_ addr, fromInteger value)) <$> ch
-      --         mirCert :: Certificate
-      --         mirCert = makeMIRCertificate mirPot x
-
-      --       BSC.writeFile (mirDir <> "/mir-" <> show idx <> ".cert") . serialiseToCBOR $ mirCert
 
     -- Genesis
     Genesis gOpts -> do

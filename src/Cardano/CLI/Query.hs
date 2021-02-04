@@ -193,7 +193,6 @@ queryVotingFunds
   -> m VotingFunds
 queryVotingFunds nw mSlotNo (Api.Lovelace threshold) = do
   info <- queryVoteRegistrationInfo mSlotNo
-  liftIO $ putStrLn $ "Got " <> show (length info) <> " vote regos."
 
   let info' = filterAmounts (> threshold) info
 
