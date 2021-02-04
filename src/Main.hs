@@ -34,7 +34,7 @@ import           Shelley.Spec.Ledger.TxBody (MIRPot (..))
 import           System.Directory (createDirectoryIfMissing)
 
 import           Cardano.API.Extended (readEnvSocketPath)
-import           Cardano.CLI.Fetching (Fund, chunk, chunkFund, fundFromVotingFunds)
+import           Cardano.CLI.Fetching (Fund, chunk, chunkFund, fundFromVotingFunds, scaleFund)
 import           Cardano.CLI.Query (MetadataError)
 import qualified Cardano.CLI.Query as Query
 import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
@@ -98,13 +98,13 @@ main = do
       case eCfg of
         Left (err :: Genesis.ConfigError) ->
           fail $ show err
-        Right (Genesis.Config networkId threshold db slotNo extraFunds outfile) -> do
+        Right (Genesis.Config networkId threshold scale db slotNo extraFunds outfile) -> do
           votingFunds <-
             runQuery db $ Query.queryVotingFunds networkId slotNo threshold
 
           let
             allFunds :: Fund
-            allFunds = fundFromVotingFunds $ votingFunds <> extraFunds
+            allFunds = scaleFund scale $ fundFromVotingFunds $ votingFunds <> extraFunds
 
           genesisTemplate <- decodeGenesisTemplateJSON
           blockZeroDate   <- getBlockZeroDate
