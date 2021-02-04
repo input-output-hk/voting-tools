@@ -2,8 +2,8 @@
 
 module Main where
 
-import           Cardano.API (Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
-                     makeMIRCertificate, serialiseToCBOR)
+import           Cardano.API (AddressAny, Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
+                     makeMIRCertificate, serialiseToCBOR, serialiseAddress)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
                      StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,
@@ -63,7 +63,7 @@ main = do
 
       let
         raw :: [(AddressAny, Double)]
-        raw = fmap (\((rewardsAddr, _stk), amt) -> (rewards, amt)) $ M.toList votingProportions
+        raw = fmap (\((rewardsAddr, stkHash), v) -> (rewardsAddr, v)) $ M.toList votingProportions
 
         ofRewards :: Double -> Double
         ofRewards = ((fromIntegral totalRewards) *)
@@ -75,22 +75,22 @@ main = do
         rewards = toRewards raw
 
         toAddrLovelaceMap :: [(AddressAny, Integer)] -> Map Text Integer
-        toAddrLovelaceMap = M.fromList . fmap (\(addr, reward) -> (serialiseToBech32 addr, reward))
+        toAddrLovelaceMap = M.fromList . fmap (\(addr, reward) -> (serialiseAddress addr, reward))
 
       BLC.writeFile outfile . toJSON Aeson.Decimal . toAddrLovelaceMap $ rewards
 
-      case mMirDir of
-        Nothing     -> pure ()
-        Just mirDir -> do
-          createDirectoryIfMissing True mirDir
-          let mirPot = TreasuryMIR
-          forM_ (zip [1..] $ chunk 200 rewards) $ \(idx, ch) -> do
-            let
-              x = (\(hash, value) -> (StakeCredentialByKey hash, fromInteger value)) <$> ch
-              mirCert :: Certificate
-              mirCert = makeMIRCertificate mirPot x
+      -- case mMirDir of
+      --   Nothing     -> pure ()
+      --   Just mirDir -> do
+      --     createDirectoryIfMissing True mirDir
+      --     let mirPot = TreasuryMIR
+      --     forM_ (zip [1..] $ chunk 200 rewards) $ \(idx, ch) -> do
+      --       let
+      --         x = (\(addr, value) -> (_ addr, fromInteger value)) <$> ch
+      --         mirCert :: Certificate
+      --         mirCert = makeMIRCertificate mirPot x
 
-            BSC.writeFile (mirDir <> "/mir-" <> show idx <> ".cert") . serialiseToCBOR $ mirCert
+      --       BSC.writeFile (mirDir <> "/mir-" <> show idx <> ".cert") . serialiseToCBOR $ mirCert
 
     -- Genesis
     Genesis gOpts -> do

@@ -4,7 +4,8 @@ module Test.Generators where
 
 import           Control.Monad.Except
 import           Control.Monad.IO.Class
-import           Data.Maybe (fromJust)
+import           Data.Maybe (fromMaybe)
+import           Data.List (sortOn)
 import qualified Data.Map.Strict as M
 import Data.Word
 import           Hedgehog (Gen, Property, forAll, property, tripping, (===), MonadGen)
@@ -72,11 +73,18 @@ contributions = Gen.recursive Gen.choice
 txMetadataKey :: Gen Word64
 txMetadataKey = Gen.word64 (Range.linear minBound maxBound)
 
-txMetadataValue = Gen.choice [ TxMetaNumber <$> Gen.integral (Range.linear ((-2)^64) (2^64 - 1))
+txMetadataMapKey :: Gen TxMetadataValue
+txMetadataMapKey = Gen.choice [ TxMetaNumber <$> Gen.integral (Range.linear (toInteger $ negate (maxBound :: Word64)) (toInteger $ (maxBound :: Word64)))
+                              , TxMetaBytes <$> Gen.bytes (Range.linear 0 64)
+                              , TxMetaText <$> Gen.text (Range.linear 0 64) Gen.unicodeAll
+                              ]
+
+txMetadataValue :: Gen TxMetadataValue
+txMetadataValue = Gen.choice [ TxMetaNumber <$> Gen.integral (Range.linear (toInteger $ negate (maxBound :: Word64)) (toInteger $ (maxBound :: Word64)))
                              , TxMetaBytes <$> Gen.bytes (Range.linear 0 64)
                              , TxMetaText <$> Gen.text (Range.linear 0 64) Gen.unicodeAll
                              , TxMetaList <$> Gen.list (Range.linear 0 20) txMetadataValue
-                             , TxMetaMap <$> Gen.list (Range.linear 0 20) ((,) <$> txMetadataValue <*> txMetadataValue)
+                             , TxMetaMap <$> Gen.list (Range.linear 0 20) ((,) <$> txMetadataMapKey <*> txMetadataValue)
                              ]
 
 txMetadata :: Gen TxMetadata
@@ -84,7 +92,7 @@ txMetadata = TxMetadata <$> Gen.map (Range.linear 0 20) ((,) <$> txMetadataKey <
 
 votingKeyPublic :: MonadGen m => m VotingKeyPublic
 votingKeyPublic =
-  fromJust (fail "Failed to deserialise VotingKeyPublic in generator")
+  fromMaybe (error "Deserialising VotingKeyPublic from bytes failed!")
   <$> deserialiseFromRawBytes AsVotingKeyPublic
   <$> Gen.bytes (Range.linear 0 128)
 

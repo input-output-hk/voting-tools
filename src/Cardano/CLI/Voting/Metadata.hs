@@ -24,6 +24,7 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , signatureMetaKey
                                    , voteRegistrationPublicKey
                                    , voteRegistrationVerificationKey
+                                   , voteRegistrationRewardsAddress
                                    , metadataToJson
                                    , parseMetadataFromJson
                                    ) where
