@@ -2,7 +2,7 @@
 
 module Main where
 
-import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraShelley))
+import           Cardano.API (ShelleyBasedEra (ShelleyBasedEraMary))
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
                      StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,
@@ -59,7 +59,7 @@ main = do
           let vote = createVoteRegistration voteSign votePub addr
 
           -- Encode the vote as a transaction and sign it
-          voteRegistrationTx <- signTx paySign <$> encodeVoteRegistration connectInfo ShelleyBasedEraShelley addr ttl vote
+          voteRegistrationTx <- signTx paySign <$> encodeVoteRegistration connectInfo ShelleyBasedEraMary addr ttl vote
 
           -- Output helpful information
           liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
