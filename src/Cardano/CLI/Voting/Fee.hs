@@ -195,10 +195,11 @@ estimateVoteFeeParams networkId era pparams meta =
     mockAddr = makeShelleyAddressInEra networkId mockPaymentCredential mockStakeAddressRef
 
     -- Start with a base estimate
-    (Lovelace feeBase)    = estimateVoteTxFee networkId era pparams mockTTL [] mockAddr (Lovelace 0) meta
     -- Estimate the fee per extra txin
-    mockTxIn   = TxIn (TxId $ Crypto.castHash $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
-    (Lovelace feeWithMockTxIn) = estimateVoteTxFee networkId era pparams mockTTL [mockTxIn] mockAddr (Lovelace 0) meta
+    mockTxInA   = TxIn (TxId $ Crypto.castHash $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
+    mockTxInB   = TxIn (TxId $ Crypto.castHash $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
+    (Lovelace feeBase)    = estimateVoteTxFee networkId era pparams mockTTL [mockTxInA] mockAddr (Lovelace 0) meta
+    (Lovelace feeWithMockTxIn) = estimateVoteTxFee networkId era pparams mockTTL [mockTxInA,  mockTxInB] mockAddr (Lovelace 0) meta
     feePerTxIn = Lovelace $ feeWithMockTxIn - feeBase
   in
     FeeParams (Lovelace feeBase) feePerTxIn

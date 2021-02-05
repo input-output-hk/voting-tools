@@ -187,16 +187,17 @@ encodeVoteRegistration connectInfo era addr ttl vote = do
       let
         meta      = voteToTxMetadata vote
         networkId = localNodeNetworkId connectInfo
-     
+
       -- Estimate the fee for the transaction
       let
         feeParams = estimateVoteFeeParams networkId era pparams meta
-     
+
       -- Find some unspent funds
       utxos <- fmap fromUtxos $ handleEraMismatch =<< handleAcquireFailure =<< queryNodeLocalState connectInfo chainTip (QueryInEra eraInMode (QueryInShelleyBasedEra era (QueryUTxO (Just $ Set.singleton addr))))
       case findUnspent feeParams utxos of
         Nothing      -> error $ "Not enough funds to meet fee in '" <> show utxos <> "'." -- throwError $ _NotEnoughFundsToMeetFeeError # utxos
         Just unspent -> do
+          liftIO $ print unspent
           let
             slotTip          = (\(ChainPoint slot _) -> slot) $ chainTip
             txins            = unspentSources unspent
@@ -204,7 +205,7 @@ encodeVoteRegistration connectInfo era addr ttl vote = do
             (Lovelace fee)   =
               estimateVoteTxFee
                 networkId era pparams slotTip txins addrShelley (Lovelace value) meta
-      
+
           -- Create the vote transaction
           pure $ voteRegistrationTx era addrShelley txins (Lovelace $ value - fee) (slotTip + ttl) (Lovelace fee) meta
 
