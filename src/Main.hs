@@ -77,7 +77,7 @@ main = do
         toAddrLovelaceMap :: [(AddressAny, Integer)] -> Map Text Integer
         toAddrLovelaceMap = M.fromList . fmap (\(addr, reward) -> (serialiseAddress addr, reward))
 
-      BLC.writeFile outfile . toJSON Aeson.Decimal . toAddrLovelaceMap $ rewards
+      BLC.writeFile outfile . toJSON Aeson.Generic . toAddrLovelaceMap $ rewards
 
     -- Genesis
     Genesis gOpts -> do
