@@ -79,7 +79,7 @@ fundFromVotingFunds :: VotingFunds -> Fund
 fundFromVotingFunds (VotingFunds m) = Fund . fmap (\(addr, (Lovelace val)) -> FundItem addr (fromIntegral val)) . M.toList $ m
 
 scaleFund :: Double -> Fund -> Fund
-scaleFund scale (Fund fs) = Fund $ fmap (\(FundItem addr val) -> FundItem addr (scale * val)) fs
+scaleFund scale (Fund fs) = Fund $ fmap (\(FundItem addr val) -> FundItem addr (scale `div` val)) fs
 
 data FundItem
   = FundItem { fiAddress :: Jormungandr.Address
