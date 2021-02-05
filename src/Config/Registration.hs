@@ -47,6 +47,7 @@ data Config = Config
     , cfgVotePublicKey       :: VotingKeyPublic
     , cfgNetworkId           :: NetworkId
     , cfgTTL                 :: SlotNo
+    , cfgSign                :: Bool
     , cfgOutFile             :: FilePath
     , cfgEra                 :: Api.AnyCardanoEra
     , cfgConsensusModeParams :: AnyConsensusModeParams
@@ -80,12 +81,12 @@ instance AsBech32DecodeError ConfigError where
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
-mkConfig (Opts pskf addr vpkf sskf networkId ttl outFile era consensusModeParams) = do
+mkConfig (Opts pskf addr vpkf sskf networkId ttl sign outFile era consensusModeParams) = do
   stkSign <- readVoteSigningKeyFile (SigningKeyFile sskf)
   paySign <- readVotePaymentKeyFile (SigningKeyFile pskf)
   votepk  <- readVotePublicKey vpkf
 
-  pure $ Config addr stkSign paySign votepk networkId ttl outFile era consensusModeParams
+  pure $ Config addr stkSign paySign votepk networkId ttl sign outFile era consensusModeParams
 
 data Opts = Opts
     { optPaymentSigningKeyFile :: FilePath
@@ -94,6 +95,7 @@ data Opts = Opts
     , optStakeSigningKeyFile   :: FilePath
     , optNetworkId             :: NetworkId
     , optTTL                   :: SlotNo
+    , optSign                  :: Bool
     , optOutFile               :: FilePath
     , optEra                   :: Api.AnyCardanoEra
     , optConsensusModeParams   :: AnyConsensusModeParams
@@ -108,6 +110,7 @@ parseOpts = Opts
   <*> strOption (long "stake-signing-key" <> metavar "FILE" <> help "stake authorizing vote key")
   <*> pNetworkId
   <*> pTTL
+  <*> switch (long "sign" <> help "Whether to sign transaction")
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
   <*> pCardanoEra
   <*> pConsensusModeParams

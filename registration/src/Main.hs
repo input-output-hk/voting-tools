@@ -60,7 +60,7 @@ main = do
   case eCfg of
     Left (err :: Register.ConfigError) ->
       fail $ show err
-    Right (Register.Config addr voteSign paySign votePub networkId ttl outFile (AnyCardanoEra era) (AnyConsensusModeParams consensusModeParams)) -> do
+    Right (Register.Config addr voteSign paySign votePub networkId ttl sign outFile (AnyCardanoEra era) (AnyConsensusModeParams consensusModeParams)) -> do
       eResult <- runExceptT $ do
         SocketPath sockPath <-  readEnvSocketPath
         let connectInfo = LocalNodeConnectInfo consensusModeParams networkId sockPath
@@ -74,7 +74,9 @@ main = do
         -- Encode the vote as a transaction and sign it
         case cardanoEraStyle era of
           ShelleyBasedEra era' -> do
-            liftIO $ (writeFile outFile =<<) $ (prettyTx . signTx paySign) <$> encodeVoteRegistration connectInfo era' addr ttl vote
+            if sign
+              then liftIO $ (writeFile outFile =<<) $ prettyTx . signTx paySign <$> encodeVoteRegistration connectInfo era' addr ttl vote
+              else liftIO . putStrLn $ "NOT IMPLEMENTED! Pass `--sign` paramater"
 
             -- Output helpful information
             liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
