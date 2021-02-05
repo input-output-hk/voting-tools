@@ -46,7 +46,7 @@ data Config = Config
     -- ^ Network (mainnet / testnet magic)
     , cfgThreshold         :: Threshold
     -- ^ Minimum threshold of funds required to vote
-    , cfgScale             :: Double
+    , cfgScale             :: Int
     -- ^ Scale the voting funds by this amount to arrive at the voting power
     , cfgDb                :: DatabaseConfig
     -- ^ cardano-db-sync database configuration
@@ -93,7 +93,7 @@ data Opts = Opts
     , optExtraFundsFile :: Maybe FilePath
     , optSlotNo         :: Maybe SlotNo
     , optThreshold      :: Threshold
-    , optScale          :: Double
+    , optScale          :: Int
     , optOutFile        :: FilePath
     }
     deriving (Eq, Show)

@@ -78,12 +78,12 @@ aboveThreshold threshold (VotingFunds map) = VotingFunds $ M.filter (\votingPowe
 fundFromVotingFunds :: VotingFunds -> Fund
 fundFromVotingFunds (VotingFunds m) = Fund . fmap (\(addr, (Lovelace val)) -> FundItem addr (fromIntegral val)) . M.toList $ m
 
-scaleFund :: Double -> Fund -> Fund
-scaleFund scale (Fund fs) = Fund $ fmap (\(FundItem addr val) -> FundItem addr (scale `div` val)) fs
+scaleFund :: Int -> Fund -> Fund
+scaleFund scale (Fund fs) = Fund $ fmap (\(FundItem addr val) -> FundItem addr (val `div` scale)) fs
 
 data FundItem
   = FundItem { fiAddress :: Jormungandr.Address
-             , fiValue   :: Double
+             , fiValue   :: Int
              }
   deriving (Eq, Show, Ord, Generic)
 
