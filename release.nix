@@ -56,7 +56,7 @@ let
       [
         jobs.native.voter-registration.x86_64-linux
         jobs.native.voting-tools.x86_64-linux
-        jobs.native.voterRegistrationTarball
+        jobs.native.voterRegistrationTarball.x86_64-linux
       ]
     ))
   # Build the shell derivation in Hydra so that all its dependencies
