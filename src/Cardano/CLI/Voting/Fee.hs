@@ -26,7 +26,7 @@ module Cardano.CLI.Voting.Fee where
 
 import           Data.String (fromString)
 
-import           Cardano.Api (Address, AddressInEra, AsType (AsPaymentKey, AsStakeKey), selectLovelace,
+import           Cardano.Api (Address, AddressInEra, AsType (AsPaymentKey, AsStakeKey),
                      IsCardanoEra, IsShelleyBasedEra, Key, LocalNodeConnectInfo, Lovelace,
                      NetworkId, PaymentCredential, PaymentKey,
                      ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
@@ -44,10 +44,13 @@ import           Cardano.Api (Address, AddressInEra, AsType (AsPaymentKey, AsSta
                      localNodeNetworkId, lovelaceToValue, makeShelleyAddress,
                      makeShelleyAddressInEra, makeShelleyKeyWitness, makeSignedTransaction,
                      makeTransactionBody, makeTransactionMetadata, multiAssetSupportedInEra,
-                     serialiseToRawBytes, serialiseToRawBytesHex, verificationKeyHash)
+                     selectLovelace, serialiseToRawBytes, serialiseToRawBytesHex,
+                     verificationKeyHash)
 import           Cardano.API.Extended (liftShelleyBasedEra, liftShelleyBasedMetadata,
                      liftShelleyBasedTxFee)
-import           Cardano.Api.ProtocolParameters (ProtocolParameters, protocolParamTxFeeFixed, protocolParamTxFeePerByte)
+import           Cardano.Api.ProtocolParameters (ProtocolParameters, protocolParamTxFeeFixed,
+                     protocolParamTxFeePerByte)
+import           Cardano.Api.Query (UTxO (UTxO))
 import           Cardano.Api.Typed (Lovelace (Lovelace), PaymentCredential (PaymentCredentialByKey),
                      Shelley, ShelleyWitnessSigningKey (WitnessPaymentKey),
                      StakeAddressReference (StakeAddressByValue),
@@ -59,15 +62,14 @@ import           Cardano.Api.Typed (Lovelace (Lovelace), PaymentCredential (Paym
 import           Cardano.Api.Typed (Shelley, StandardShelley)
 import qualified Cardano.Binary as CBOR
 import qualified Cardano.Crypto.Hash.Class as Crypto
-import qualified Data.Map.Strict as M
 import qualified Cardano.Crypto.Seed as Crypto
 import           Control.Lens.TH (makeClassyPrisms)
+import qualified Data.Map.Strict as M
+import           Shelley.Spec.Ledger.Hashing (EraIndependentTxBody)
 import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
-import Shelley.Spec.Ledger.Hashing (EraIndependentTxBody)
-import Cardano.Api.Query (UTxO(UTxO))
 
 -- | Fee characteristics of a transaction
 data FeeParams = FeeParams

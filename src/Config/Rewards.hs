@@ -50,7 +50,7 @@ mkConfig
   :: Opts
   -> Config
 mkConfig (Opts networkId dbName dbUser dbHost mSlotNo threshold totalRewards outfile) = do
-  Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo totalRewards outfile 
+  Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo totalRewards outfile
 
 data Opts = Opts
     { optNetworkId      :: NetworkId

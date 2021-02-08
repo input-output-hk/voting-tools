@@ -32,11 +32,11 @@ import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import           Cardano.CLI.Voting.Signing (VotePaymentKey, VoteSigningKey, readVotePaymentKeyFile,
                      readVoteSigningKeyFile)
 
-import           Cardano.API.Extended (pConsensusModeParams, AsBech32DecodeError (_Bech32DecodeError),
+import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32', pNetworkId, parseAddressAny,
-                     readSigningKeyFile, readerFromAttoParser)
+                     VotingKeyPublic, deserialiseFromBech32', pConsensusModeParams, pNetworkId,
+                     parseAddressAny, readSigningKeyFile, readerFromAttoParser)
 import           Cardano.CLI.Voting.Error (AsTextEnvelopeError (_TextEnvelopeError))
 import           Config.Common (pCardanoEra)
 

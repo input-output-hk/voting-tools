@@ -1,16 +1,18 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
-import           Cardano.Api (AnyCardanoEra(AnyCardanoEra), cardanoEraStyle, CardanoEraStyle(ShelleyBasedEra), ShelleyBasedEra(..), shelleyBasedEra, CardanoEra(..))
-import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
-import           Cardano.Api.Modes
+import           Cardano.Api (AnyCardanoEra (AnyCardanoEra), CardanoEra (..),
+                     CardanoEraStyle (ShelleyBasedEra), ShelleyBasedEra (..), cardanoEraStyle,
+                     shelleyBasedEra)
 import           Cardano.Api.IPC
-import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace), ShelleyLedgerEra,
-                     StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,
-                     serialiseToBech32, serialiseToRawBytesHex)
+import           Cardano.Api.Modes
+import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
+import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
+                     ShelleyLedgerEra, StakeCredential (StakeCredentialByKey), StakeKey,
+                     makeStakeAddress, serialiseToBech32, serialiseToRawBytesHex)
 import           Cardano.Chain.Slotting (EpochSlots (..))
 import           Cardano.CLI.Types (QueryFilter (FilterByAddress), SocketPath (SocketPath))
 import qualified Cardano.Crypto.DSIGN as Crypto

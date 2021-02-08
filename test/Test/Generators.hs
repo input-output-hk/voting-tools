@@ -4,24 +4,32 @@ module Test.Generators where
 
 import           Control.Monad.Except
 import           Control.Monad.IO.Class
-import           Data.Maybe (fromMaybe)
 import           Data.List (sortOn)
 import qualified Data.Map.Strict as M
-import Data.Word
-import           Hedgehog (Gen, Property, forAll, property, tripping, (===), MonadGen)
+import           Data.Maybe (fromMaybe)
+import           Data.Word
+import           Hedgehog (Gen, MonadGen, Property, forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog
 
-import           Cardano.Api (AsType(AsPaymentKey), AddressAny, Lovelace, deserialiseFromRawBytes, TxMetadata(TxMetadata), TxMetadataValue(TxMetaNumber, TxMetaBytes, TxMetaText, TxMetaList, TxMetaMap), AsType(AsStakeKey, AsStakeExtendedKey), getVerificationKey, verificationKeyHash, toAddressAny, makeShelleyAddress, NetworkId(Testnet, Mainnet), PaymentCredential(PaymentCredentialByKey), StakeAddressReference(NoStakeAddress))
-import           Cardano.Api.Typed (generateSigningKey, NetworkMagic(NetworkMagic))
+import           Cardano.Api (AddressAny, AsType (AsPaymentKey, AsStakeExtendedKey, AsStakeKey),
+                     Lovelace, NetworkId (Mainnet, Testnet),
+                     PaymentCredential (PaymentCredentialByKey),
+                     StakeAddressReference (NoStakeAddress), TxMetadata (TxMetadata),
+                     TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText),
+                     deserialiseFromRawBytes, getVerificationKey, makeShelleyAddress, toAddressAny,
+                     verificationKeyHash)
+import           Cardano.Api.Typed (NetworkMagic (NetworkMagic), generateSigningKey)
 import qualified Data.Aeson as Aeson
 
 import           Cardano.Api.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
-import           Cardano.CLI.Voting.Signing (VoteVerificationKey(..), VoteSigningKey(..), voteSigningKeyFromStakeSigningKey, voteSigningKeyFromStakeExtendedSigningKey, getVoteVerificationKey)
 import           Cardano.CLI.Voting
-import Cardano.CLI.Voting.Metadata (mkVotePayload, VotePayload, Vote, signVotePayload)
+import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload)
+import           Cardano.CLI.Voting.Signing (VoteSigningKey (..), VoteVerificationKey (..),
+                     getVoteVerificationKey, voteSigningKeyFromStakeExtendedSigningKey,
+                     voteSigningKeyFromStakeSigningKey)
 import           Contribution (Contributions)
 import qualified Contribution as Contrib
 

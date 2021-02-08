@@ -1,7 +1,7 @@
 import           Test.Tasty (TestTree, defaultMain, testGroup)
 
-import qualified Test.Contribution
 import qualified Test.Cardano.CLI.Voting.Metadata
+import qualified Test.Contribution
 
 
 main :: IO ()

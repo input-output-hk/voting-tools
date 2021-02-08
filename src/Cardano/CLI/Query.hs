@@ -37,8 +37,9 @@ import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace), metadataFromJson
 import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
                      chunkFund, fundFromVotingFunds)
 import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), MetadataParsingError,
-                     Vote, voteFromTxMetadata, parseMetadataFromJson, metadataMetaKey, signatureMetaKey,
-                     voteRegistrationPublicKey, voteRegistrationRewardsAddress, voteRegistrationVerificationKey, withMetaKey)
+                     Vote, metadataMetaKey, parseMetadataFromJson, signatureMetaKey,
+                     voteFromTxMetadata, voteRegistrationPublicKey, voteRegistrationRewardsAddress,
+                     voteRegistrationVerificationKey, withMetaKey)
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKeyHash),
                      VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash)
 import           Contribution (Contributions, causeSumAmounts, contribute, filterAmounts,

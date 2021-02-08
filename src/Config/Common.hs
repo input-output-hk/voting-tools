@@ -3,10 +3,11 @@
 
 module Config.Common where
 
+import           Cardano.Api (AnyCardanoEra (..), CardanoEra (..),
+                     IsShelleyBasedEra (shelleyBasedEra))
 import qualified Data.ByteString.Char8 as BC
-import Data.Foldable (asum)
-import Cardano.Api (AnyCardanoEra(..), IsShelleyBasedEra(shelleyBasedEra), CardanoEra(..))
-import           Options.Applicative (Parser, auto, help, long, metavar, option, flag')
+import           Data.Foldable (asum)
+import           Options.Applicative (Parser, auto, flag', help, long, metavar, option)
 
 import           Cardano.Api.Typed (SlotNo (SlotNo))
 

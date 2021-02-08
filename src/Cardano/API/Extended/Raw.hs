@@ -11,9 +11,7 @@
 module Cardano.API.Extended.Raw where
 
 import           Control.Applicative ((<|>))
-import Data.Foldable (asum)
 import           Control.Lens (( # ))
-import           Data.Word (Word64)
 import           Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
 import           Control.Monad.Fail (MonadFail)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
@@ -22,20 +20,23 @@ import           Data.Aeson.Encode.Pretty (Config (..), defConfig, encodePretty'
 import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Foldable (asum)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import           Data.Word (Word64)
 import qualified Options.Applicative as Opt
 
 import           Cardano.Api
-import           Cardano.Api.Modes (AnyConsensusModeParams(..), ConsensusModeParams(..), EpochSlots(EpochSlots))
 import           Cardano.Api (AsType (AsShelleyAddress), HasTextEnvelope,
                      NetworkId (Mainnet, Testnet), TextEnvelopeDescr, deserialiseAddress,
                      queryNodeLocalState, serialiseToTextEnvelope)
-import Cardano.Api.Protocol (Protocol(ByronProtocol, ShelleyProtocol, CardanoProtocol))
 import           Cardano.Api.LocalChainSync (getLocalTip)
+import           Cardano.Api.Modes (AnyConsensusModeParams (..), ConsensusModeParams (..),
+                     EpochSlots (EpochSlots))
+import           Cardano.Api.Protocol (Protocol (ByronProtocol, CardanoProtocol, ShelleyProtocol))
 import           Cardano.Api.Shelley
 import           Cardano.Api.Typed (LocalNodeConnectInfo, NetworkMagic (NetworkMagic),
                      ShelleyLedgerEra)
