@@ -1,0 +1,59 @@
+{
+  "nodes": {
+    "haskell-nix": {
+      "locked": {
+        "lastModified": 1612228441,
+        "narHash": "sha256-MyJCFiU0Nrb72RgQ9KPJBOWIEvJ3fc4+YhVhzCTuovo=",
+        "owner": "input-output-hk",
+        "repo": "haskell.nix",
+        "rev": "e283bba3533744088371812329c9c1ec0a7940bc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "repo": "haskell.nix",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1612199420,
+        "narHash": "sha256-2uGAh8PEN0CdCfTedzErkEH/bUGx/IqUTID5TMIM+yo=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "8230a316357f8f87cc4c361510453dc5d99e5fbc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-20.09",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "haskell-nix": "haskell-nix",
+        "nixpkgs": "nixpkgs",
+        "utils": "utils"
+      }
+    },
+    "utils": {
+      "locked": {
+        "lastModified": 1610051610,
+        "narHash": "sha256-U9rPz/usA1/Aohhk7Cmc2gBrEEKRzcW4nwPWMPwja4Y=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "3982c9903e93927c2164caa727cd3f6a0e6d14cc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
