@@ -4,7 +4,7 @@
 
 module Test.Cardano.CLI.Voting.Metadata where
 
-import qualified Cardano.API as Api
+import qualified Cardano.Api as Api
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Base16 as Base16

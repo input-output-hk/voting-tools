@@ -24,7 +24,7 @@ import           Cardano.Api (AddressAny, AsType (AsPaymentKey, AsStakeExtendedK
 import           Cardano.Api.Typed (NetworkMagic (NetworkMagic), generateSigningKey)
 import qualified Data.Aeson as Aeson
 
-import           Cardano.Api.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
+import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Voting
 import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload)
 import           Cardano.CLI.Voting.Signing (VoteSigningKey (..), VoteVerificationKey (..),
