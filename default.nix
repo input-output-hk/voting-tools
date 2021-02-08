@@ -38,6 +38,7 @@ let
     inherit (haskellPackages.voter-registration.identifier) version;
     # Grab the executable component of our package.
     inherit (haskellPackages.voter-registration.components.exes) voter-registration;
+    inherit (haskellPackages.voting-tools.components.exes) voting-tools;
 
     # `tests` are the test suites which have been built.
     tests = collectComponents' "tests" haskellPackages;

@@ -57,6 +57,7 @@ let
       # TODO: Add your project executables to this list
       [
         jobs.native.voter-registration.x86_64-linux
+        jobs.native.voting-tools.x86_64-linux
       ]
     ))
   # Build the shell derivation in Hydra so that all its dependencies
