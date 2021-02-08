@@ -1,4 +1,4 @@
--- | Cardano.API.Extended.Raw but I've made the errors "classy". Plus
+-- | Cardano.Api.Extended.Raw but I've made the errors "classy". Plus
 -- some utility functions.
 
 {-# LANGUAGE FlexibleContexts #-}
@@ -12,11 +12,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.API.Extended ( queryUTxOFromLocalState
-                            , queryPParamsFromLocalState
-                            , Extended.ShelleyQueryCmdLocalStateQueryError(..)
-                            , AsShelleyQueryCmdLocalStateQueryError(..)
-                            , readSigningKeyFile
+module Cardano.API.Extended ( readSigningKeyFile
                             , readSigningKeyFileAnyOf
                             , AsFileError(..)
                             , AsInputDecodeError(..)
@@ -37,6 +33,8 @@ module Cardano.API.Extended ( queryUTxOFromLocalState
                             , liftShelleyBasedTxFee
                             , SerialiseAsBech32'(bech32PrefixFor, bech32PrefixesPermitted)
                             , AsType(AsVotingKeyPublic)
+                            , Extended.pEpochSlots
+                            , Extended.pConsensusModeParams
                             ) where
 
 import           Control.Lens (( # ))
@@ -55,7 +53,7 @@ import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text as T
 
-import           Cardano.API (AnyCardanoEra (AnyCardanoEra), AsType, Bech32DecodeError,
+import           Cardano.Api (AnyCardanoEra (AnyCardanoEra), AsType, Bech32DecodeError,
                      CardanoEra (AllegraEra, MaryEra, ShelleyEra),
                      CardanoEraStyle (ShelleyBasedEra), FromSomeType, HasTextEnvelope,
                      IsShelleyBasedEra, Lovelace, SerialiseAsBech32,
@@ -86,7 +84,6 @@ import qualified Shelley.Spec.Ledger.UTxO as Ledger
 
 import qualified Cardano.API.Extended.Raw as Extended
 
-makeClassyPrisms ''Extended.ShelleyQueryCmdLocalStateQueryError
 makeClassyPrisms ''FileError
 makeClassyPrisms ''InputDecodeError
 makeClassyPrisms ''EnvSocketError
@@ -129,33 +126,6 @@ liftExceptTIO
 liftExceptTIO f exc = do
   x <- liftIO $ runExceptT exc
   either (throwError . f) pure x
-
-queryUTxOFromLocalState
-  :: ( MonadIO m
-     , MonadError e m
-     , AsShelleyQueryCmdLocalStateQueryError e
-     , Consensus.ShelleyBasedEra ledgerera
-     , ShelleyLedgerEra era ~ ledgerera
-     , IsShelleyBasedEra era
-     )
-  => ShelleyBasedEra era
-  -> QueryFilter
-  -> LocalNodeConnectInfo mode block
-  -> m (Ledger.UTxO ledgerera)
-queryUTxOFromLocalState era qf =
-  liftExceptTIO (_ShelleyQueryCmdLocalStateQueryError #) .
-    Extended.queryUTxOFromLocalState era qf
-
-queryPParamsFromLocalState
-  :: ( MonadIO m
-     , MonadError e m
-     , AsShelleyQueryCmdLocalStateQueryError e
-     )
-  => LocalNodeConnectInfo mode block
-  -> m (PParams StandardShelley)
-queryPParamsFromLocalState =
-  liftExceptTIO (_ShelleyQueryCmdLocalStateQueryError #) .
-    Extended.queryPParamsFromLocalState
 
 readSigningKeyFile
   :: forall e m fileErr keyrole .
@@ -226,7 +196,7 @@ instance SerialiseAsBech32' VotingKeyPublic where
     bech32PrefixFor (VotingKeyPublic _) = "ed25519_pk"
     bech32PrefixesPermitted AsVotingKeyPublic = ["ed25519_pk"]
 
--- TODO Ask for this class to be exposed in Cardano.API...
+-- TODO Ask for this class to be exposed in Cardano.Api...
 -- The SerialiseAsBech32 class need to be exposed from the CardanoAPI
 -- for me to be able to define serialization for new types.
 

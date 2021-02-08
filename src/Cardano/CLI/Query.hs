@@ -30,15 +30,16 @@ import           System.IO (hPutStr, hPutStrLn, stderr)
 
 import           Ouroboros.Network.Block (unSlotNo)
 
-import           Cardano.API (SlotNo)
-import qualified Cardano.API as Api
+import           Cardano.Api (SlotNo)
+import qualified Cardano.Api as Api
 import           Cardano.API.Extended (VotingKeyPublic, serialiseToBech32')
 import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace), metadataFromJson)
 import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
                      chunkFund, fundFromVotingFunds)
 import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), MetadataParsingError,
-                     Vote, fromTxMetadata, metadataMetaKey, signatureMetaKey,
-                     voteRegistrationPublicKey, voteRegistrationVerificationKey, withMetaKey)
+                     Vote, metadataMetaKey, parseMetadataFromJson, signatureMetaKey,
+                     voteFromTxMetadata, voteRegistrationPublicKey, voteRegistrationRewardsAddress,
+                     voteRegistrationVerificationKey, withMetaKey)
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKeyHash),
                      VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash)
 import           Contribution (Contributions, causeSumAmounts, contribute, filterAmounts,
@@ -51,9 +52,6 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 
 import qualified Cardano.API.Jormungandr as Jormungandr
-
-parseMetadataFromJson :: Aeson.Object -> Either Api.TxMetadataJsonError Api.TxMetadata
-parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonNoSchema . Aeson.Object
 
 data MetadataRetrievalError
   = MetadataFailedToRetrieveMetadataField
@@ -93,7 +91,7 @@ queryStake mSlotRestriction stakeHash = do
     Nothing             ->
       pure $ "SELECT SUM(utxo_view.value) FROM utxo_view WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "';"
     Just slotNo -> do
-      -- Get first tx is slot after one we've asked to restrict the
+      -- Get first tx in slot after one we've asked to restrict the
       -- query to, we don't want to get this Tx or any later Txs.
       let
         firstUnwantedTxIdSql = "SELECT tx.id FROM tx LEFT OUTER JOIN block ON block.id = tx.block_id WHERE block.slot_no > " <> T.pack (show $ unSlotNo slotNo) <> " LIMIT 1";
@@ -121,7 +119,7 @@ queryVoteRegistrationInfo
      , AsMetadataRetrievalError e
      )
   => Maybe SlotNo
-  -> m (Contributions VotingKeyPublic (Api.Hash Api.StakeKey) Integer)
+  -> m (Contributions VotingKeyPublic (Api.AddressAny, Api.Hash Api.StakeKey) Integer)
 queryVoteRegistrationInfo mSlotNo  = do
   regos <- queryVoteRegistration mSlotNo
 
@@ -129,16 +127,17 @@ queryVoteRegistrationInfo mSlotNo  = do
 
   let
     -- Each stake key has one public voting key it can stake to
-    xs :: Map (Api.Hash Api.StakeKey) VotingKeyPublic
+    xs :: Map (Api.Hash Api.StakeKey) (VotingKeyPublic, Api.AddressAny)
     xs = fmap snd $ foldl' (\acc (txid, rego) ->
              let
                verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
                votePub    = voteRegistrationPublicKey rego
+               rewardsAddr = voteRegistrationRewardsAddress rego
              in
                case M.lookup verKeyHash acc of
-                 Nothing      -> M.insert verKeyHash (txid, votePub) acc
-                 Just (t, v)  -> if txid >= t
-                                 then M.insert verKeyHash (txid, votePub) acc
+                 Nothing      -> M.insert verKeyHash (txid, (votePub, rewardsAddr)) acc
+                 Just (t, _)  -> if txid >= t
+                                 then M.insert verKeyHash (txid, (votePub, rewardsAddr)) acc
                                  else acc
            ) mempty regos
 
@@ -147,11 +146,11 @@ queryVoteRegistrationInfo mSlotNo  = do
   let
     xs' = zip [1..] (M.toList xs)
 
-  foldM (\acc (idx, (verKeyHash, votepub)) -> do
+  foldM (\acc (idx, (verKeyHash, (votepub, rewardsAddr))) -> do
     (Api.Lovelace stake) <- queryStake mSlotNo verKeyHash
 
     liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show idx <> " of " <> show (length xs)
-    pure $ contribute votepub verKeyHash stake acc
+    pure $ contribute votepub (rewardsAddr, verKeyHash) stake acc
         ) mempty xs'
 
 queryVotingProportion
@@ -165,12 +164,12 @@ queryVotingProportion
   => Api.NetworkId
   -> Maybe SlotNo
   -> Threshold
-  -> m (Map (Api.Hash Api.StakeKey) Double)
+  -> m (Map (Api.AddressAny, Api.Hash Api.StakeKey) Double)
 queryVotingProportion nw mSlotNo (Api.Lovelace threshold) = do
   info <- filterAmounts (> threshold) <$> queryVoteRegistrationInfo mSlotNo
 
   let
-    proportions :: [((Api.Hash Api.StakeKey), Double)]
+    proportions :: [((Api.AddressAny, Api.Hash Api.StakeKey), Double)]
     proportions =
       proportionalize info
       & foldMap snd
@@ -228,7 +227,7 @@ queryVoteRegistration mSlotNo =
         Nothing   -> (sqlBase <> ";")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
-    forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
+    fmap mconcat $ forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
       metadata  <- maybe (throwError $ _MetadataFailedToRetrieveMetadataField # ()) pure mMetadata
       signature <- maybe (throwError $ _MetadataFailedToRetrieveSignatureField # ()) pure mSignature
 
@@ -242,8 +241,9 @@ queryVoteRegistration mSlotNo =
           , (T.pack $ show signatureMetaKey, signatureObj)
           ]
 
-      meta <- either (\err -> throwError $ (_MetadataFailedToDecodeTxMetadata # (metaObj, err))) pure $ parseMetadataFromJson metaObj
-      either (throwError . (_MetadataParsingError #)) pure $ fmap (txId,) $ fromTxMetadata meta
+      meta <- either (\err -> throwError $ (_MetadataFailedToDecodeTxMetadata # (metaObj, err))) pure $ parseMetadataFromJson (Aeson.Object metaObj)
+      -- We now ignore any Metadata that fails to decode (generally will be due to entries missing the new "3" metadata field)
+      either (const $ pure []) (\v -> pure [v]) $ fmap (txId,) $ voteFromTxMetadata meta
 
 runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a
 runQuery backend query = liftIO $ runSqlConnWithIsolation query backend Serializable

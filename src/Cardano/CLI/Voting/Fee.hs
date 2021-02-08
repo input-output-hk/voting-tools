@@ -26,7 +26,7 @@ module Cardano.CLI.Voting.Fee where
 
 import           Data.String (fromString)
 
-import           Cardano.API (Address, AddressInEra, AsType (AsPaymentKey, AsStakeKey),
+import           Cardano.Api (Address, AddressInEra, AsType (AsPaymentKey, AsStakeKey),
                      IsCardanoEra, IsShelleyBasedEra, Key, LocalNodeConnectInfo, Lovelace,
                      NetworkId, PaymentCredential, PaymentKey,
                      ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
@@ -44,9 +44,13 @@ import           Cardano.API (Address, AddressInEra, AsType (AsPaymentKey, AsSta
                      localNodeNetworkId, lovelaceToValue, makeShelleyAddress,
                      makeShelleyAddressInEra, makeShelleyKeyWitness, makeSignedTransaction,
                      makeTransactionBody, makeTransactionMetadata, multiAssetSupportedInEra,
-                     serialiseToRawBytes, serialiseToRawBytesHex, verificationKeyHash)
+                     selectLovelace, serialiseToRawBytes, serialiseToRawBytesHex,
+                     verificationKeyHash)
 import           Cardano.API.Extended (liftShelleyBasedEra, liftShelleyBasedMetadata,
                      liftShelleyBasedTxFee)
+import           Cardano.Api.ProtocolParameters (ProtocolParameters, protocolParamTxFeeFixed,
+                     protocolParamTxFeePerByte)
+import           Cardano.Api.Query (UTxO (UTxO))
 import           Cardano.Api.Typed (Lovelace (Lovelace), PaymentCredential (PaymentCredentialByKey),
                      Shelley, ShelleyWitnessSigningKey (WitnessPaymentKey),
                      StakeAddressReference (StakeAddressByValue),
@@ -60,6 +64,8 @@ import qualified Cardano.Binary as CBOR
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import qualified Cardano.Crypto.Seed as Crypto
 import           Control.Lens.TH (makeClassyPrisms)
+import qualified Data.Map.Strict as M
+import           Shelley.Spec.Ledger.Hashing (EraIndependentTxBody)
 import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Ledger
@@ -87,6 +93,14 @@ data NotEnoughFundsError = NotEnoughFundsToMeetFeeError !UnspentSources
 
 makeClassyPrisms ''NotEnoughFundsError
 
+fromUtxos :: UTxO era -> UnspentSources
+fromUtxos (UTxO m) = foldr
+  (\(txIn, TxOut _ val) -> case val of
+    (TxOutAdaOnly _ l) -> ((txIn, l):)
+    (TxOutValue _ v)   -> if selectLovelace v == Lovelace 0 then id else ((txIn, selectLovelace v):)
+  )
+  [] (M.assocs m)
+
 -- | Total amount of unspent value.
 unspentValue :: UnspentSources -> Lovelace
 unspentValue =
@@ -103,7 +117,7 @@ estimateVoteTxFee
   :: IsShelleyBasedEra era
   => NetworkId
   -> ShelleyBasedEra era
-  -> PParams StandardShelley
+  -> ProtocolParameters
   -> SlotNo
   -> [TxIn]
   -> AddressInEra era
@@ -139,8 +153,8 @@ estimateVoteTxFee networkId era pparams ttl txins addr txBaseValue meta =
   in
     estimateTransactionFee
       networkId
-      (Shelley._minfeeB pparams)
-      (Shelley._minfeeA pparams)
+      (protocolParamTxFeeFixed pparams)
+      (protocolParamTxFeePerByte pparams)
       tx
       (length txins)
       (length txoutsNoFee)
@@ -153,7 +167,7 @@ estimateVoteFeeParams
   :: IsShelleyBasedEra era
   => NetworkId
   -> ShelleyBasedEra era
-  -> PParams StandardShelley
+  -> ProtocolParameters
   -> TxMetadata
   -> FeeParams
 estimateVoteFeeParams networkId era pparams meta =
@@ -183,10 +197,11 @@ estimateVoteFeeParams networkId era pparams meta =
     mockAddr = makeShelleyAddressInEra networkId mockPaymentCredential mockStakeAddressRef
 
     -- Start with a base estimate
-    (Lovelace feeBase)    = estimateVoteTxFee networkId era pparams mockTTL [] mockAddr (Lovelace 0) meta
     -- Estimate the fee per extra txin
-    mockTxIn   = TxIn (TxId $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
-    (Lovelace feeWithMockTxIn) = estimateVoteTxFee networkId era pparams mockTTL [mockTxIn] mockAddr (Lovelace 0) meta
+    mockTxInA   = TxIn (TxId $ Crypto.castHash $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
+    mockTxInB   = TxIn (TxId $ Crypto.castHash $ Crypto.hashWith CBOR.serialize' ()) (TxIx 1)
+    (Lovelace feeBase)    = estimateVoteTxFee networkId era pparams mockTTL [mockTxInA] mockAddr (Lovelace 0) meta
+    (Lovelace feeWithMockTxIn) = estimateVoteTxFee networkId era pparams mockTTL [mockTxInA,  mockTxInB] mockAddr (Lovelace 0) meta
     feePerTxIn = Lovelace $ feeWithMockTxIn - feeBase
   in
     FeeParams (Lovelace feeBase) feePerTxIn

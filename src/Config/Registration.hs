@@ -20,9 +20,10 @@ import qualified Data.Text.IO as TIO
 
 import           Options.Applicative
 
-import           Cardano.API (Address, AddressAny, Bech32DecodeError, FileError, NetworkId,
+import           Cardano.Api (Address, AddressAny, Bech32DecodeError, FileError, NetworkId,
                      PaymentKey, SigningKey, StakeKey, Witness)
-import qualified Cardano.API as Api
+import qualified Cardano.Api as Api
+import           Cardano.Api.Modes
 import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
 import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
@@ -34,18 +35,22 @@ import           Cardano.CLI.Voting.Signing (VotePaymentKey, VoteSigningKey, rea
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
                      AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32', pNetworkId, parseAddressAny,
-                     readSigningKeyFile, readerFromAttoParser)
+                     VotingKeyPublic, deserialiseFromBech32', pConsensusModeParams, pNetworkId,
+                     parseAddressAny, readSigningKeyFile, readerFromAttoParser)
 import           Cardano.CLI.Voting.Error (AsTextEnvelopeError (_TextEnvelopeError))
+import           Config.Common (pCardanoEra)
 
 data Config = Config
-    { cfgPaymentAddress    :: AddressAny
-    , cfgVoteSigningKey    :: VoteSigningKey
-    , cfgPaymentSigningKey :: VotePaymentKey
-    , cfgVotePublicKey     :: VotingKeyPublic
-    , cfgNetworkId         :: NetworkId
-    , cfgTTL               :: SlotNo
-    , cfgOutFile           :: FilePath
+    { cfgPaymentAddress      :: AddressAny
+    , cfgVoteSigningKey      :: VoteSigningKey
+    , cfgPaymentSigningKey   :: VotePaymentKey
+    , cfgVotePublicKey       :: VotingKeyPublic
+    , cfgNetworkId           :: NetworkId
+    , cfgTTL                 :: SlotNo
+    , cfgSign                :: Bool
+    , cfgOutFile             :: FilePath
+    , cfgEra                 :: Api.AnyCardanoEra
+    , cfgConsensusModeParams :: AnyConsensusModeParams
     }
     deriving (Show)
 
@@ -76,12 +81,12 @@ instance AsBech32DecodeError ConfigError where
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
-mkConfig (Opts pskf addr vpkf sskf networkId ttl outFile) = do
+mkConfig (Opts pskf addr vpkf sskf networkId ttl sign outFile era consensusModeParams) = do
   stkSign <- readVoteSigningKeyFile (SigningKeyFile sskf)
   paySign <- readVotePaymentKeyFile (SigningKeyFile pskf)
   votepk  <- readVotePublicKey vpkf
 
-  pure $ Config addr stkSign paySign votepk networkId ttl outFile
+  pure $ Config addr stkSign paySign votepk networkId ttl sign outFile era consensusModeParams
 
 data Opts = Opts
     { optPaymentSigningKeyFile :: FilePath
@@ -90,9 +95,12 @@ data Opts = Opts
     , optStakeSigningKeyFile   :: FilePath
     , optNetworkId             :: NetworkId
     , optTTL                   :: SlotNo
+    , optSign                  :: Bool
     , optOutFile               :: FilePath
+    , optEra                   :: Api.AnyCardanoEra
+    , optConsensusModeParams   :: AnyConsensusModeParams
     }
-    deriving (Eq, Show)
+    deriving (Show)
 
 parseOpts :: Parser Opts
 parseOpts = Opts
@@ -102,7 +110,10 @@ parseOpts = Opts
   <*> strOption (long "stake-signing-key" <> metavar "FILE" <> help "stake authorizing vote key")
   <*> pNetworkId
   <*> pTTL
+  <*> switch (long "sign" <> help "Whether to sign transaction")
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
+  <*> pCardanoEra
+  <*> pConsensusModeParams
 
 opts =
   info

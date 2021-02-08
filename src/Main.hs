@@ -2,8 +2,8 @@
 
 module Main where
 
-import           Cardano.API (Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
-                     makeMIRCertificate, serialiseToCBOR)
+import           Cardano.Api (AddressAny, Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
+                     makeMIRCertificate, serialiseAddress, serialiseToCBOR)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
                      StakeCredential (StakeCredentialByKey), StakeKey, makeStakeAddress,
@@ -34,7 +34,7 @@ import           Shelley.Spec.Ledger.TxBody (MIRPot (..))
 import           System.Directory (createDirectoryIfMissing)
 
 import           Cardano.API.Extended (readEnvSocketPath)
-import           Cardano.CLI.Fetching (Fund, chunk, chunkFund, fundFromVotingFunds)
+import           Cardano.CLI.Fetching (Fund, chunk, chunkFund, fundFromVotingFunds, scaleFund)
 import           Cardano.CLI.Query (MetadataError)
 import qualified Cardano.CLI.Query as Query
 import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
@@ -56,44 +56,28 @@ main = do
   case options of
     -- Rewards
     Rewards rOpts -> do
-      let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile mMirDir) = Rewards.mkConfig rOpts
+      let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile) = Rewards.mkConfig rOpts
 
-      (votingProportions :: Map (Hash StakeKey) Double) <-
+      (votingProportions :: Map (AddressAny, Hash StakeKey) Double) <-
         runQuery db $ Query.queryVotingProportion networkId slotNo threshold
 
       let
-        raw :: [(Hash StakeKey, Double)]
-        raw = M.toList votingProportions
+        raw :: [(AddressAny, Double)]
+        raw = fmap (\((rewardsAddr, stkHash), v) -> (rewardsAddr, v)) $ M.toList votingProportions
 
         ofRewards :: Double -> Double
         ofRewards = ((fromIntegral totalRewards) *)
 
-        toBech32Addr :: Hash StakeKey -> Text
-        toBech32Addr = serialiseToBech32 . makeStakeAddress networkId . StakeCredentialByKey
+        toRewards :: [(AddressAny, Double)] -> [(AddressAny, Integer)]
+        toRewards = fmap (\(rewardsAddr, proportion) -> (rewardsAddr, proportion & ofRewards & round))
 
-        toRewards :: [(Hash StakeKey, Double)] -> [(Hash StakeKey, Integer)]
-        toRewards = fmap (\(hash, proportion) -> (hash, proportion & ofRewards & round))
-
-        rewards :: [(Hash StakeKey, Integer)]
+        rewards :: [(AddressAny, Integer)]
         rewards = toRewards raw
 
-        toAddrLovelaceMap :: [(Hash StakeKey, Integer)] -> Map Text Integer
-        toAddrLovelaceMap = M.fromList . fmap (\(hash, reward) -> (toBech32Addr hash, reward))
+        toAddrLovelaceMap :: [(AddressAny, Integer)] -> Map Text Integer
+        toAddrLovelaceMap = M.fromList . fmap (\(addr, reward) -> (serialiseAddress addr, reward))
 
-      BLC.writeFile outfile . toJSON Aeson.Decimal . toAddrLovelaceMap $ rewards
-
-      case mMirDir of
-        Nothing     -> pure ()
-        Just mirDir -> do
-          createDirectoryIfMissing True mirDir
-          let mirPot = TreasuryMIR
-          forM_ (zip [1..] $ chunk 200 rewards) $ \(idx, ch) -> do
-            let
-              x = (\(hash, value) -> (StakeCredentialByKey hash, fromInteger value)) <$> ch
-              mirCert :: Certificate
-              mirCert = makeMIRCertificate mirPot x
-
-            BSC.writeFile (mirDir <> "/mir-" <> show idx <> ".cert") . serialiseToCBOR $ mirCert
+      BLC.writeFile outfile . toJSON Aeson.Generic . toAddrLovelaceMap $ rewards
 
     -- Genesis
     Genesis gOpts -> do
@@ -101,13 +85,13 @@ main = do
       case eCfg of
         Left (err :: Genesis.ConfigError) ->
           fail $ show err
-        Right (Genesis.Config networkId threshold db slotNo extraFunds outfile) -> do
+        Right (Genesis.Config networkId threshold scale db slotNo extraFunds outfile) -> do
           votingFunds <-
             runQuery db $ Query.queryVotingFunds networkId slotNo threshold
 
           let
             allFunds :: Fund
-            allFunds = fundFromVotingFunds $ votingFunds <> extraFunds
+            allFunds = scaleFund scale $ fundFromVotingFunds $ votingFunds <> extraFunds
 
           genesisTemplate <- decodeGenesisTemplateJSON
           blockZeroDate   <- getBlockZeroDate

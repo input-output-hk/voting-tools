@@ -20,18 +20,23 @@ import           Data.Aeson.Encode.Pretty (Config (..), defConfig, encodePretty'
 import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Foldable (asum)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import           Data.Word (Word64)
 import qualified Options.Applicative as Opt
 
-import           Cardano.API
-import           Cardano.API (AsType (AsShelleyAddress), HasTextEnvelope,
+import           Cardano.Api
+import           Cardano.Api (AsType (AsShelleyAddress), HasTextEnvelope,
                      NetworkId (Mainnet, Testnet), TextEnvelopeDescr, deserialiseAddress,
                      queryNodeLocalState, serialiseToTextEnvelope)
 import           Cardano.Api.LocalChainSync (getLocalTip)
+import           Cardano.Api.Modes (AnyConsensusModeParams (..), ConsensusModeParams (..),
+                     EpochSlots (EpochSlots))
+import           Cardano.Api.Protocol (Protocol (ByronProtocol, CardanoProtocol, ShelleyProtocol))
 import           Cardano.Api.Shelley
 import           Cardano.Api.Typed (LocalNodeConnectInfo, NetworkMagic (NetworkMagic),
                      ShelleyLedgerEra)
@@ -61,104 +66,6 @@ import           Shelley.Spec.Ledger.PParams (PParams)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Ledger
 import qualified Shelley.Spec.Ledger.UTxO as Ledger
-
--- | An error that can occur while querying a node's local state.
-data ShelleyQueryCmdLocalStateQueryError
-  = AcquireFailureError !LocalStateQuery.AcquireFailure
-  | EraMismatchError !EraMismatch
-  -- ^ A query from a certain era was applied to a ledger from a different
-  -- era.
-  | ByronProtocolNotSupportedError
-  -- ^ The query does not support the Byron protocol.
-  | ShelleyProtocolEraMismatch
-  -- ^ The Shelley protocol only supports the Shelley era.
-  deriving (Eq, Show)
-
--- | Query the UTxO, filtered by a given set of addresses, from a Shelley node
--- via the local state query protocol.
---
--- This one is Shelley-specific because the query is Shelley-specific.
---
-queryUTxOFromLocalState
-  :: forall era ledgerera mode block.
-     ShelleyLedgerEra era ~ ledgerera
-  => IsShelleyBasedEra era
-  => ShelleyBasedEra era
-  -> QueryFilter
-  -> LocalNodeConnectInfo mode block
-  -> ExceptT ShelleyQueryCmdLocalStateQueryError IO (Ledger.UTxO ledgerera)
-queryUTxOFromLocalState era qFilter connectInfo@LocalNodeConnectInfo{localNodeConsensusMode} =
-  case localNodeConsensusMode of
-    ByronMode{} -> throwError ByronProtocolNotSupportedError
-
-    ShelleyMode{} | ShelleyBasedEraShelley <- era -> do
-      tip <- liftIO $ getLocalTip connectInfo
-      Consensus.DegenQueryResult result <-
-        firstExceptT AcquireFailureError . newExceptT $
-          queryNodeLocalState
-            connectInfo
-            ( getTipPoint tip
-            , Consensus.DegenQuery (applyUTxOFilter qFilter)
-            )
-      return result
-
-    ShelleyMode{} | otherwise -> throwError ShelleyProtocolEraMismatch
-
-    CardanoMode{} -> do
-      tip <- liftIO $ getLocalTip connectInfo
-      result <- firstExceptT AcquireFailureError . newExceptT $
-        queryNodeLocalState
-          connectInfo
-          (getTipPoint tip, queryIfCurrentEra era (applyUTxOFilter qFilter))
-      case result of
-        QueryResultEraMismatch err -> throwError (EraMismatchError err)
-        QueryResultSuccess utxo -> return utxo
-  where
-    applyUTxOFilter :: QueryFilter
-                    -> Query (Consensus.ShelleyBlock ledgerera)
-                             (Ledger.UTxO ledgerera)
-    applyUTxOFilter (FilterByAddress as) = Consensus.GetFilteredUTxO (toShelleyAddrs as)
-    applyUTxOFilter NoFilter             = Consensus.GetUTxO
-
-    toShelleyAddrs :: Set AddressAny -> Set (Ledger.Addr ledgerera)
-    toShelleyAddrs = Set.map (toShelleyAddr
-                           . (anyAddressInShelleyBasedEra
-                                :: AddressAny -> AddressInEra era))
-
--- | Query the current protocol parameters from a Shelley node via the local
--- state query protocol.
---
--- This one is Shelley-specific because the query is Shelley-specific.
---
-queryPParamsFromLocalState
-  :: LocalNodeConnectInfo mode block
-  -> ExceptT ShelleyQueryCmdLocalStateQueryError IO (PParams StandardShelley)
-queryPParamsFromLocalState LocalNodeConnectInfo{
-                             localNodeConsensusMode = ByronMode{}
-                           } =
-    throwError ByronProtocolNotSupportedError
-
-queryPParamsFromLocalState connectInfo@LocalNodeConnectInfo{
-                             localNodeConsensusMode = ShelleyMode
-                           } = do
-    tip <- liftIO $ getLocalTip connectInfo
-    DegenQueryResult result <- firstExceptT AcquireFailureError . newExceptT $
-      queryNodeLocalState
-        connectInfo
-        (getTipPoint tip, DegenQuery GetCurrentPParams)
-    return result
-
-queryPParamsFromLocalState connectInfo@LocalNodeConnectInfo{
-                             localNodeConsensusMode = CardanoMode{}
-                           } = do
-    tip <- liftIO $ getLocalTip connectInfo
-    result <- firstExceptT AcquireFailureError . newExceptT $
-      queryNodeLocalState
-        connectInfo
-        (getTipPoint tip, QueryIfCurrentShelley GetCurrentPParams)
-    case result of
-      QueryResultEraMismatch eraerr  -> throwError (EraMismatchError eraerr)
-      QueryResultSuccess     pparams -> return pparams
 
 parseAddressAny :: Atto.Parser AddressAny
 parseAddressAny = do
@@ -225,3 +132,43 @@ queryIfCurrentEra :: ShelleyBasedEra era
 queryIfCurrentEra ShelleyBasedEraShelley = Consensus.QueryIfCurrentShelley
 queryIfCurrentEra ShelleyBasedEraAllegra = Consensus.QueryIfCurrentAllegra
 queryIfCurrentEra ShelleyBasedEraMary    = Consensus.QueryIfCurrentMary
+
+defaultByronEpochSlots :: Word64
+defaultByronEpochSlots = 21600
+
+pConsensusModeParams :: Opt.Parser AnyConsensusModeParams
+pConsensusModeParams = asum
+  [ Opt.flag' (AnyConsensusModeParams ShelleyModeParams)
+      (  Opt.long "shelley-mode"
+      <> Opt.help "For talking to a node running in Shelley-only mode."
+      )
+  , Opt.flag' ()
+      (  Opt.long "byron-mode"
+      <> Opt.help "For talking to a node running in Byron-only mode."
+      )
+       *> pByronConsensusMode
+  , Opt.flag' ()
+      (  Opt.long "cardano-mode"
+      <> Opt.help "For talking to a node running in full Cardano mode (default)."
+      )
+       *> pCardanoConsensusMode
+  , -- Default to the Cardano consensus mode.
+    pure . AnyConsensusModeParams . CardanoModeParams $ EpochSlots defaultByronEpochSlots
+  ]
+ where
+   pCardanoConsensusMode :: Opt.Parser AnyConsensusModeParams
+   pCardanoConsensusMode = AnyConsensusModeParams . CardanoModeParams <$> pEpochSlots
+   pByronConsensusMode :: Opt.Parser AnyConsensusModeParams
+   pByronConsensusMode = AnyConsensusModeParams . ByronModeParams <$> pEpochSlots
+
+pEpochSlots :: Opt.Parser EpochSlots
+pEpochSlots =
+  EpochSlots <$>
+    Opt.option Opt.auto
+      (  Opt.long "epoch-slots"
+      <> Opt.metavar "NATURAL"
+      <> Opt.help "The number of slots per epoch for the Byron era."
+      <> Opt.value defaultByronEpochSlots -- Default to the mainnet value.
+      <> Opt.showDefault
+      )
+

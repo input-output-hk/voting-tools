@@ -22,8 +22,9 @@ import           Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import           GHC.Generics
 
-import           Cardano.API (Lovelace, Quantity)
-import qualified Cardano.API as Api
+import           Cardano.Api (Lovelace, Quantity)
+import qualified Cardano.Api as Api
+import           Cardano.Api.Typed (Lovelace (Lovelace), Quantity)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                      AsFileError (_FileIOError, __FileError),
@@ -75,11 +76,14 @@ aboveThreshold :: Threshold -> VotingFunds -> VotingFunds
 aboveThreshold threshold (VotingFunds map) = VotingFunds $ M.filter (\votingPower -> votingPower > threshold) map
 
 fundFromVotingFunds :: VotingFunds -> Fund
-fundFromVotingFunds (VotingFunds m) = Fund . fmap (\(addr, val) -> FundItem addr val) . M.toList $ m
+fundFromVotingFunds (VotingFunds m) = Fund . fmap (\(addr, (Lovelace val)) -> FundItem addr (fromIntegral val)) . M.toList $ m
+
+scaleFund :: Int -> Fund -> Fund
+scaleFund scale (Fund fs) = Fund $ fmap (\(FundItem addr val) -> FundItem addr (val `div` scale)) fs
 
 data FundItem
   = FundItem { fiAddress :: Jormungandr.Address
-             , fiValue   :: Lovelace
+             , fiValue   :: Int
              }
   deriving (Eq, Show, Ord, Generic)
 

@@ -13,9 +13,9 @@ import qualified Data.Text.IO as TIO
 
 import           Options.Applicative
 
-import           Cardano.API (Address, Bech32DecodeError, FileError, Lovelace, NetworkId,
+import           Cardano.Api (Address, Bech32DecodeError, FileError, Lovelace, NetworkId,
                      PaymentKey, SigningKey, StakeKey, Witness)
-import qualified Cardano.API as Api
+import qualified Cardano.Api as Api
 import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
 import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
@@ -43,16 +43,14 @@ data Config = Config
     -- ^ Total rewards to distribute between voters
     , cfgOutFile           :: FilePath
     -- ^ File to write rewards info to
-    , cfgOutMIRDir         :: Maybe FilePath
-    -- ^ Folder to write MIR certificates to
     }
   deriving (Eq, Show)
 
 mkConfig
   :: Opts
   -> Config
-mkConfig (Opts networkId dbName dbUser dbHost mSlotNo threshold totalRewards outfile mirDir) = do
-  Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo totalRewards outfile mirDir
+mkConfig (Opts networkId dbName dbUser dbHost mSlotNo threshold totalRewards outfile) = do
+  Config networkId threshold (DatabaseConfig dbName dbUser dbHost) mSlotNo totalRewards outfile
 
 data Opts = Opts
     { optNetworkId      :: NetworkId
@@ -63,7 +61,6 @@ data Opts = Opts
     , optThreshold      :: Threshold
     , optTotalRewards   :: Lovelace
     , optOutFile        :: FilePath
-    , optOutMIRDir      :: Maybe FilePath
     }
     deriving (Eq, Show)
 
@@ -77,7 +74,6 @@ parseOpts = Opts
   <*> fmap fromIntegral (option auto (long "threshold" <> metavar "INT64" <> showDefault <> value defaultThreshold <> help "Minimum threshold of funds required to vote (Lovelace)"))
   <*> fmap fromIntegral (option auto (long "total-rewards" <> metavar "INT64" <> help "Total rewards to distribute between voters"))
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
-  <*> optional (strOption (long "mir-dir" <> metavar "FOLDER" <> help "Folder to output MIR certificates to"))
 
 opts =
   info
