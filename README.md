@@ -52,8 +52,8 @@ make repl target=lib:voting-tools
 
 A static binary for the "voter-registration" executable is provided.
 Due to limitations in our cross-compilation infrastructure
-(specifically, static binaries cannot be produced of postgresql
-librarys), a static binary cannot be provided for the "voting-tools"
+(specifically, static binaries of postgresql libraries cannot be
+produced), a static binary cannot be provided for the "voting-tools"
 executable.
 
 The latest static binary can be found
