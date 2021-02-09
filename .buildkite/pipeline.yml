@@ -5,13 +5,6 @@ steps:
     agents:
       system: x86_64-linux
 
-    command:
-      - 'nix-build -A voterRegistrationTarball'
-    artifact_paths:
-      - "result/voter-registration.tar.gz"
-    agents:
-      system: x86_64-linux
-
   - label: 'style'
     command: nix-shell --pure --run 'find . -type f -name "*.hs" -not -path ".git" -not -path "*.stack-work*" -print0 | xargs -0 stylish-haskell -i && git diff --exit-code'
     agents:

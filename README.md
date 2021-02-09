@@ -47,3 +47,19 @@ make dev target=exe:voter-registration
 # Launch a ghci session for the given target
 make repl target=lib:voting-tools
 ```
+
+## Distribution
+
+A static binary for the "voter-registration" executable is provided.
+Due to limitations in our cross-compilation infrastructure
+(specifically, static binaries cannot be produced of postgresql
+librarys), a static binary cannot be provided for the "voting-tools"
+executable.
+
+The latest static binary can be found
+[here](https://hydra.iohk.io/job/Cardano/voting-tools/native.voterRegistrationTarball.x86_64-linux/latest/download/1/voter-registration.tar.gz),
+or built with Nix using:
+
+```
+nix-build -A voterRegistrationTarball
+```

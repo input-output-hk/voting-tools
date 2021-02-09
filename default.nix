@@ -25,8 +25,9 @@ let
     (selectProjectPackages pkgs.pkgsCross.musl64.votingToolsHaskellPackages);
   voterRegistrationTarball = pkgs.runCommandNoCC "voter-registration-tarball" { buildInputs = [ pkgs.gnutar gzip ]; } ''
     cp ${haskellPackagesMusl64.voter-registration.components.exes.voter-registration}/bin/voter-registration ./
-    mkdir -p $out
+    mkdir -p $out/nix-support
     tar -czvf $out/voter-registration.tar.gz voter-registration
+    echo "file binary-dist $out/voter-registration.tar.gz" > $out/nix-support/hydra-build-products
   '';
 
   self = {
