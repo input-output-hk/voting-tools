@@ -30,7 +30,7 @@
       in {
         inherit legacyPackages packages;
 
-        apps = eachName (name: {
+        apps = eachName (name: utils.lib.mkApp {
           drv = packages.${name};
           exePath = "/bin/${name}";
         });
