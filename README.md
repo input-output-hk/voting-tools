@@ -18,6 +18,8 @@ appropriate MIR certificates.
 
 ## Running
 
+The latest pre-built statically linked tarball can be found at https://hydra.iohk.io/job/Cardano/voting-tools/native.voterRegistrationTarball.x86_64-linux/latest-finished/download/1/voter-registration.tar.gz
+
 ```
 make build-voter-registration
 
@@ -30,7 +32,7 @@ CARDANO_NODE_SOCKET_PATH=state-node-testnet/node.socket \
   --testnet-magic 1097911063 > meta.txsigned
 
 make build-voting-tools
-  
+
 ./voting-tools/bin/voting-tools genesis --mainnet --db-user cardano-node --out-file genesis.json
 
 ./voting-tools/bin/voting-tools rewards --mainnet --db-user cardano-node --total-rewards 8000 --out-file rewards.json
