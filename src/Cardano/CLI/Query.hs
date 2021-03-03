@@ -25,7 +25,7 @@ import           Data.Traversable (for, forM)
 import           Data.Word (Word64)
 import           Database.Esqueleto (BackendCompatible, Single (Single))
 import           Database.Persist.Postgresql (Entity, IsolationLevel (Serializable), SqlBackend,
-                     SqlPersistT, rawSql, runSqlConnWithIsolation)
+                     SqlPersistT, rawExecute, rawSql, runSqlConnWithIsolation)
 import           System.IO (hPutStr, hPutStrLn, stderr)
 
 import           Ouroboros.Network.Block (unSlotNo)
@@ -81,28 +81,12 @@ queryStake
      , MonadReader backend m
      , BackendCompatible SqlBackend backend
      )
-  => Maybe SlotNo
-  -> Api.Hash Api.StakeKey
+  => Api.Hash Api.StakeKey
   -> m Api.Lovelace
-queryStake mSlotRestriction stakeHash = do
+queryStake stakeHash = do
   r <- ask
-  let stkHashSql = T.pack (BC.unpack $ Api.serialiseToRawBytesHex stakeHash)
-  stakeQuerySql <- case mSlotRestriction of
-    Nothing             ->
-      pure $ "SELECT SUM(utxo_view.value) FROM utxo_view WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "';"
-    Just slotNo -> do
-      -- Get first tx in slot after one we've asked to restrict the
-      -- query to, we don't want to get this Tx or any later Txs.
-      let
-        firstUnwantedTxIdSql = "SELECT tx.id FROM tx LEFT OUTER JOIN block ON block.id = tx.block_id WHERE block.slot_no > " <> T.pack (show $ unSlotNo slotNo) <> " LIMIT 1";
-
-      (txids :: [Single Word64]) <- (flip runReaderT) r $ rawSql firstUnwantedTxIdSql []
-      case txids of
-        []               -> error $ "No txs found in slot " <> show (slotNo + 1)-- TODO throwError (_NoTxsFoundInSlot # (slotNo + 1))
-        x1:(x2:xs)       -> error $ "Too many txs found for slot " <> show slotNo <> ", add 'LIMIT 1' to query."
-        (Single txid):[] ->
-          pure $ "SELECT SUM(tx_out.value) FROM tx_out INNER JOIN tx ON tx.id = tx_out.tx_id LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index AND tx_in_id < " <> T.pack (show txid) <> " INNER JOIN block ON block.id = tx.block_id AND block.slot_no < " <> T.pack (show $ unSlotNo slotNo) <> " WHERE CAST(encode(address_raw, 'hex') AS text) LIKE '%" <> stkHashSql <> "' AND tx_in.tx_in_id is null;"
-
+  let stkHashSql = "e1" <> T.pack (BC.unpack $ Api.serialiseToRawBytesHex stakeHash)
+      stakeQuerySql = "SELECT SUM(utxo_snapshot.value) FROM utxo_snapshot WHERE stake_credential = decode('" <> stkHashSql <> "', 'hex');"
   (stakeValues :: [Single (Maybe DbLovelace)]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
   case stakeValues of
     x1:(x2:xs)                            -> error "Too many stake values found for stake sum, is SUM missing from your query?"
@@ -145,9 +129,19 @@ queryVoteRegistrationInfo mSlotNo  = do
 
   let
     xs' = zip [1..] (M.toList xs)
+  stakeTempTableSql <- case mSlotNo of
+    Nothing     ->
+      pure "CREATE TEMPORARY TABLE IF NOT EXISTS utxo_snapshot AS (SELECT tx_out.*, stake_address.hash_raw AS stake_credential FROM tx_out LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index INNER JOIN stake_address ON stake_address.id = tx_out.stake_address_id WHERE tx_in.tx_in_id IS NULL);"
+    Just slotNo -> do
+      let tx_out_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS tx_out_snapshot AS (SELECT tx_out.*, stake_address.hash_raw AS stake_credential FROM tx_out INNER JOIN tx ON tx_out.tx_id = tx.id INNER JOIN block ON tx.block_id = block.id INNER JOIN stake_address ON stake_address.id = tx_out.stake_address_id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slotNo) <> "); "
+          tx_in_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS tx_in_snapshot AS (SELECT tx_in.* FROM tx_in INNER JOIN tx ON tx_in.tx_in_id = tx.id INNER JOIN block ON tx.block_id = block.id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slotNo) <> "); "
+          utxo_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS utxo_snapshot AS (SELECT tx_out_snapshot.* FROM tx_out_snapshot LEFT OUTER JOIN tx_in_snapshot ON tx_out_snapshot.tx_id = tx_in_snapshot.tx_out_id AND tx_out_snapshot.index = tx_in_snapshot.tx_out_index WHERE tx_in_snapshot.tx_in_id IS NULL);"
+      pure $ tx_out_snapshot <> tx_in_snapshot <> utxo_snapshot
+  r <- ask
 
+  _ :: () <- (flip runReaderT) r $ rawExecute stakeTempTableSql []
   foldM (\acc (idx, (verKeyHash, (votepub, rewardsAddr))) -> do
-    (Api.Lovelace stake) <- queryStake mSlotNo verKeyHash
+    (Api.Lovelace stake) <- queryStake verKeyHash
 
     liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show idx <> " of " <> show (length xs)
     pure $ contribute votepub (rewardsAddr, verKeyHash) stake acc
