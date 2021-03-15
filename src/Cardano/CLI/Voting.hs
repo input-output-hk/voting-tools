@@ -266,3 +266,7 @@ signTx psk txbody =
 -- | Pretty print a transaction.
 prettyTx :: IsCardanoEra era => Tx era -> String
 prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
+
+-- | Pretty print a transaction.
+prettyTxBody :: IsCardanoEra era => TxBody era -> String
+prettyTxBody = BSC.unpack . textEnvelopeToJSON Nothing

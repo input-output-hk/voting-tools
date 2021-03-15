@@ -35,7 +35,7 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Fetching (Fund, chunkFund, fundFromVotingFunds)
-import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
+import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx, prettyTxBody,
                      signTx)
 import           Cardano.CLI.Voting.Error (AppError)
 import           Cardano.CLI.Voting.Metadata (voteSignature)
@@ -78,7 +78,7 @@ main = do
           ShelleyBasedEra era' -> do
             if sign
               then liftIO $ (writeFile outFile =<<) $ prettyTx . signTx paySign <$> encodeVoteRegistration connectInfo era' addr ttl vote
-              else liftIO . putStrLn $ "NOT IMPLEMENTED! Pass `--sign` paramater"
+              else liftIO $ (writeFile outFile =<<) $ prettyTxBody <$> encodeVoteRegistration connectInfo era' addr ttl vote
 
             -- Output helpful information
             liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
