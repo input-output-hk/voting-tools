@@ -55,6 +55,7 @@ library
                      , cardano-cli
                      , cardano-crypto
                      , cardano-crypto-class
+                     , cardano-crypto-wrapper
                      , cardano-ledger-shelley-ma
                      , cardano-node
                      , cborg
@@ -95,6 +96,7 @@ executable voting-tools
                      , cardano-cli
                      , cardano-crypto
                      , cardano-crypto-class
+                     , cardano-crypto-wrapper
                      , cardano-db
                      , cardano-ledger
                      , cardano-ledger-shelley-ma
