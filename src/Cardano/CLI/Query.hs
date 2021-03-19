@@ -217,7 +217,7 @@ queryVoteRegistration mSlotNo =
   in do
     let
       sql = case mSlotNo of
-        Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no < " <> T.pack (show $ unSlotNo slot) <> ";")
+        Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slot) <> ";")
         Nothing   -> (sqlBase <> ";")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
