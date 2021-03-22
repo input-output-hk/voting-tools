@@ -33,7 +33,7 @@ import           Ouroboros.Network.Block (unSlotNo)
 import           Cardano.Api (SlotNo)
 import qualified Cardano.Api as Api
 import           Cardano.API.Extended (VotingKeyPublic, serialiseToBech32')
-import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace), metadataFromJson)
+import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace), metadataFromJson, StakeCredential (StakeCredentialByKey))
 import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
                      chunkFund, fundFromVotingFunds)
 import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), MetadataParsingError,
@@ -81,12 +81,16 @@ queryStake
      , MonadReader backend m
      , BackendCompatible SqlBackend backend
      )
-  => Api.Hash Api.StakeKey
+  => Api.NetworkId
+  -> Api.Hash Api.StakeKey
   -> m Api.Lovelace
-queryStake stakeHash = do
+queryStake nw stakeHash = do
   r <- ask
-  let stkHashSql = "e1" <> T.pack (BC.unpack $ Api.serialiseToRawBytesHex stakeHash)
-      stakeQuerySql = "SELECT SUM(utxo_snapshot.value) FROM utxo_snapshot WHERE stake_credential = decode('" <> stkHashSql <> "', 'hex');"
+  let
+      -- TODO: figure out how to obtain this from NetworkId via cardano-api
+      stakeAddress = Api.makeStakeAddress nw (Api.StakeCredentialByKey stakeHash)
+      stakeAddressHex = T.pack (BC.unpack $ Api.serialiseToRawBytesHex stakeAddress)
+      stakeQuerySql = "SELECT SUM(utxo_snapshot.value) FROM utxo_snapshot WHERE stake_credential = decode('" <> stakeAddressHex <> "', 'hex');"
   (stakeValues :: [Single (Maybe DbLovelace)]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
   case stakeValues of
     x1:(x2:xs)                            -> error "Too many stake values found for stake sum, is SUM missing from your query?"
@@ -102,10 +106,11 @@ queryVoteRegistrationInfo
      , AsMetadataParsingError e
      , AsMetadataRetrievalError e
      )
-  => Maybe SlotNo
+  => Api.NetworkId
+  -> Maybe SlotNo
   -> m (Contributions VotingKeyPublic (Api.AddressAny, Api.Hash Api.StakeKey) Integer)
-queryVoteRegistrationInfo mSlotNo  = do
-  regos <- queryVoteRegistration mSlotNo
+queryVoteRegistrationInfo nw mSlotNo  = do
+  regos <- queryVoteRegistration nw mSlotNo
 
   liftIO $ hPutStr stderr $ "\nRaw DB query rows returned: " <> show (length regos)
 
@@ -141,7 +146,7 @@ queryVoteRegistrationInfo mSlotNo  = do
 
   _ :: () <- (flip runReaderT) r $ rawExecute stakeTempTableSql []
   foldM (\acc (idx, (verKeyHash, (votepub, rewardsAddr))) -> do
-    (Api.Lovelace stake) <- queryStake verKeyHash
+    (Api.Lovelace stake) <- queryStake nw verKeyHash
 
     liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show idx <> " of " <> show (length xs)
     pure $ contribute votepub (rewardsAddr, verKeyHash) stake acc
@@ -160,7 +165,7 @@ queryVotingProportion
   -> Threshold
   -> m (Map (Api.AddressAny, Api.Hash Api.StakeKey) Double)
 queryVotingProportion nw mSlotNo (Api.Lovelace threshold) = do
-  info <- filterAmounts (> threshold) <$> queryVoteRegistrationInfo mSlotNo
+  info <- filterAmounts (> threshold) <$> queryVoteRegistrationInfo nw mSlotNo
 
   let
     proportions :: [((Api.AddressAny, Api.Hash Api.StakeKey), Double)]
@@ -187,7 +192,7 @@ queryVotingFunds
   -> Threshold
   -> m VotingFunds
 queryVotingFunds nw mSlotNo (Api.Lovelace threshold) = do
-  info <- queryVoteRegistrationInfo mSlotNo
+  info <- queryVoteRegistrationInfo nw mSlotNo
 
   let info' = filterAmounts (> threshold) info
 
@@ -209,9 +214,10 @@ queryVoteRegistration
      , MonadReader backend m
      , BackendCompatible SqlBackend backend
      )
-  => Maybe SlotNo
+  => Api.NetworkId
+  -> Maybe SlotNo
   -> m [(TxId, Vote)]
-queryVoteRegistration mSlotNo =
+queryVoteRegistration nw mSlotNo =
   let
     sqlBase = "WITH meta_table AS (select tx_id, json AS metadata from tx_metadata where key = '" <> T.pack (show metadataMetaKey) <> "') , sig_table AS (select tx_id, json AS signature from tx_metadata where key = '" <> T.pack (show signatureMetaKey) <> "') SELECT tx.hash,tx_id,metadata,signature FROM meta_table INNER JOIN tx ON tx.id = meta_table.tx_id INNER JOIN sig_table USING(tx_id)"
   in do
