@@ -128,11 +128,11 @@ rewardsAddress = do
 
 votePayload :: (MonadGen m, MonadIO m) => m VotePayload
 votePayload =
-  mkVotePayload <$> votingKeyPublic <*> voteVerificationKey <*> rewardsAddress
+  mkVotePayload <$> votingKeyPublic <*> voteVerificationKey <*> rewardsAddress <*> Gen.integral (Range.linear 0 100000000)
 
 vote :: (MonadGen m, MonadIO m) => m Vote
 vote = do
-  createVoteRegistration <$> voteSigningKey <*> votingKeyPublic <*> rewardsAddress
+  createVoteRegistration <$> voteSigningKey <*> votingKeyPublic <*> rewardsAddress <*> Gen.integral (Range.linear 0 100000000)
 
 -- votePayload :: Gen VotePayload
 -- votePayload =

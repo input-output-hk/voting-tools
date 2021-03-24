@@ -55,6 +55,7 @@ unit_txMetadata_can_decode_example = do
           [ ("1", Aeson.String "0x49b8a147e4ffb1119d460feef2d13a9e882684f30f8cf74e6956246670b2652e")
           , ("2", Aeson.String "0xc14fad1da753e2701b9d3546ace0bffe97670598b0ed53f63484c7ded732a0a9")
           , ("3", Aeson.String "0x009d78cbfe0ec5b263d96847fad6b988c5edddc013aa3af83148e2f9af67cdce358308a9a132b87fc6ed005b36261b081e65f3213eead7eb07")
+          , ("4", Aeson.Number 1234567890)
           ])
       , ("61285", Aeson.Object $ HM.fromList
           [ ("1", Aeson.String "0xfb01d767515ad75a959ef1b154bfb704c1a2a1af9e8c36ea38caade4931f9967780f08cfb2dfdac92e0b1efcca0cb148587b656007e87f1af0be3d4a93826706") ])
@@ -65,6 +66,7 @@ unit_txMetadata_can_decode_example = do
           [ (61284, Api.TxMetaMap [ (Api.TxMetaNumber 1, Api.TxMetaBytes $ fromRight "" $ Base16.decode "49b8a147e4ffb1119d460feef2d13a9e882684f30f8cf74e6956246670b2652e")
                                   , (Api.TxMetaNumber 2, Api.TxMetaBytes $ fromRight "" $ Base16.decode "c14fad1da753e2701b9d3546ace0bffe97670598b0ed53f63484c7ded732a0a9")
                                   , (Api.TxMetaNumber 3, Api.TxMetaBytes $ fromRight "" $ Base16.decode "009d78cbfe0ec5b263d96847fad6b988c5edddc013aa3af83148e2f9af67cdce358308a9a132b87fc6ed005b36261b081e65f3213eead7eb07")
+                                  , (Api.TxMetaNumber 4, Api.TxMetaNumber 1234567890)
                                   ]
             )
           , (61285, Api.TxMetaMap [ (Api.TxMetaNumber 1, Api.TxMetaBytes $ fromRight "" $ Base16.decode "fb01d767515ad75a959ef1b154bfb704c1a2a1af9e8c36ea38caade4931f9967780f08cfb2dfdac92e0b1efcca0cb148587b656007e87f1af0be3d4a93826706")])
@@ -76,22 +78,25 @@ unit_vote_can_decode_example = do
     b1 = fromRight (error "b1") $ Base16.decode "49b8a147e4ffb1119d460feef2d13a9e882684f30f8cf74e6956246670b2652e"
     b2 = fromRight (error "b2") $ Base16.decode "c14fad1da753e2701b9d3546ace0bffe97670598b0ed53f63484c7ded732a0a9"
     b3 = fromRight (error "b3") $ Base16.decode "009d78cbfe0ec5b263d96847fad6b988c5edddc013aa3af83148e2f9af67cdce358308a9a132b87fc6ed005b36261b081e65f3213eead7eb07"
-    b4 = fromRight (error "b4") $ Base16.decode "fb01d767515ad75a959ef1b154bfb704c1a2a1af9e8c36ea38caade4931f9967780f08cfb2dfdac92e0b1efcca0cb148587b656007e87f1af0be3d4a93826706"
+    b4 = 1234567890
+    b5 = fromRight (error "b4") $ Base16.decode "fb01d767515ad75a959ef1b154bfb704c1a2a1af9e8c36ea38caade4931f9967780f08cfb2dfdac92e0b1efcca0cb148587b656007e87f1af0be3d4a93826706"
     txMetadata = Api.makeTransactionMetadata $ M.fromList
       [ (61284, Api.TxMetaMap [ (Api.TxMetaNumber 1, Api.TxMetaBytes b1 )
                               , (Api.TxMetaNumber 2, Api.TxMetaBytes b2 )
                               , (Api.TxMetaNumber 3, Api.TxMetaBytes b3 )
+                              , (Api.TxMetaNumber 4, Api.TxMetaNumber b4 )
                               ]
         )
-      , (61285, Api.TxMetaMap [ (Api.TxMetaNumber 1, Api.TxMetaBytes b4 )])
+      , (61285, Api.TxMetaMap [ (Api.TxMetaNumber 1, Api.TxMetaBytes b5 )])
       ]
 
   let
-    expectedSig         = fromMaybe (error "sig") $ Crypto.rawDeserialiseSigDSIGN b4
+    expectedSig         = fromMaybe (error "sig") $ Crypto.rawDeserialiseSigDSIGN b5
     expectedVotePub     = fromMaybe (error "votepub") $ Api.deserialiseFromRawBytes Api.AsVotingKeyPublic b1
     expectedStkVerify   = fromMaybe (error "stkVerify") $ Api.deserialiseFromRawBytes AsVoteVerificationKey b2
     expectedPaymentAddr = fromMaybe (error "paymentAddr") $ Api.deserialiseFromRawBytes Api.AsAddressAny b3
-    expected            = fromMaybe (error "expected") $ (mkVotePayload expectedVotePub expectedStkVerify expectedPaymentAddr) `signVotePayload` expectedSig
+    expectedSlot = b4
+    expected            = fromMaybe (error "expected") $ (mkVotePayload expectedVotePub expectedStkVerify expectedPaymentAddr expectedSlot) `signVotePayload` expectedSig
 
   voteFromTxMetadata txMetadata @?= (Right expected)
 
