@@ -16,7 +16,7 @@ import           Test.Tasty.Hedgehog
 
 import           Cardano.Api (AddressAny, AsType (AsPaymentKey, AsStakeExtendedKey, AsStakeKey),
                      Lovelace, NetworkId (Mainnet, Testnet),
-                     PaymentCredential (PaymentCredentialByKey),
+                     PaymentCredential (PaymentCredentialByKey), SlotNo (SlotNo),
                      StakeAddressReference (NoStakeAddress), TxMetadata (TxMetadata),
                      TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText),
                      deserialiseFromRawBytes, getVerificationKey, makeShelleyAddress, toAddressAny,
@@ -30,6 +30,9 @@ import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, 
 import           Cardano.CLI.Voting.Signing (VoteSigningKey (..), VoteVerificationKey (..),
                      getVoteVerificationKey, voteSigningKeyFromStakeExtendedSigningKey,
                      voteSigningKeyFromStakeSigningKey)
+import qualified Cardano.Crypto.DSIGN.Class as Crypto
+import qualified Cardano.Crypto.DSIGN.Ed25519 as Crypto
+import qualified Cardano.Crypto.Seed as Crypto
 import           Contribution (Contributions)
 import qualified Contribution as Contrib
 
@@ -126,13 +129,13 @@ rewardsAddress = do
     <*> (pure $ PaymentCredentialByKey hashPaymentKey)
     <*> pure NoStakeAddress
 
+slotNo :: MonadGen m => m Integer
+slotNo = fromIntegral <$> Gen.word64 Range.constantBounded
+
 votePayload :: (MonadGen m, MonadIO m) => m VotePayload
 votePayload =
-  mkVotePayload <$> votingKeyPublic <*> voteVerificationKey <*> rewardsAddress
+  mkVotePayload <$> votingKeyPublic <*> voteVerificationKey <*> rewardsAddress <*> slotNo
 
 vote :: (MonadGen m, MonadIO m) => m Vote
-vote = do
-  createVoteRegistration <$> voteSigningKey <*> votingKeyPublic <*> rewardsAddress
-
--- votePayload :: Gen VotePayload
--- votePayload =
+vote =
+  createVoteRegistration <$> voteSigningKey <*> votingKeyPublic <*> rewardsAddress <*> slotNo

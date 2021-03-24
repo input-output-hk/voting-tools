@@ -33,7 +33,8 @@ import           Ouroboros.Network.Block (unSlotNo)
 import           Cardano.Api (SlotNo)
 import qualified Cardano.Api as Api
 import           Cardano.API.Extended (VotingKeyPublic, serialiseToBech32')
-import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace), metadataFromJson, StakeCredential (StakeCredentialByKey))
+import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace),
+                     StakeCredential (StakeCredentialByKey), metadataFromJson)
 import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
                      chunkFund, fundFromVotingFunds)
 import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), MetadataParsingError,

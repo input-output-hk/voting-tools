@@ -5,8 +5,8 @@
 module Main where
 
 import           Cardano.Api (AnyCardanoEra (AnyCardanoEra), CardanoEra (..),
-                     CardanoEraStyle (ShelleyBasedEra), ShelleyBasedEra (..), cardanoEraStyle,
-                     shelleyBasedEra, ChainPoint, ChainTip (..))
+                     CardanoEraStyle (ShelleyBasedEra), ChainPoint, ChainTip (..),
+                     ShelleyBasedEra (..), cardanoEraStyle, shelleyBasedEra)
 import           Cardano.Api.Block (ChainPoint (ChainPoint))
 import           Cardano.Api.IPC
 import           Cardano.Api.Modes
@@ -37,8 +37,8 @@ import           Ouroboros.Network.Block (unSlotNo)
 
 import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Fetching (Fund, chunkFund, fundFromVotingFunds)
-import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx, prettyTxBody,
-                     signTx)
+import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
+                     prettyTxBody, signTx)
 import           Cardano.CLI.Voting.Error (AppError)
 import           Cardano.CLI.Voting.Metadata (voteSignature)
 import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)

@@ -159,11 +159,13 @@ test-suite unit-tests
                 , QuickCheck
                 , aeson
                 , cardano-api
+                , cardano-binary
                 , containers
                 , hedgehog
                 , hedgehog
                 , hspec
                 , mtl
+                , text
                 , tasty
                 , tasty-hedgehog
                 , base16-bytestring

@@ -25,6 +25,7 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , voteRegistrationPublicKey
                                    , voteRegistrationVerificationKey
                                    , voteRegistrationRewardsAddress
+                                   , voteRegistrationSlot
                                    , metadataToJson
                                    , parseMetadataFromJson
                                    ) where
@@ -86,6 +87,9 @@ voteRegistrationVerificationKey = _votePayloadVerificationKey . _voteMeta
 
 voteRegistrationRewardsAddress :: Vote -> RewardsAddress
 voteRegistrationRewardsAddress = _votePayloadRewardsAddr . _voteMeta
+
+voteRegistrationSlot :: Vote -> Integer
+voteRegistrationSlot = _votePayloadSlot . _voteMeta
 
 data MetadataParsingError
   = MetadataMissingField TxMetadata Word64
