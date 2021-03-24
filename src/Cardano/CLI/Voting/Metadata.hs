@@ -25,6 +25,7 @@ module Cardano.CLI.Voting.Metadata ( VotePayload
                                    , voteRegistrationPublicKey
                                    , voteRegistrationVerificationKey
                                    , voteRegistrationRewardsAddress
+                                   , voteRegistrationSlot
                                    , metadataToJson
                                    , parseMetadataFromJson
                                    ) where
@@ -67,6 +68,7 @@ data VotePayload
   = VotePayload { _votePayloadVoteKey         :: VotingKeyPublic
                 , _votePayloadVerificationKey :: VoteVerificationKey
                 , _votePayloadRewardsAddr     :: RewardsAddress
+                , _votePayloadSlot            :: Integer
                 }
   deriving (Eq, Show)
 
@@ -85,6 +87,9 @@ voteRegistrationVerificationKey = _votePayloadVerificationKey . _voteMeta
 
 voteRegistrationRewardsAddress :: Vote -> RewardsAddress
 voteRegistrationRewardsAddress = _votePayloadRewardsAddr . _voteMeta
+
+voteRegistrationSlot :: Vote -> Integer
+voteRegistrationSlot = _votePayloadSlot . _voteMeta
 
 data MetadataParsingError
   = MetadataMissingField TxMetadata Word64
@@ -128,9 +133,11 @@ mkVotePayload
   -- ^ Vote verification key
   -> RewardsAddress
   -- ^ Address used to pay for the vote registration
+  -> Integer
+  -- ^ Slot registration created at
   -> VotePayload
   -- ^ Payload of the vote
-mkVotePayload votepub vkey rewardsAddr = VotePayload votepub vkey rewardsAddr
+mkVotePayload votepub vkey rewardsAddr slot = VotePayload votepub vkey rewardsAddr slot
 
 signVotePayload
   :: VotePayload
@@ -148,11 +155,12 @@ signVotePayload payload@(VotePayload { _votePayloadVerificationKey = vkey }) sig
     else Just $ Vote payload sig
 
 votePayloadToTxMetadata :: VotePayload -> TxMetadata
-votePayloadToTxMetadata (VotePayload votepub stkVerify paymentAddr) =
+votePayloadToTxMetadata (VotePayload votepub stkVerify paymentAddr slot) =
   makeTransactionMetadata $ M.fromList [ (61284, TxMetaMap
     [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
     , (TxMetaNumber 2, TxMetaBytes $ serialiseToRawBytes stkVerify)
     , (TxMetaNumber 3, TxMetaBytes $ serialiseToRawBytes paymentAddr)
+    , (TxMetaNumber 4, TxMetaNumber slot)
     ])]
 
 voteToTxMetadata :: Vote -> TxMetadata
@@ -176,6 +184,7 @@ voteFromTxMetadata meta = do
   votePubRaw     <- metaKey 61284 meta >>= metaNum 1 >>= asBytes
   stkVerifyRaw   <- metaKey 61284 meta >>= metaNum 2 >>= asBytes
   paymentAddrRaw <- metaKey 61284 meta >>= metaNum 3 >>= asBytes
+  slot           <- metaKey 61284 meta >>= metaNum 4 >>= asInt
   sigBytes       <- metaKey 61285 meta >>= metaNum 1 >>= asBytes
 
   sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
@@ -192,7 +201,7 @@ voteFromTxMetadata meta = do
     Just x  -> pure x
 
   let
-    payload = mkVotePayload votePub stkVerify paymentAddr
+    payload = mkVotePayload votePub stkVerify paymentAddr slot
 
   case payload `signVotePayload` sig of
     Nothing   -> throwError (_MetadataSignatureInvalid # (payload, sig))
@@ -215,6 +224,10 @@ voteFromTxMetadata meta = do
     asBytes :: TxMetadataValue -> Either MetadataParsingError ByteString
     asBytes (TxMetaBytes bs) = pure bs
     asBytes (x)              = throwError (_MetadataValueUnexpectedType # ("TxMetaBytes", x))
+
+    asInt :: TxMetadataValue -> Either MetadataParsingError Integer
+    asInt (TxMetaNumber int) = pure int
+    asInt (x)              = throwError (_MetadataValueUnexpectedType # ("TxMetaNumber", x))
 
 voteSignature :: Vote -> Crypto.SigDSIGN Crypto.Ed25519DSIGN
 voteSignature (Vote _ sig) = sig

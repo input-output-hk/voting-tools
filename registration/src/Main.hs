@@ -5,8 +5,9 @@
 module Main where
 
 import           Cardano.Api (AnyCardanoEra (AnyCardanoEra), CardanoEra (..),
-                     CardanoEraStyle (ShelleyBasedEra), ShelleyBasedEra (..), cardanoEraStyle,
-                     shelleyBasedEra)
+                     CardanoEraStyle (ShelleyBasedEra), ChainPoint, ChainTip (..),
+                     ShelleyBasedEra (..), cardanoEraStyle, shelleyBasedEra)
+import           Cardano.Api.Block (ChainPoint (ChainPoint))
 import           Cardano.Api.IPC
 import           Cardano.Api.Modes
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
@@ -32,11 +33,12 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Options.Applicative as Opt
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import           Ouroboros.Network.Block (unSlotNo)
 
 import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Fetching (Fund, chunkFund, fundFromVotingFunds)
 import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
-                     signTx)
+                     prettyTxBody, signTx)
 import           Cardano.CLI.Voting.Error (AppError)
 import           Cardano.CLI.Voting.Metadata (voteSignature)
 import           Cardano.CLI.Voting.Signing (verificationKeyRawBytes)
@@ -70,19 +72,25 @@ main = do
         -- as transaction metadata. The transaction sends some
         -- unspent ADA back to us (minus a fee).
 
-        -- Generate vote payload (vote information is encoded as metadata).
-        let vote = createVoteRegistration voteSign votePub addr
-
         -- Encode the vote as a transaction and sign it
         case cardanoEraStyle era of
           ShelleyBasedEra era' -> do
+            chainTip <- liftIO $ getLocalChainTip connectInfo
+            let
+                -- Get current slot to embed into vote payload to prevent replay attacks
+                slotTip = (\(ChainPoint slot _) -> slot) $ chainTip
+                slotTipInt = toInteger $ unSlotNo slotTip
+                -- Generate vote payload (vote information is encoded as metadata).
+                vote = createVoteRegistration voteSign votePub addr slotTipInt
             if sign
               then liftIO $ (writeFile outFile =<<) $ prettyTx . signTx paySign <$> encodeVoteRegistration connectInfo era' addr ttl vote
-              else liftIO . putStrLn $ "NOT IMPLEMENTED! Pass `--sign` paramater"
+              else liftIO $ (writeFile outFile =<<) $ prettyTxBody <$> encodeVoteRegistration connectInfo era' addr ttl vote
 
             -- Output helpful information
             liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
-            liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (verificationKeyRawBytes voteSign)
+            liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (Base16.encode . verificationKeyRawBytes $ voteSign)
+            liftIO . putStrLn $ "Rewards address used        (hex): " <> BSC.unpack (serialiseToRawBytesHex addr)
+            liftIO . putStrLn $ "Slot registered:                   " <> show slotTipInt
             liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
           otherwise            -> error "Byron protocol not supported"
 

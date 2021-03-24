@@ -55,6 +55,7 @@ library
                      , cardano-cli
                      , cardano-crypto
                      , cardano-crypto-class
+                     , cardano-crypto-wrapper
                      , cardano-ledger-shelley-ma
                      , cardano-node
                      , cborg
@@ -95,6 +96,7 @@ executable voting-tools
                      , cardano-cli
                      , cardano-crypto
                      , cardano-crypto-class
+                     , cardano-crypto-wrapper
                      , cardano-db
                      , cardano-ledger
                      , cardano-ledger-shelley-ma
@@ -157,11 +159,13 @@ test-suite unit-tests
                 , QuickCheck
                 , aeson
                 , cardano-api
+                , cardano-binary
                 , containers
                 , hedgehog
                 , hedgehog
                 , hspec
                 , mtl
+                , text
                 , tasty
                 , tasty-hedgehog
                 , base16-bytestring

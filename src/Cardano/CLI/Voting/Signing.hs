@@ -30,6 +30,7 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
 import           Control.Monad.Except (MonadError)
 import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as LBS
 
 import           Cardano.Api (AsType (AsHash, AsPaymentExtendedKey, AsPaymentKey, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
                      FromSomeType, HasTypeProxy, Hash, Key, NetworkId, PaymentExtendedKey,
@@ -46,6 +47,7 @@ import           Cardano.Api.Typed (FromSomeType (FromSomeType), ShelleySigningK
                      makeShelleySignature, toShelleySigningKey)
 import           Cardano.CLI.Types (SigningKeyFile)
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
+import qualified Cardano.Crypto.Hashing as Crypto
 import qualified Cardano.Crypto.Util as Crypto
 import qualified Cardano.Crypto.Wallet as Crypto.HD
 import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
@@ -145,24 +147,37 @@ readVotePaymentKeyFile skFile =
                       APaymentExtendedSigningKey
       ]
 
-sign
+hashVotePayload :: ByteString -> ByteString
+hashVotePayload payload = Crypto.hashToBytes . Crypto.hashRaw $ LBS.fromStrict payload
+
+sign :: ByteString -> VoteSigningKey -> Crypto.SigDSIGN (DSIGN StandardCrypto)
+sign payload vsk = sign' (hashVotePayload payload) vsk
+
+sign'
   :: Crypto.SignableRepresentation tosign
   => tosign
   -> VoteSigningKey
   -> Crypto.SigDSIGN (DSIGN StandardCrypto)
-sign payload vsk =
+sign' payload vsk =
   withVoteShelleySigningKey vsk $ \skey ->
     let
-      (Crypto.SignedDSIGN sig) = payload `makeShelleySignature` skey
+      (Crypto.SignedDSIGN sig) = makeShelleySignature payload skey
     in sig
 
 verify
+  :: VoteVerificationKey
+  -> ByteString
+  -> Crypto.SigDSIGN (DSIGN StandardCrypto)
+  -> Bool
+verify vkey payload sig = verify' vkey (hashVotePayload payload) sig
+
+verify'
   :: Crypto.SignableRepresentation tosign
   => VoteVerificationKey
   -> tosign
   -> Crypto.SigDSIGN (DSIGN StandardCrypto)
   -> Bool
-verify vkey payload sig =
+verify' vkey payload sig =
   withVoteVerificationKey vkey $ \(StakeVerificationKey (Shelley.VKey v)) ->
     either (const False) (const True) $ Crypto.verifyDSIGN () v payload sig
 

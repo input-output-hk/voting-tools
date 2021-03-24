@@ -30,6 +30,7 @@ executable voter-registration
                      , cardano-binary
                      , cardano-cli
                      , cardano-crypto-class
+                     , cardano-crypto-wrapper
                      , cardano-ledger
                      , cardano-crypto
                      , containers

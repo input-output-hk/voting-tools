@@ -120,10 +120,11 @@ createVoteRegistration
   :: VoteSigningKey
   -> VotingKeyPublic
   -> RewardsAddress
+  -> Integer
   -> Vote
-createVoteRegistration skey votepub rewardsAddr =
+createVoteRegistration skey votepub rewardsAddr slot =
     let
-      payload     = mkVotePayload votepub (getVoteVerificationKey skey) rewardsAddr
+      payload     = mkVotePayload votepub (getVoteVerificationKey skey) rewardsAddr slot
       payloadCBOR = CBOR.serialize' payload
 
       payloadSig  :: SigDSIGN (DSIGN StandardCrypto)
@@ -201,7 +202,6 @@ encodeVoteRegistration connectInfo era addr ttl vote = do
       case findUnspent feeParams utxos of
         Nothing      -> error $ "Not enough funds to meet fee in '" <> show utxos <> "'." -- throwError $ _NotEnoughFundsToMeetFeeError # utxos
         Just unspent -> do
-          liftIO $ print unspent
           let
             slotTip          = (\(ChainPoint slot _) -> slot) $ chainTip
             txins            = unspentSources unspent
@@ -266,3 +266,7 @@ signTx psk txbody =
 -- | Pretty print a transaction.
 prettyTx :: IsCardanoEra era => Tx era -> String
 prettyTx = BSC.unpack . textEnvelopeToJSON Nothing
+
+-- | Pretty print a transaction.
+prettyTxBody :: IsCardanoEra era => TxBody era -> String
+prettyTxBody = BSC.unpack . textEnvelopeToJSON Nothing
