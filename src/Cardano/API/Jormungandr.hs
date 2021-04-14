@@ -64,7 +64,7 @@ data Address = Address { unAddress :: B.ByteString }
 
 addressFromVotingKeyPublic :: NetworkId -> VotingKeyPublic -> Address
 addressFromVotingKeyPublic nw =
-  mkSingleAddress (discriminationFromNetworkId nw) . serialiseToRawBytes
+  mkAccountAddress (discriminationFromNetworkId nw) . serialiseToRawBytes
 
 discriminationFromNetworkId :: NetworkId -> Discrimination
 discriminationFromNetworkId Mainnet          = Production
@@ -75,6 +75,13 @@ mkSingleAddress d bs = Address . B.concat $ BL.toChunks . Bin.runPut $ do
   case d of
     Production -> Bin.putWord8 (0b01111111 .&. 0x3)
     Test       -> Bin.putWord8 (0b11111111 .&. 0x3)
+  Bin.putByteString bs
+
+mkAccountAddress :: Discrimination -> B.ByteString -> Address
+mkAccountAddress d bs = Address . B.concat $ BL.toChunks . Bin.runPut $ do
+  case d of
+    Production -> Bin.putWord8 (0b01111111 .&. 0x5)
+    Test       -> Bin.putWord8 (0b11111111 .&. 0x5)
   Bin.putByteString bs
 
 instance SerialiseAsBech32' Address where
