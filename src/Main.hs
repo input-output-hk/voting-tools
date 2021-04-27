@@ -2,7 +2,7 @@
 
 module Main where
 
-import           Cardano.Api (AddressAny, Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
+import           Cardano.Api (StakeAddress, Certificate, ShelleyBasedEra (ShelleyBasedEraShelley),
                      makeMIRCertificate, serialiseAddress, serialiseToCBOR)
 import           Cardano.Api.Protocol (Protocol (CardanoProtocol), withlocalNodeConnectInfo)
 import           Cardano.Api.Typed (AsType (AsStakeAddress), Hash, Lovelace (Lovelace),
@@ -58,23 +58,23 @@ main = do
     Rewards rOpts -> do
       let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile) = Rewards.mkConfig rOpts
 
-      (votingProportions :: Map (AddressAny, Hash StakeKey) Double) <-
+      (votingProportions :: Map (StakeAddress, Hash StakeKey) Double) <-
         runQuery db $ Query.queryVotingProportion networkId slotNo threshold
 
       let
-        raw :: [(AddressAny, Double)]
+        raw :: [(StakeAddress, Double)]
         raw = fmap (\((rewardsAddr, stkHash), v) -> (rewardsAddr, v)) $ M.toList votingProportions
 
         ofRewards :: Double -> Double
         ofRewards = ((fromIntegral totalRewards) *)
 
-        toRewards :: [(AddressAny, Double)] -> [(AddressAny, Integer)]
+        toRewards :: [(StakeAddress, Double)] -> [(StakeAddress, Integer)]
         toRewards = fmap (\(rewardsAddr, proportion) -> (rewardsAddr, proportion & ofRewards & round))
 
-        rewards :: [(AddressAny, Integer)]
+        rewards :: [(StakeAddress, Integer)]
         rewards = toRewards raw
 
-        toAddrLovelaceMap :: [(AddressAny, Integer)] -> Map Text Integer
+        toAddrLovelaceMap :: [(StakeAddress, Integer)] -> Map Text Integer
         toAddrLovelaceMap = M.fromList . fmap (\(addr, reward) -> (serialiseAddress addr, reward))
 
       BLC.writeFile outfile . toJSON Aeson.Generic . toAddrLovelaceMap $ rewards
