@@ -224,8 +224,8 @@ queryVoteRegistration nw mSlotNo =
   in do
     let
       sql = case mSlotNo of
-        Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slot) <> ";")
-        Nothing   -> (sqlBase <> ";")
+        Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slot) <> " ORDER BY metadata -> '4' ASC;")
+        Nothing   -> (sqlBase <> " ORDER BY metadata -> '4' ASC;")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     fmap mconcat $ forM results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
