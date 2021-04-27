@@ -19,6 +19,7 @@ module Cardano.API.Extended ( readSigningKeyFile
                             , AsEnvSocketError(..)
                             , Extended.readerFromAttoParser
                             , Extended.parseAddressAny
+                            , Extended.parseStakeAddress
                             , Extended.pNetworkId
                             , readEnvSocketPath
                             , Extended.textEnvelopeToJSON

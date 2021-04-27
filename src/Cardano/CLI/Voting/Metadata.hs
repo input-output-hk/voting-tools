@@ -60,7 +60,7 @@ import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPubl
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKey), VoteVerificationKey,
                      verify)
 
-type RewardsAddress = Api.AddressAny
+type RewardsAddress = Api.StakeAddress
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).
@@ -98,7 +98,7 @@ data MetadataParsingError
   | DeserialiseSigDSIGNFailure ByteString
   | DeserialiseVerKeyDSIGNFailure ByteString
   | DeserialiseVotePublicKeyFailure ByteString
-  | DeserialisePaymentAddressFailure ByteString
+  | DeserialiseRewardsAddressFailure ByteString
   | MetadataSignatureInvalid VotePayload (Crypto.SigDSIGN (DSIGN StandardCrypto))
   deriving (Eq, Show)
 
@@ -183,7 +183,7 @@ voteFromTxMetadata :: TxMetadata -> Either MetadataParsingError Vote
 voteFromTxMetadata meta = do
   votePubRaw     <- metaKey 61284 meta >>= metaNum 1 >>= asBytes
   stkVerifyRaw   <- metaKey 61284 meta >>= metaNum 2 >>= asBytes
-  paymentAddrRaw <- metaKey 61284 meta >>= metaNum 3 >>= asBytes
+  rewardsAddrRaw <- metaKey 61284 meta >>= metaNum 3 >>= asBytes
   slot           <- metaKey 61284 meta >>= metaNum 4 >>= asInt
   sigBytes       <- metaKey 61285 meta >>= metaNum 1 >>= asBytes
 
@@ -196,12 +196,12 @@ voteFromTxMetadata meta = do
   votePub   <- case Api.deserialiseFromRawBytes AsVotingKeyPublic votePubRaw of
     Nothing -> throwError (_DeserialiseVotePublicKeyFailure # votePubRaw)
     Just x  -> pure x
-  paymentAddr <- case Api.deserialiseFromRawBytes Api.AsAddressAny paymentAddrRaw of
-    Nothing -> throwError (_DeserialisePaymentAddressFailure # paymentAddrRaw)
+  rewardsAddr <- case Api.deserialiseFromRawBytes Api.AsStakeAddress rewardsAddrRaw of
+    Nothing -> throwError (_DeserialiseRewardsAddressFailure # rewardsAddrRaw)
     Just x  -> pure x
 
   let
-    payload = mkVotePayload votePub stkVerify paymentAddr slot
+    payload = mkVotePayload votePub stkVerify rewardsAddr slot
 
   case payload `signVotePayload` sig of
     Nothing   -> throwError (_MetadataSignatureInvalid # (payload, sig))
