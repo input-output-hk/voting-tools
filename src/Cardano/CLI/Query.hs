@@ -109,7 +109,7 @@ queryVoteRegistrationInfo
      )
   => Api.NetworkId
   -> Maybe SlotNo
-  -> m (Contributions VotingKeyPublic (Api.AddressAny, Api.Hash Api.StakeKey) Integer)
+  -> m (Contributions VotingKeyPublic (Api.StakeAddress, Api.Hash Api.StakeKey) Integer)
 queryVoteRegistrationInfo nw mSlotNo  = do
   regos <- queryVoteRegistration nw mSlotNo
 
@@ -117,7 +117,7 @@ queryVoteRegistrationInfo nw mSlotNo  = do
 
   let
     -- Each stake key has one public voting key it can stake to
-    xs :: Map (Api.Hash Api.StakeKey) (VotingKeyPublic, Api.AddressAny)
+    xs :: Map (Api.Hash Api.StakeKey) (VotingKeyPublic, Api.StakeAddress)
     xs = fmap snd $ foldl' (\acc (txid, rego) ->
              let
                verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
@@ -164,12 +164,12 @@ queryVotingProportion
   => Api.NetworkId
   -> Maybe SlotNo
   -> Threshold
-  -> m (Map (Api.AddressAny, Api.Hash Api.StakeKey) Double)
+  -> m (Map (Api.StakeAddress, Api.Hash Api.StakeKey) Double)
 queryVotingProportion nw mSlotNo (Api.Lovelace threshold) = do
   info <- filterAmounts (> threshold) <$> queryVoteRegistrationInfo nw mSlotNo
 
   let
-    proportions :: [((Api.AddressAny, Api.Hash Api.StakeKey), Double)]
+    proportions :: [((Api.StakeAddress, Api.Hash Api.StakeKey), Double)]
     proportions =
       proportionalize info
       & foldMap snd
