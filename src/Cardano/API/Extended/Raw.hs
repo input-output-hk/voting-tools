@@ -74,6 +74,13 @@ parseAddressAny = do
       Nothing   -> fail "invalid address"
       Just addr -> pure addr
 
+parseStakeAddress :: Atto.Parser StakeAddress
+parseStakeAddress = do
+    str <- lexPlausibleAddressString
+    case deserialiseAddress AsStakeAddress str of
+      Nothing   -> fail "invalid address"
+      Just addr -> pure addr
+
 lexPlausibleAddressString :: Atto.Parser Text
 lexPlausibleAddressString =
     T.decodeLatin1 <$> Atto.takeWhile1 isPlausibleAddressChar

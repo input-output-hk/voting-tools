@@ -64,7 +64,7 @@ main = do
   case eCfg of
     Left (err :: Register.ConfigError) ->
       fail $ show err
-    Right (Register.Config addr voteSign paySign votePub networkId ttl sign outFile (AnyCardanoEra era) (AnyConsensusModeParams consensusModeParams)) -> do
+    Right (Register.Config addr rewardsAddr voteSign paySign votePub networkId ttl sign outFile (AnyCardanoEra era) (AnyConsensusModeParams consensusModeParams)) -> do
       eResult <- runExceptT $ do
         SocketPath sockPath <-  readEnvSocketPath
         let connectInfo = LocalNodeConnectInfo consensusModeParams networkId sockPath
@@ -81,7 +81,7 @@ main = do
                 slotTip = (\(ChainPoint slot _) -> slot) $ chainTip
                 slotTipInt = toInteger $ unSlotNo slotTip
                 -- Generate vote payload (vote information is encoded as metadata).
-                vote = createVoteRegistration voteSign votePub addr slotTipInt
+                vote = createVoteRegistration voteSign votePub rewardsAddr slotTipInt
             if sign
               then liftIO $ (writeFile outFile =<<) $ prettyTx . signTx paySign <$> encodeVoteRegistration connectInfo era' addr ttl vote
               else liftIO $ (writeFile outFile =<<) $ prettyTxBody <$> encodeVoteRegistration connectInfo era' addr ttl vote
@@ -89,7 +89,7 @@ main = do
             -- Output helpful information
             liftIO . putStrLn $ "Vote public key used        (hex): " <> BSC.unpack (serialiseToRawBytesHex votePub)
             liftIO . putStrLn $ "Stake public key used       (hex): " <> BSC.unpack (Base16.encode . verificationKeyRawBytes $ voteSign)
-            liftIO . putStrLn $ "Rewards address used        (hex): " <> BSC.unpack (serialiseToRawBytesHex addr)
+            liftIO . putStrLn $ "Rewards address used        (hex): " <> BSC.unpack (serialiseToRawBytesHex rewardsAddr)
             liftIO . putStrLn $ "Slot registered:                   " <> show slotTipInt
             liftIO . putStrLn $ "Vote registration signature (hex): " <> BSC.unpack (Base16.encode . Crypto.rawSerialiseSigDSIGN $ voteSignature vote)
           otherwise            -> error "Byron protocol not supported"
