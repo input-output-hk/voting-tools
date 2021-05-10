@@ -14,6 +14,7 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , getVoteVerificationKeyHash
                                   , getVoteVerificationKey
                                   , withVoteVerificationKey
+                                  , hashVotePayload
                                   , withVoteSigningKey
                                   , withVoteShelleySigningKey
                                   , voteSigningKeyFromStakeSigningKey
@@ -24,6 +25,7 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , readVoteSigningKeyFile
                                   , verificationKeyRawBytes
                                   , withWitnessPaymentKey
+                                  , toStakeAddr
                                   , readVotePaymentKeyFile
                                   ) where
 

@@ -21,7 +21,7 @@ import qualified Data.Text.IO as TIO
 import           Options.Applicative
 
 import           Cardano.Api (Address, AddressAny, Bech32DecodeError, FileError, NetworkId,
-                     PaymentKey, StakeAddress, SigningKey, StakeKey, Witness)
+                     PaymentKey, SigningKey, StakeAddress, StakeKey, Witness)
 import qualified Cardano.Api as Api
 import           Cardano.Api.Modes
 import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TextEnvelopeError)

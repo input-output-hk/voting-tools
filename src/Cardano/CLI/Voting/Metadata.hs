@@ -9,8 +9,8 @@
 -- vote. The payload consists of the vote public key, and the stake
 -- verification key. The payload must be signed before it is
 -- considered a valid vote.
-module Cardano.CLI.Voting.Metadata ( VotePayload
-                                   , Vote
+module Cardano.CLI.Voting.Metadata ( VotePayload(..)
+                                   , Vote(..)
                                    , RewardsAddress
                                    , mkVotePayload
                                    , signVotePayload
