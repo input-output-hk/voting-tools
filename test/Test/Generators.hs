@@ -1,4 +1,3 @@
-
 module Test.Generators where
 
 
@@ -14,22 +13,23 @@ import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog
 
-import           Cardano.Api (AddressAny, AsType (AsPaymentKey, AsStakeExtendedKey, AsStakeKey),
-                     Lovelace, NetworkId (Mainnet, Testnet),
-                     PaymentCredential (PaymentCredentialByKey), SlotNo (SlotNo),
-                     StakeAddressReference (NoStakeAddress), TxMetadata (TxMetadata),
+import           Cardano.Api (AsType (AsPaymentKey, AsStakeExtendedKey, AsStakeKey), Hash, Lovelace,
+                     NetworkId (Mainnet, Testnet), PaymentCredential (PaymentCredentialByKey),
+                     SlotNo (SlotNo), StakeAddress, StakeAddressReference (NoStakeAddress),
+                     StakeKey, TxMetadata (TxMetadata),
                      TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText),
                      deserialiseFromRawBytes, getVerificationKey, makeShelleyAddress, toAddressAny,
                      verificationKeyHash)
-import           Cardano.Api.Typed (NetworkMagic (NetworkMagic), generateSigningKey)
+import           Cardano.Api.Typed (NetworkMagic (NetworkMagic),
+                     StakeCredential (StakeCredentialByKey), generateSigningKey)
 import qualified Data.Aeson as Aeson
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Voting
 import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload, signVotePayload)
 import           Cardano.CLI.Voting.Signing (VoteSigningKey (..), VoteVerificationKey (..),
-                     getVoteVerificationKey, voteSigningKeyFromStakeExtendedSigningKey,
-                     voteSigningKeyFromStakeSigningKey)
+                     getVoteVerificationKey, toStakeAddr,
+                     voteSigningKeyFromStakeExtendedSigningKey, voteSigningKeyFromStakeSigningKey)
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Cardano.Crypto.DSIGN.Ed25519 as Crypto
 import qualified Cardano.Crypto.Seed as Crypto
@@ -119,15 +119,14 @@ voteVerificationKey :: (MonadGen m, MonadIO m) => m VoteVerificationKey
 voteVerificationKey =
   getVoteVerificationKey <$> voteSigningKey
 
-rewardsAddress :: (MonadGen m, MonadIO m) => m AddressAny
+rewardsAddress :: (MonadGen m, MonadIO m) => m StakeAddress
 rewardsAddress = do
-  signingKey <- liftIO $ generateSigningKey AsPaymentKey
-  let hashPaymentKey = verificationKeyHash . getVerificationKey $ signingKey
+  signingKey <- liftIO $ generateSigningKey AsStakeKey
+  let hashStakeKey = verificationKeyHash . getVerificationKey $ signingKey
 
-  fmap toAddressAny $ makeShelleyAddress
-    <$> Gen.choice [ (Testnet . NetworkMagic) <$> Gen.word32 (Range.linear minBound maxBound), pure Mainnet ]
-    <*> (pure $ PaymentCredentialByKey hashPaymentKey)
-    <*> pure NoStakeAddress
+  toStakeAddr
+    <$> Gen.choice [ Testnet . NetworkMagic <$> Gen.word32 (Range.linear minBound maxBound), pure Mainnet ]
+    <*> pure hashStakeKey
 
 slotNo :: MonadGen m => m Integer
 slotNo = fromIntegral <$> Gen.word64 Range.constantBounded
