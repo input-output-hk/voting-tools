@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -28,6 +29,10 @@ module Cardano.CLI.Voting.Metadata ( VotePayload(..)
                                    , voteRegistrationSlot
                                    , metadataToJson
                                    , parseMetadataFromJson
+                                   , componentPath
+                                   , prettyPrintMetadataParsingError
+                                   , prettyPrintMetadataPath
+                                   , prettyPrintComponent
                                    ) where
 
 import           Cardano.Api (StakeKey, TxMetadata (TxMetadata), VerificationKey,
@@ -51,6 +56,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.HashMap.Strict as HM
 import           Data.List (find)
 import qualified Data.Map.Strict as M
+import Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Word (Word64)
 import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
@@ -91,16 +97,59 @@ voteRegistrationRewardsAddress = _votePayloadRewardsAddr . _voteMeta
 voteRegistrationSlot :: Vote -> Integer
 voteRegistrationSlot = _votePayloadSlot . _voteMeta
 
-data MetadataParsingError
-  = MetadataMissingField TxMetadata Word64
-  | MetadataValueMissingField TxMetadataValue Integer
-  | MetadataValueUnexpectedType String TxMetadataValue
-  | DeserialiseSigDSIGNFailure ByteString
-  | DeserialiseVerKeyDSIGNFailure ByteString
-  | DeserialiseVotePublicKeyFailure ByteString
-  | DeserialiseRewardsAddressFailure ByteString
-  | MetadataSignatureInvalid VotePayload (Crypto.SigDSIGN (DSIGN StandardCrypto))
+data VoteRegistrationComponent
+  = RegoVotingKey
+  | RegoStakeVerificationKey
+  | RegoRewardsAddress
+  | RegoSlotNum
+  | RegoSignature
   deriving (Eq, Show)
+
+prettyPrintComponent RegoVotingKey
+    = "voting key"
+prettyPrintComponent RegoStakeVerificationKey
+    = "stake verification key"
+prettyPrintComponent RegoRewardsAddress
+    = "rewards address"
+prettyPrintComponent RegoSlotNum
+    = "slot number"
+prettyPrintComponent RegoSignature
+    = "signature"
+
+type MetadataPath = (Word64, Integer)
+
+componentPath :: VoteRegistrationComponent -> MetadataPath
+componentPath RegoVotingKey            = (61284, 1)
+componentPath RegoStakeVerificationKey = (61284, 2)
+componentPath RegoRewardsAddress       = (61284, 3)
+componentPath RegoSlotNum              = (61284, 4)
+componentPath RegoSignature            = (61285, 1)
+
+prettyPrintMetadataPath :: MetadataPath -> Text
+prettyPrintMetadataPath (k1, k2) = T.pack $ show k1 <> " > " <> show k2
+
+data MetadataParsingError
+  = MetadataMissing VoteRegistrationComponent
+  | MetadataParseFailure VoteRegistrationComponent Text
+  | MetadataUnexpectedType VoteRegistrationComponent Text
+  | MetadataInvalidSignature
+  deriving (Eq, Show)
+
+prettyPrintMetadataParsingError :: MetadataParsingError -> Text
+prettyPrintMetadataParsingError (MetadataMissing comp)
+    = "The " <> prettyPrintComponent comp
+    <> " could not be found at the metadata path: "
+    <> prettyPrintMetadataPath (componentPath comp)
+prettyPrintMetadataParsingError (MetadataParseFailure comp failure)
+    = "The " <> prettyPrintComponent comp
+    <> " at metadata path: " <> prettyPrintMetadataPath (componentPath comp)
+    <> " failed to parse. Error was: " <> failure
+prettyPrintMetadataParsingError (MetadataUnexpectedType comp expected)
+    = "The " <> prettyPrintComponent comp
+    <> " expected type '" <> expected <> "'"
+    <> " at path " <> prettyPrintMetadataPath (componentPath comp)
+prettyPrintMetadataParsingError MetadataInvalidSignature =
+    "Signature validation failed"
 
 makeClassyPrisms ''MetadataParsingError
 
@@ -186,19 +235,19 @@ voteFromTxMetadata meta = do
 
   -- DECISION #09A:
   --   the voting public key under '61284' > '1'
-  votePubRaw     <- metaKey 61284 meta >>= metaNum 1 >>= asBytes
+  votePubRaw     <- metaValue RegoVotingKey meta >>= asBytes RegoVotingKey
   -- DECISION #09B:
   --   the stake verifiaction key under '61284' > '2'
-  stkVerifyRaw   <- metaKey 61284 meta >>= metaNum 2 >>= asBytes
+  stkVerifyRaw   <- metaValue RegoStakeVerificationKey meta >>= asBytes RegoStakeVerificationKey
   -- DECISION #09C:
   --   the rewards address under '61284' > '3'
-  rewardsAddrRaw <- metaKey 61284 meta >>= metaNum 3 >>= asBytes
+  rewardsAddrRaw <- metaValue RegoRewardsAddress meta >>= asBytes RegoRewardsAddress
   -- DECISION #09D:
   --   the slot number under '61284' > '4'
-  slot           <- metaKey 61284 meta >>= metaNum 4 >>= asInt
+  slot           <- metaValue RegoSlotNum meta >>= asInt RegoSlotNum
   -- DECISION #09E:
   --   the signature under '61285' > '1'
-  sigBytes       <- metaKey 61285 meta >>= metaNum 1 >>= asBytes
+  sigBytes       <- metaValue RegoSignature meta >>= asBytes RegoSignature
 
   -- DECISION #10:
   --   We found a vote registration with all the correct parts, but were unable
@@ -207,22 +256,22 @@ voteFromTxMetadata meta = do
   -- DECISION #10A:
   --   deserialise the signature
   sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
-    Nothing -> throwError (_DeserialiseSigDSIGNFailure # sigBytes)
+    Nothing -> throwError (_MetadataParseFailure # (RegoSignature, "Failed to deserialise."))
     Just x  -> pure x
   -- DECISION #10A:
   --   deserialise the stake verification key
   stkVerify <- case Api.deserialiseFromRawBytes AsVoteVerificationKey stkVerifyRaw of
-    Nothing  -> throwError (_DeserialiseVerKeyDSIGNFailure # stkVerifyRaw)
+    Nothing  -> throwError (_MetadataParseFailure # (RegoStakeVerificationKey, "Failed to deserialise."))
     Just x   -> pure x
   -- DECISION #10A:
   --   deserialise the voting public key
   votePub   <- case Api.deserialiseFromRawBytes AsVotingKeyPublic votePubRaw of
-    Nothing -> throwError (_DeserialiseVotePublicKeyFailure # votePubRaw)
+    Nothing -> throwError (_MetadataParseFailure # (RegoVotingKey, "Failed to deserialise."))
     Just x  -> pure x
   -- DECISION #10A:
   --   deserialise the rewards address
   rewardsAddr <- case Api.deserialiseFromRawBytes Api.AsStakeAddress rewardsAddrRaw of
-    Nothing -> throwError (_DeserialiseRewardsAddressFailure # rewardsAddrRaw)
+    Nothing -> throwError (_MetadataParseFailure # (RegoRewardsAddress, "Failed to deserialise."))
     Just x  -> pure x
 
   let
@@ -232,30 +281,38 @@ voteFromTxMetadata meta = do
   --   We found and deserialised the vote registration but the vote registration
   --   signature is invalid.
   case payload `signVotePayload` sig of
-    Nothing   -> throwError (_MetadataSignatureInvalid # (payload, sig))
+    Nothing   -> throwError (_MetadataInvalidSignature # ())
     Just vote -> pure vote
 
   where
-    metaKey :: Word64 -> TxMetadata -> Either MetadataParsingError TxMetadataValue
-    metaKey key val@(TxMetadata map) =
-      case M.lookup key map of
-        Nothing     -> throwError (_MetadataMissingField # (val, key))
-        Just x      -> pure x
+    metaValue
+        :: VoteRegistrationComponent
+        -> TxMetadata
+        -> Either MetadataParsingError TxMetadataValue
+    metaValue comp (TxMetadata map1) =
+        let
+            (k1, k2) = componentPath comp
+        in
+            case M.lookup k1 map1 of
+                Nothing ->
+                    throwError (_MetadataMissing # comp)
+                Just (TxMetaMap map2) ->
+                    case find (\(k, v) -> k == TxMetaNumber k2) map2 of
+                        Nothing ->
+                            throwError (_MetadataMissing # comp)
+                        Just (_, v) ->
+                            pure v
+                Just other ->
+                    throwError (_MetadataMissing # comp)
+                
 
-    metaNum :: Integer -> TxMetadataValue -> Either MetadataParsingError TxMetadataValue
-    metaNum key val@(TxMetaMap xs) =
-      case find (\(k, v) -> k == TxMetaNumber key) xs of
-        Nothing     -> throwError (_MetadataValueMissingField # (val, key))
-        Just (_, x) -> pure x
-    metaNum key (x)            = throwError (_MetadataValueUnexpectedType # ("TxMetaMap", x))
+    asBytes :: VoteRegistrationComponent -> TxMetadataValue -> Either MetadataParsingError ByteString
+    asBytes _    (TxMetaBytes bs) = pure bs
+    asBytes comp x                = throwError (_MetadataUnexpectedType # (comp, "TxMetaBytes"))
 
-    asBytes :: TxMetadataValue -> Either MetadataParsingError ByteString
-    asBytes (TxMetaBytes bs) = pure bs
-    asBytes (x)              = throwError (_MetadataValueUnexpectedType # ("TxMetaBytes", x))
-
-    asInt :: TxMetadataValue -> Either MetadataParsingError Integer
-    asInt (TxMetaNumber int) = pure int
-    asInt (x)              = throwError (_MetadataValueUnexpectedType # ("TxMetaNumber", x))
+    asInt :: VoteRegistrationComponent -> TxMetadataValue -> Either MetadataParsingError Integer
+    asInt comp (TxMetaNumber int) = pure int
+    asInt comp x                  = throwError (_MetadataUnexpectedType # (comp, "TxMetaNumber"))
 
 voteSignature :: Vote -> Crypto.SigDSIGN Crypto.Ed25519DSIGN
 voteSignature (Vote _ sig) = sig
