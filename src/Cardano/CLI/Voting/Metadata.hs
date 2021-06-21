@@ -181,21 +181,46 @@ metadataToJson = Api.metadataToJson Api.TxMetadataJsonNoSchema
 
 voteFromTxMetadata :: TxMetadata -> Either MetadataParsingError Vote
 voteFromTxMetadata meta = do
+  -- DECISION #09:
+  --   We found some valid TxMetadata but we failed to find:
+
+  -- DECISION #09A:
+  --   the voting public key under '61284' > '1'
   votePubRaw     <- metaKey 61284 meta >>= metaNum 1 >>= asBytes
+  -- DECISION #09B:
+  --   the stake verifiaction key under '61284' > '2'
   stkVerifyRaw   <- metaKey 61284 meta >>= metaNum 2 >>= asBytes
+  -- DECISION #09C:
+  --   the rewards address under '61284' > '3'
   rewardsAddrRaw <- metaKey 61284 meta >>= metaNum 3 >>= asBytes
+  -- DECISION #09D:
+  --   the slot number under '61284' > '4'
   slot           <- metaKey 61284 meta >>= metaNum 4 >>= asInt
+  -- DECISION #09E:
+  --   the signature under '61285' > '1'
   sigBytes       <- metaKey 61285 meta >>= metaNum 1 >>= asBytes
 
+  -- DECISION #10:
+  --   We found a vote registration with all the correct parts, but were unable
+  --   to:
+
+  -- DECISION #10A:
+  --   deserialise the signature
   sig       <- case Crypto.rawDeserialiseSigDSIGN sigBytes of
     Nothing -> throwError (_DeserialiseSigDSIGNFailure # sigBytes)
     Just x  -> pure x
+  -- DECISION #10A:
+  --   deserialise the stake verification key
   stkVerify <- case Api.deserialiseFromRawBytes AsVoteVerificationKey stkVerifyRaw of
     Nothing  -> throwError (_DeserialiseVerKeyDSIGNFailure # stkVerifyRaw)
     Just x   -> pure x
+  -- DECISION #10A:
+  --   deserialise the voting public key
   votePub   <- case Api.deserialiseFromRawBytes AsVotingKeyPublic votePubRaw of
     Nothing -> throwError (_DeserialiseVotePublicKeyFailure # votePubRaw)
     Just x  -> pure x
+  -- DECISION #10A:
+  --   deserialise the rewards address
   rewardsAddr <- case Api.deserialiseFromRawBytes Api.AsStakeAddress rewardsAddrRaw of
     Nothing -> throwError (_DeserialiseRewardsAddressFailure # rewardsAddrRaw)
     Just x  -> pure x
@@ -203,6 +228,9 @@ voteFromTxMetadata meta = do
   let
     payload = mkVotePayload votePub stkVerify rewardsAddr slot
 
+  -- DECISION #11:
+  --   We found and deserialised the vote registration but the vote registration
+  --   signature is invalid.
   case payload `signVotePayload` sig of
     Nothing   -> throwError (_MetadataSignatureInvalid # (payload, sig))
     Just vote -> pure vote
