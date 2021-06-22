@@ -13,8 +13,9 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Reader (MonadReader, ask, asks, runReaderT)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
-import           Data.Function ((&))
+import           Data.Either (partitionEithers)
 import           Data.Foldable (for_)
+import           Data.Function ((&))
 import           Data.List (foldl')
 import           Data.Monoid (Sum (Sum), getSum)
 import           Data.Ratio (Ratio, denominator, numerator)
@@ -24,7 +25,6 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import           Data.Traversable (for, forM)
 import           Data.Word (Word64)
-import           Data.Either (partitionEithers)
 import           Database.Esqueleto (BackendCompatible, Single (Single), fromSqlKey)
 import           Database.Persist.Postgresql (Entity, IsolationLevel (Serializable), SqlBackend,
                      SqlPersistT, rawExecute, rawSql, runSqlConnWithIsolation)
@@ -40,9 +40,9 @@ import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace),
 import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
                      chunkFund, fundFromVotingFunds)
 import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), MetadataParsingError,
-                     Vote, metadataMetaKey, parseMetadataFromJson, signatureMetaKey,
-                     voteFromTxMetadata, voteRegistrationPublicKey, voteRegistrationRewardsAddress,
-                     voteRegistrationVerificationKey, withMetaKey, prettyPrintMetadataParsingError)
+                     Vote, metadataMetaKey, parseMetadataFromJson, prettyPrintMetadataParsingError,
+                     signatureMetaKey, voteFromTxMetadata, voteRegistrationPublicKey,
+                     voteRegistrationRewardsAddress, voteRegistrationVerificationKey, withMetaKey)
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKeyHash),
                      VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash)
 import           Contribution (Contributions, causeSumAmounts, contribute, filterAmounts,
@@ -75,10 +75,10 @@ prettyPrintMetadataRetrievalError (MetadataFailedToRetrieveSignatureField txId) 
   "There was no signature JSON (key \"61285\") value associated with the tx \""
   <> prettyPrintTxId txId <> "\""
 prettyPrintMetadataRetrievalError (MetadataFailedToDecodeMetadataField txId err) =
-  "Couldn't decode JSON value at metadata key \"61284\" for transaction \"" 
+  "Couldn't decode JSON value at metadata key \"61284\" for transaction \""
   <> prettyPrintTxId txId <> "\". Error was: \"" <> err <> "\""
 prettyPrintMetadataRetrievalError (MetadataFailedToDecodeSignatureField txId err) =
-  "Couldn't decode JSON value at signature key \"61285\" for transaction \"" 
+  "Couldn't decode JSON value at signature key \"61285\" for transaction \""
   <> prettyPrintTxId txId <> "\". Error was: \"" <> err <> "\""
 prettyPrintMetadataRetrievalError (MetadataFailedToDecodeTxMetadata txId err) =
   "The metadata entry associated with transaction \"" <> prettyPrintTxId txId
@@ -98,7 +98,7 @@ retrievalErrorTxId (MetadataFailedToDecodeTxMetadata txId _)      = txId
 retrievalErrorTxId (MetadataFailedToParseVoteRegistration txId _) = txId
 
 prettyPrintTxId :: TxId -> Text
-prettyPrintTxId = T.pack . show . fromSqlKey 
+prettyPrintTxId = T.pack . show . fromSqlKey
 
 queryStake
   :: ( MonadIO m
@@ -289,7 +289,7 @@ queryVoteRegistration nw mSlotNo =
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     sequence $ fmap runExceptT $ (flip fmap) results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
       let
-          handleEither f = 
+          handleEither f =
               either (throwError . f) pure
       -- DECISION #01:
       --   When querying the transaction/metadata/signature information, the
@@ -391,7 +391,7 @@ queryVoteRegistration nw mSlotNo =
       rego <-
           handleEither (\e -> _MetadataFailedToParseVoteRegistration # (txId, e))
           $ voteFromTxMetadata meta
-  
+
       pure $ (txId, rego)
 
 runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a

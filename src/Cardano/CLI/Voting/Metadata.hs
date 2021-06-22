@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- | A vote in Voltaire is encoded as transaction metadata. We
@@ -56,7 +56,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.HashMap.Strict as HM
 import           Data.List (find)
 import qualified Data.Map.Strict as M
-import Data.Text (Text)
+import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Word (Word64)
 import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
@@ -304,7 +304,7 @@ voteFromTxMetadata meta = do
                             pure v
                 Just other ->
                     throwError (_MetadataMissing # comp)
-                
+
 
     asBytes :: VoteRegistrationComponent -> TxMetadataValue -> Either MetadataParsingError ByteString
     asBytes _    (TxMetaBytes bs) = pure bs
