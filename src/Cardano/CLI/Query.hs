@@ -14,9 +14,9 @@ import           Control.Monad.Reader (MonadReader, ask, asks, runReaderT)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import           Data.Either (partitionEithers)
-import           Data.Foldable (for_)
+import           Data.Foldable (for_, forM_)
 import           Data.Function ((&))
-import           Data.List (foldl')
+import           Data.List (foldl', partition)
 import           Data.Monoid (Sum (Sum), getSum)
 import           Data.Ratio (Ratio, denominator, numerator)
 import           Data.Text (Text)
@@ -252,16 +252,21 @@ queryVotingFunds
 queryVotingFunds nw mSlotNo (Api.Lovelace threshold) = do
   info <- queryVoteRegistrationInfo nw mSlotNo
 
-  funds <- fmap mconcat . forM (causeSumAmounts info) $ \(votepub, amt) -> do
-      if amt < fromIntegral threshold
-      then do
-          liftIO $ hPutStr stderr $ notEnoughVotingPowerError votepub
-          pure []
-      else do
-        pure [ ( Jormungandr.addressFromVotingKeyPublic nw votepub
-               , Api.Lovelace $ numerator amt
-               )
-             ]
+  let
+      (aboveThreshold, belowThreshold) =
+          partition (\(_, amt) -> amt > fromIntegral threshold)
+                    (causeSumAmounts info)
+
+  forM_ belowThreshold $ \(votepub, _) ->
+      liftIO $ hPutStr stderr $ notEnoughVotingPowerError votepub
+
+  let
+      funds :: [(Jormungandr.Address, Api.Lovelace)]
+      funds = (flip foldMap) aboveThreshold $ \(votepub, amt) ->
+          [ ( Jormungandr.addressFromVotingKeyPublic nw votepub
+            , Api.Lovelace $ numerator amt
+            )
+          ]
 
   pure $ VotingFunds $ M.fromList funds
 
