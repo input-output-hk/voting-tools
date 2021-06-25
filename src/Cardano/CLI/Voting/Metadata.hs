@@ -294,17 +294,13 @@ voteFromTxMetadata meta = do
             (k1, k2) = componentPath comp
         in
             case M.lookup k1 map1 of
-                Nothing ->
-                    throwError (_MetadataMissing # comp)
                 Just (TxMetaMap map2) ->
                     case find (\(k, v) -> k == TxMetaNumber k2) map2 of
-                        Nothing ->
-                            throwError (_MetadataMissing # comp)
                         Just (_, v) ->
                             pure v
-                Just other ->
-                    throwError (_MetadataMissing # comp)
-
+                        Nothing ->
+                            throwError (_MetadataMissing # comp)
+                _ -> throwError (_MetadataMissing # comp)
 
     asBytes :: VoteRegistrationComponent -> TxMetadataValue -> Either MetadataParsingError ByteString
     asBytes _    (TxMetaBytes bs) = pure bs
