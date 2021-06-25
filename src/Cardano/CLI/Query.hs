@@ -221,12 +221,12 @@ queryVotingProportion nw mSlotNo (Api.Lovelace threshold) = do
   --                   └── But the voting power did not exceed the threshold.
   info <-  queryVoteRegistrationInfo nw mSlotNo
 
-  for_ (causeSumAmounts info) $ \(votepub, amt) -> do
-      if amt < fromIntegral threshold
-      then
-          liftIO $ hPutStr stderr $ notEnoughVotingPowerError votepub
-      else
-          pure ()
+  let
+      didntMeetThreshold =
+          filter ((< fromIntegral threshold) . snd) $ causeSumAmounts info
+  liftIO $
+      mapM_ (hPutStrLn stderr . notEnoughVotingPowerError . fst)
+            didntMeetThreshold
 
   let
     proportions :: [((Api.StakeAddress, Api.Hash Api.StakeKey), Double)]
