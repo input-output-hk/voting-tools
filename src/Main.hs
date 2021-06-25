@@ -35,7 +35,7 @@ import           System.Directory (createDirectoryIfMissing)
 
 import           Cardano.API.Extended (readEnvSocketPath)
 import           Cardano.CLI.Fetching (Fund, chunk, chunkFund, fundFromVotingFunds, scaleFund)
-import           Cardano.CLI.Query (MetadataError)
+import           Cardano.CLI.Query (MetadataRetrievalError)
 import qualified Cardano.CLI.Query as Query
 import           Cardano.CLI.Voting (createVoteRegistration, encodeVoteRegistration, prettyTx,
                      signTx)
@@ -107,15 +107,15 @@ main = do
 toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString
 toJSON numFormat = Aeson.encodePretty' (Aeson.defConfig { Aeson.confCompare = Aeson.compare, Aeson.confNumFormat = numFormat })
 
-runQuery :: DatabaseConfig -> ExceptT MetadataError (SqlPersistT IO) a -> IO a
+runQuery :: DatabaseConfig -> ExceptT MetadataRetrievalError (SqlPersistT IO) a -> IO a
 runQuery dbConfig q = runNoLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
     result <- Query.runQuery backend $ runExceptT $ q
 
     case result of
-      Left (err :: MetadataError) -> fail $ show err
-      Right x                     -> pure x
+      Left (err :: MetadataRetrievalError) -> fail $ show err
+      Right x                              -> pure x
 
 
 pgConnectionString :: DatabaseConfig -> ConnectionString
