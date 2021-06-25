@@ -14,7 +14,7 @@ import           Control.Monad.Reader (MonadReader, ask, asks, runReaderT)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import           Data.Either (partitionEithers)
-import           Data.Foldable (for_, forM_)
+import           Data.Foldable (forM_, for_)
 import           Data.Function ((&))
 import           Data.List (foldl', partition)
 import           Data.Monoid (Sum (Sum), getSum)
