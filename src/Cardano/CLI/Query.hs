@@ -181,13 +181,42 @@ queryVoteRegistrationInfo nw mSlotNo  = do
   let
     xs' = zip [1..] (M.toList xs)
   stakeTempTableSql <- case mSlotNo of
-    Nothing     ->
-      pure "CREATE TEMPORARY TABLE IF NOT EXISTS utxo_snapshot AS (SELECT tx_out.*, stake_address.hash_raw AS stake_credential FROM tx_out LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index INNER JOIN stake_address ON stake_address.id = tx_out.stake_address_id WHERE tx_in.tx_in_id IS NULL);"
+    Nothing     -> do
+      let stake_credential_index = "CREATE INDEX IF NOT EXISTS utxo_snapshot_stake_credential ON utxo_snapshot(stake_credential);"
+          analyze_table = "ANALYZE utxo_snapshot;"
+          utxo_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS utxo_snapshot AS (SELECT tx_out.*, stake_address.hash_raw AS stake_credential FROM tx_out LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index INNER JOIN stake_address ON stake_address.id = tx_out.stake_address_id WHERE tx_in.tx_in_id IS NULL);"
+      pure $ utxo_snapshot <> stake_credential_index <> analyze_table
     Just slotNo -> do
-      let tx_out_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS tx_out_snapshot AS (SELECT tx_out.*, stake_address.hash_raw AS stake_credential FROM tx_out INNER JOIN tx ON tx_out.tx_id = tx.id INNER JOIN block ON tx.block_id = block.id INNER JOIN stake_address ON stake_address.id = tx_out.stake_address_id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slotNo) <> "); "
-          tx_in_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS tx_in_snapshot AS (SELECT tx_in.* FROM tx_in INNER JOIN tx ON tx_in.tx_in_id = tx.id INNER JOIN block ON tx.block_id = block.id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slotNo) <> "); "
-          utxo_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS utxo_snapshot AS (SELECT tx_out_snapshot.* FROM tx_out_snapshot LEFT OUTER JOIN tx_in_snapshot ON tx_out_snapshot.tx_id = tx_in_snapshot.tx_out_id AND tx_out_snapshot.index = tx_in_snapshot.tx_out_index WHERE tx_in_snapshot.tx_in_id IS NULL);"
-      pure $ tx_out_snapshot <> tx_in_snapshot <> utxo_snapshot
+      let tx_out_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS tx_out_snapshot AS (\
+            \ SELECT tx_out.*,\
+            \ stake_address.hash_raw AS stake_credential\
+              \ FROM tx_out\
+              \ INNER JOIN tx ON tx_out.tx_id = tx.id\
+              \ INNER JOIN block ON tx.block_id = block.id\
+              \ INNER JOIN stake_address ON stake_address.id = tx_out.stake_address_id\
+              \ WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slotNo) <> ");"
+          tx_in_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS tx_in_snapshot AS (\
+            \ SELECT tx_in.* FROM tx_in\
+              \ INNER JOIN tx ON tx_in.tx_in_id = tx.id\
+              \ INNER JOIN block ON tx.block_id = block.id\
+              \ WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slotNo) <> ");"
+          utxo_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS utxo_snapshot AS (\
+            \ SELECT tx_out_snapshot.* FROM tx_out_snapshot\
+              \ LEFT OUTER JOIN tx_in_snapshot\
+                \ ON tx_out_snapshot.tx_id = tx_in_snapshot.tx_out_id\
+                \ AND tx_out_snapshot.index = tx_in_snapshot.tx_out_index\
+              \ WHERE tx_in_snapshot.tx_in_id IS NULL);"
+          stake_credential_index = "CREATE INDEX IF NOT EXISTS utxo_snapshot_stake_credential ON utxo_snapshot(stake_credential);"
+          analyze_tx_out_snapshot = "ANALYZE tx_out_snapshot;"
+          analyze_tx_in_snapshot = "ANALYZE tx_in_snapshot;"
+          analyze_utxo_snapshot = "ANALYZE utxo_snapshot;"
+      pure $ tx_out_snapshot
+           <> analyze_tx_out_snapshot
+           <> tx_in_snapshot
+           <> analyze_tx_in_snapshot
+           <> utxo_snapshot
+           <> stake_credential_index
+           <> analyze_utxo_snapshot
   r <- ask
 
   _ :: () <- (flip runReaderT) r $ rawExecute stakeTempTableSql []
