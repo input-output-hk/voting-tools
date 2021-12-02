@@ -98,7 +98,7 @@ executable voting-tools
                      , cardano-crypto-class
                      , cardano-crypto-wrapper
                      , cardano-db
-                     , cardano-ledger
+                     , cardano-ledger-core
                      , cardano-ledger-shelley-ma
                      , conduit
                      , containers

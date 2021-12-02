@@ -27,6 +27,8 @@ let
     ++ iohkNix.overlays.haskell-nix-extra
     # iohkNix: nix utilities and niv:
     ++ iohkNix.overlays.iohkNix
+    # iohkNix: utils
+    ++ iohkNix.overlays.utils
     # our own overlays:
     ++ [
       (pkgs: _: with pkgs; {

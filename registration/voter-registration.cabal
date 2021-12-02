@@ -31,7 +31,7 @@ executable voter-registration
                      , cardano-cli
                      , cardano-crypto-class
                      , cardano-crypto-wrapper
-                     , cardano-ledger
+                     , cardano-ledger-core
                      , cardano-crypto
                      , containers
                      , time
