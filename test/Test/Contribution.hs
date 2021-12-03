@@ -2,16 +2,15 @@ module Test.Contribution
   ( tests
   ) where
 
-import           Data.List (delete, find)
 import           Data.Monoid (Sum (Sum), getSum)
 import           Data.Ratio (Ratio, (%))
 import           Data.Word (Word8)
-import           Hedgehog (Gen, MonadTest, Property, annotate, forAll, property, tripping, (===))
+import           Hedgehog (Property, forAll, property, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import           Test.Tasty.Hedgehog
-import           Test.Tasty.HUnit (Assertion, assertEqual, testCase, (@?=))
 
 import           Contribution
 import qualified Test.Generators as Gen
@@ -45,41 +44,41 @@ tests = testGroup "Contribution algebra"
 
 unit_contribution_adds :: Assertion
 unit_contribution_adds = do
-   (contributions $ contribute 1 1 3 mempty) @?= [(1, [(1, 3)])]
-   (contributions $ contribute 1 1 4 $ contribute 1 2 4 mempty) @?= [(1, [(1, 4), (2, 4)])]
+   (contributions $ contribute 1 1 3 mempty) @?= [(1 :: Integer, [(1, 3)] :: [(Integer, Integer)])]
+   (contributions $ contribute 1 1 4 $ contribute 1 2 4 mempty) @?= [(1 :: Integer, [(1, 4), (2, 4)] :: [(Integer, Integer)])]
 
 unit_proportionalize :: Assertion
 unit_proportionalize = do
-  proportionalize mempty
+  proportionalize (mempty :: Contributions Word8 Word8 (Ratio Integer))
     @?= ([] :: [(Word8, [(Word8, Ratio Integer)])])
-  (proportionalize $ contribute 0 0 0 mempty)
+  (proportionalize $ (contribute 0 0 0 mempty :: Contributions Word8 Word8 (Ratio Integer)))
     @?= ([(0, [(0, 0)])])
-  (proportionalize $ contribute 0 0 1 $ contribute 0 1 1 mempty)
+  (proportionalize $ (contribute 0 0 1 $ contribute 0 1 1 mempty :: Contributions Word8 Word8 (Ratio Integer)))
     @?= [(0, [(0, 1 % 2), (1, 1 % 2)])]
-  (proportionalize $ contribute 0 0 1 $ contribute 1 1 1 mempty)
+  (proportionalize $ (contribute 0 0 1 $ contribute 1 1 1 mempty :: Contributions Word8 Word8 (Ratio Integer)))
     @?= [(0, [(0, 1 % 2)]), (1, [(1, 1 % 2)])]
-  (proportionalize $ contribute 0 0 2 $ contribute 1 1 3 $ contribute 1 2 5 $ mempty)
+  (proportionalize $ (contribute 0 0 2 $ contribute 1 1 3 $ contribute 1 2 5 $ mempty :: Contributions Word8 Word8 (Ratio Integer)))
     @?= [(0, [(0, 2 % 10)]), (1, [(1, 3 % 10), (2, 5 % 10)])]
 
 unit_contributionsBy :: Assertion
 unit_contributionsBy = do
-   (contributionsBy 0 $ contribute 1 0 2 (contribute 0 0 1 mempty))
+   (contributionsBy 0 $ contribute 1 0 2 (contribute 0 0 1 mempty :: Contributions Word8 Word8 (Ratio Integer)))
      @?= [(0, 1), (1, 2)]
-   (contributionsBy 0 $ contribute 1 1 4 $ contribute 1 0 2 (contribute 0 0 1 mempty))
+   (contributionsBy 0 $ contribute 1 1 4 $ contribute 1 0 2 (contribute 0 0 1 mempty :: Contributions Word8 Word8 (Ratio Integer)))
      @?= [(0, 1), (1, 2)]
-   (contributionsBy 1 $ contribute 1 1 4 $ contribute 1 0 2 (contribute 0 0 1 mempty))
+   (contributionsBy 1 $ contribute 1 1 4 $ contribute 1 0 2 (contribute 0 0 1 mempty :: Contributions Word8 Word8 (Ratio Integer)))
      @?= [(1, 4)]
 
 unit_contributionsFor :: Assertion
 unit_contributionsFor = do
-   (contributionsFor 0 $ contribute 1 0 2 (contribute 0 0 1 mempty))
+   (contributionsFor 0 $ contribute 1 0 2 (contribute 0 0 1 mempty :: Contributions Word8 Word8 (Ratio Integer)))
      @?= [(0, 1)]
 
 unit_causeSumAmounts :: Assertion
 unit_causeSumAmounts = do
-   (causeSumAmounts $ contribute 1 0 2 (contribute 0 0 1 mempty))
+   (causeSumAmounts $ contribute 1 0 2 (contribute 0 0 1 mempty :: Contributions Word8 Word8 (Ratio Integer)))
      @?= [(0, 1), (1, 2)]
-   (causeSumAmounts $ contribute 1 0 255 (contribute 1 1 255 mempty))
+   (causeSumAmounts $ contribute 1 0 255 (contribute 1 1 255 mempty :: Contributions Word8 Word8 (Ratio Integer)))
      @?= [(1, 510)]
 
 prop_contributions_semigroup_associativity :: Property
@@ -109,11 +108,11 @@ prop_contributions_contribute_lastwins :: Property
 prop_contributions_contribute_lastwins = property $ do
   cause <- forAll $ Gen.word8 (Range.linear 0 maxBound)
   ident <- forAll $ Gen.word8 (Range.linear 0 maxBound)
-  amt1  <- forAll $ Gen.word8 (Range.linear 0 maxBound)
+  amt1 <- forAll $ Gen.word8 (Range.linear 0 maxBound)
   amt2  <- forAll $ Gen.word8 (Range.linear 0 maxBound)
   cs    <- forAll Gen.contributions
 
-  contribute cause ident amt2 (contribute cause ident amt2 cs) === contribute cause ident amt2 cs
+  contribute cause ident amt2 (contribute cause ident amt1 cs) === contribute cause ident amt2 cs
 
 prop_contributions_contribute_withdraw :: Property
 prop_contributions_contribute_withdraw = property $ do
@@ -185,7 +184,7 @@ prop_contributions_denotation_proportionalize = property $ do
 
   proportionalize cs
     ===
-      ((fmap (fmap (fmap (fmap (\amt -> if sumAmts == 0 then 0 else (toRational amt / sumAmts) ))))) $ contributions cs)
+      ((fmap (fmap (fmap (fmap (\amt' -> if sumAmts == 0 then 0 else (toRational amt' / sumAmts) ))))) $ contributions cs)
 
 prop_contributions_proportionalize_sumOne :: Property
 prop_contributions_proportionalize_sumOne = property $ do
@@ -199,7 +198,6 @@ prop_contributions_proportionalize_sumOne = property $ do
 
   let
     sumProportions = getSum (foldMap (foldMap (foldMap (foldMap (Sum . toRational)))) (proportionalize cs))
-    sumAmts = sumAmounts cs
 
   sumProportions === fromInteger 1
 
@@ -209,7 +207,7 @@ prop_contributions_denotation_contributionsBy = property $ do
   cs    <- forAll Gen.contributions
 
   contributionsBy ident cs
-    === (foldMap (\(c, cs) -> foldMap (\(x, amt) -> if x == ident then [(c, amt)] else []) cs) $ contributions cs)
+    === (foldMap (\(c, cs') -> foldMap (\(x, amt) -> if x == ident then [(c, amt)] else []) cs') $ contributions cs)
 
 prop_contributions_denotation_contributionsFor :: Property
 prop_contributions_denotation_contributionsFor = property $ do
@@ -217,7 +215,7 @@ prop_contributions_denotation_contributionsFor = property $ do
   cs    <- forAll Gen.contributions
 
   contributionsFor cause cs
-    === (foldMap (\(c, cs) -> if c == cause then cs else []) $ contributions cs)
+    === (foldMap (\(c, cs') -> if c == cause then cs' else []) $ contributions cs)
 
 prop_contributions_denotation_causeSumAmounts :: Property
 prop_contributions_denotation_causeSumAmounts = property $ do

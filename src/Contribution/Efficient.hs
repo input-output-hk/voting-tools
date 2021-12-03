@@ -17,14 +17,11 @@ module Contribution.Efficient
   , Contributions
   ) where
 
-import           Data.List (foldl')
 import qualified Data.Map.Merge.Strict as M
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (fromMaybe, maybe)
 import           Data.Monoid (Sum (Sum), getSum)
 import           Data.Ratio
-import           Data.Traversable (for)
 
 data Contributions cause id amt = Contributions (Map cause (Map id amt))
    deriving Show
@@ -41,11 +38,11 @@ instance (Ord cause, Ord id) => Semigroup (Contributions cause id amt) where
     $ M.merge
         M.preserveMissing
         M.preserveMissing
-        (M.zipWithMatched (\c ->
+        (M.zipWithMatched (\_ ->
           M.merge
             M.preserveMissing
             M.preserveMissing
-           (M.zipWithMatched (\ident amt1 amt2 -> amt2)
+           (M.zipWithMatched (\_ident _amt1 amt2 -> amt2)
            )
         ))
         existing
@@ -57,17 +54,17 @@ instance Foldable (Contributions cause id) where
 contributions :: Contributions cause id amt -> [(cause, [(id, amt)])]
 contributions (Contributions cs) = foldMap removeEmpty . M.toList . fmap M.toList $ cs
   where
-    removeEmpty (c, []) = []
-    removeEmpty (c, cs) = [(c, cs)]
+    removeEmpty (_c, []) = []
+    removeEmpty (c, cs') = [(c, cs')]
 
 contribute :: forall cause id amt . (Ord cause, Ord id) => cause -> id -> amt -> Contributions cause id amt -> Contributions cause id amt
 contribute cause ident amt (Contributions cs) =
   let
-    mod = case M.lookup cause cs of
+    modified = case M.lookup cause cs of
       Nothing       -> M.singleton ident amt
       Just existing -> M.insert ident amt existing
   in
-    Contributions $ M.insert cause mod cs
+    Contributions $ M.insert cause modified cs
 
 withdraw :: (Ord cause, Ord id) => cause -> id -> Contributions cause id amt -> Contributions cause id amt
 withdraw cause ident (Contributions cs) =
@@ -95,7 +92,7 @@ withdraw cause ident (Contributions cs) =
 -- allow fractional types.
 sumAmounts
   :: forall cause id amt
-   . (Num amt, Real amt)
+   . Real amt
   => Contributions cause id amt -> Ratio Integer
 sumAmounts = getSum . foldMap (Sum . toRational)
 
@@ -106,7 +103,7 @@ sumAmounts = getSum . foldMap (Sum . toRational)
 --   = [(0, [(0, 0.5)]), (1, [(1, 0.5)])]
 -- because each contributor contributed 50% of the total value in the
 -- system towards their cause.
-proportionalize :: forall cause id amt . (Num amt, Real amt) => Contributions cause id amt -> [(cause, [(id, Ratio Integer)])]
+proportionalize :: forall cause id amt . Real amt => Contributions cause id amt -> [(cause, [(id, Ratio Integer)])]
 proportionalize cs =
   let
     totalValue = sumAmounts cs
@@ -145,7 +142,7 @@ contributionsFor c (Contributions m) = maybe [] M.toList $ M.lookup c m
 
 causeSumAmounts
   :: forall cause id amt
-   . (Num amt, Real amt)
+   . Real amt
   => Contributions cause id amt
   -> [(cause, Ratio Integer)]
 causeSumAmounts =

@@ -7,18 +7,16 @@
 
 module Cardano.CLI.Voting.Error where
 
-import           Cardano.Api (Address, AddressAny, Bech32DecodeError, FileError, Lovelace)
-import           Cardano.Api.Typed (Shelley, TextEnvelopeError)
+import           Cardano.Api (AddressAny, Bech32DecodeError, FileError, Lovelace, TextEnvelopeError)
 import           Cardano.CLI.Environment (EnvSocketError (..))
-import qualified Codec.Binary.Bech32 as Bech32
 import           Control.Lens.TH (makeClassyPrisms)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
-                     AsBech32HumanReadablePartError (__Bech32HumanReadablePartError),
-                     AsEnvSocketError (_EnvSocketError), AsFileError (__FileError),
-                     Bech32HumanReadablePartError)
+                   AsBech32HumanReadablePartError (__Bech32HumanReadablePartError),
+                   AsEnvSocketError (_EnvSocketError), AsFileError (__FileError),
+                   Bech32HumanReadablePartError)
 import           Cardano.CLI.Voting.Fee (AsNotEnoughFundsError (_NotEnoughFundsError),
-                     NotEnoughFundsError)
+                   NotEnoughFundsError)
 
 -- | Address doesn't have enough UTxOs to pay the requested amount.
 data AddressUTxOError = AddressNotEnoughUTxOs AddressAny Lovelace

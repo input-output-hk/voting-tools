@@ -5,4 +5,4 @@ module Contribution
   ) where
 
 import           Contribution.Efficient
-import           Contribution.Initial
+-- import           Contribution.Initial

@@ -34,28 +34,24 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 
-import           Cardano.Api (AsType (AsHash, AsPaymentExtendedKey, AsPaymentKey, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
-                     FromSomeType, HasTypeProxy, Hash, Key, NetworkId, PaymentExtendedKey,
-                     PaymentKey,
-                     SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
-                     SigningKey, StakeAddress, StakeExtendedKey, StakeKey, VerificationKey,
-                     castHash, castVerificationKey, getVerificationKey, makeStakeAddress,
-                     proxyToAsType, serialiseToRawBytes, verificationKeyHash)
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
-import           Cardano.Api.Typed (FromSomeType (FromSomeType), ShelleySigningKey, ShelleyWitnessSigningKey (WitnessPaymentExtendedKey, WitnessPaymentKey, WitnessStakeExtendedKey, WitnessStakeKey),
-                     SigningKey (StakeExtendedSigningKey, StakeSigningKey),
-                     StakeCredential (StakeCredentialByKey),
-                     VerificationKey (StakeVerificationKey), getShelleyKeyWitnessVerificationKey,
-                     makeShelleySignature, toShelleySigningKey)
+import           Cardano.Api
+                   (AsType (AsHash, AsPaymentExtendedKey, AsPaymentKey, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                   FromSomeType (..), HasTypeProxy, Hash, Key, NetworkId, PaymentExtendedKey,
+                   PaymentKey, SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
+                   ShelleyWitnessSigningKey, SigningKey, StakeAddress, StakeExtendedKey, StakeKey,
+                   VerificationKey, castVerificationKey, getVerificationKey, makeStakeAddress,
+                   proxyToAsType, serialiseToRawBytes, verificationKeyHash)
+import           Cardano.Api.Shelley (ShelleySigningKey, ShelleyWitnessSigningKey (..),
+                   SigningKey (..), StakeCredential (..), VerificationKey (StakeVerificationKey),
+                   makeShelleySignature, toShelleySigningKey)
 import           Cardano.CLI.Types (SigningKeyFile)
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Cardano.Crypto.Hashing as Crypto
 import qualified Cardano.Crypto.Util as Crypto
-import qualified Cardano.Crypto.Wallet as Crypto.HD
-import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
-import qualified Shelley.Spec.Ledger.Keys as Shelley
+import qualified Cardano.Ledger.Keys as Shelley
 
-import           Cardano.Ledger.Crypto (Crypto (..))
+import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
 
 data VoteSigningKey
   = AStakeSigningKey         (SigningKey StakeKey)
@@ -105,8 +101,8 @@ withVoteVerificationKey :: VoteVerificationKey -> (VerificationKey StakeKey -> a
 withVoteVerificationKey ver f =
   let
     vkey = case ver of
-      (AStakeVerificationKey vkey)         -> vkey
-      (AStakeExtendedVerificationKey vkey) -> castVerificationKey vkey
+      (AStakeVerificationKey vkey')         -> vkey'
+      (AStakeExtendedVerificationKey vkey') -> castVerificationKey vkey'
   in
     f vkey
 

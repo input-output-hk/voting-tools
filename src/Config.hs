@@ -9,7 +9,6 @@ import           Options.Applicative
 
 import           Config.Common
 import qualified Config.Genesis as Genesis
-import qualified Config.Registration as Register
 import qualified Config.Rewards as Rewards
 
 data Command

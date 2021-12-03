@@ -5,31 +5,22 @@
 module Test.Cardano.CLI.Voting.Metadata where
 
 import qualified Cardano.Api as Api
-import qualified Cardano.Binary as CBOR
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Base16 as Base16
 import           Data.Either
 import qualified Data.HashMap.Strict as HM
-import           Data.List (delete, find, sort)
+import           Data.List (sort)
 import qualified Data.Map.Strict as M
-import           Data.Maybe
-import           Data.Monoid (Sum (Sum), getSum)
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import           Data.Word (Word64, Word8)
-import           Hedgehog (Gen, MonadTest, Property, annotate, forAll, property, tripping, (===))
+import           Hedgehog (property, tripping, (===))
 import qualified Hedgehog as H
-import qualified Hedgehog.Gen as Gen
 import           Hedgehog.Internal.Property (forAllT)
-import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import           Test.Tasty.Hedgehog
-import           Test.Tasty.HUnit (Assertion, assertEqual, testCase, (@?=))
 
-import qualified Cardano.API.Extended as Api
 import           Cardano.CLI.Voting.Metadata
-import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKey))
 import qualified Test.Generators as Gen
 
 tests :: TestTree
@@ -41,11 +32,13 @@ tests = testGroup "Vote Metadata type tests"
       ]
   ]
 
+prop_vote_txMetadata_roundtrips :: H.Property
 prop_vote_txMetadata_roundtrips = property $ do
   a <- forAllT Gen.vote
 
   tripping a voteToTxMetadata voteFromTxMetadata
 
+unit_txMetadata_can_decode_example :: Assertion
 unit_txMetadata_can_decode_example = do
   let
     jsonMetadata = Aeson.Object $ HM.fromList
@@ -53,7 +46,7 @@ unit_txMetadata_can_decode_example = do
           [ ("1", Aeson.String "0x49b8a147e4ffb1119d460feef2d13a9e882684f30f8cf74e6956246670b2652e")
           , ("2", Aeson.String "0xc14fad1da753e2701b9d3546ace0bffe97670598b0ed53f63484c7ded732a0a9")
           , ("3", Aeson.String "0x009d78cbfe0ec5b263d96847fad6b988c5edddc013aa3af83148e2f9af67cdce358308a9a132b87fc6ed005b36261b081e65f3213eead7eb07")
-          , ("4", Aeson.Number $ fromIntegral 8)
+          , ("4", Aeson.Number $ fromIntegral (8 :: Int))
           ])
       , ("61285", Aeson.Object $ HM.fromList
           [ ("1", Aeson.String "0xfb01d767515ad75a959ef1b154bfb704c1a2a1af9e8c36ea38caade4931f9967780f08cfb2dfdac92e0b1efcca0cb148587b656007e87f1af0be3d4a93826706") ])
@@ -75,6 +68,7 @@ unit_txMetadata_can_decode_example = do
 -- function results in a JSON format we expect. Via
 -- 'prop_vote_txMetadata_roundtrips' we have already proven that the
 -- format parses.
+prop_vote_serialized_format :: H.Property
 prop_vote_serialized_format = H.property $ do
   vote <- forAllT $ Gen.vote
 

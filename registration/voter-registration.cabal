@@ -1,4 +1,4 @@
-cabal-version:       >=1.10
+cabal-version:       3.0
 name:                voter-registration
 version:             0.1.0.0
 -- synopsis:
@@ -13,46 +13,31 @@ maintainer:          mail@sevanspowell.net
 build-type:          Simple
 extra-source-files:  ../CHANGELOG.md
 
+common project-config
+  default-language:     Haskell2010
+  default-extensions:   OverloadedStrings
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wpartial-fields
+                        -Wredundant-constraints
+                        -Wunused-packages
+
 executable voter-registration
+  import:              project-config
   main-is:             Main.hs
   build-depends:       base
-                     , aeson
-                     , aeson-pretty
-                     , unordered-containers
-                     , attoparsec
                      , base16-bytestring
-                     , bech32
                      , bytestring
-                     , conduit
-                     , lens-aeson
-                     , binary
                      , cardano-api
-                     , cardano-binary
                      , cardano-cli
                      , cardano-crypto-class
-                     , cardano-crypto-wrapper
-                     , cardano-ledger-core
-                     , cardano-crypto
-                     , containers
-                     , time
-                     , resourcet
-                     , monad-logger
-                     , monoidal-containers
-                     , lens
                      , mtl
-                     , nothunks
-                     , cardano-ledger-shelley-ma
                      , optparse-applicative
-                     , ouroboros-consensus
-                     , ouroboros-consensus-cardano
                      , ouroboros-consensus-shelley
                      , ouroboros-network
-                     , ouroboros-network-framework
-                     , safe-exceptions
-                     , shelley-spec-ledger
-                     , scientific
-                     , text
-                     , transformers-except
                      , voting-tools
 
   hs-source-dirs:      src/
