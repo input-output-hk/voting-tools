@@ -84,7 +84,10 @@ encodeVoteRegistration connectInfo era addr ttl vote = do
       -- Find some unspent funds
       utxos <- fmap fromUtxos $ handleEraMismatch =<< handleAcquireFailure =<< queryNodeLocalState connectInfo Nothing (QueryInEra eraInMode (QueryInShelleyBasedEra era (QueryUTxO (QueryUTxOByAddress $ Set.singleton addr))))
       case findUnspent feeParams utxos of
-        Nothing      -> error $ "Not enough funds to meet fee in '" <> show utxos <> "'." -- throwError $ _NotEnoughFundsToMeetFeeError # utxos
+        Nothing      ->
+          case utxos of
+            [] -> error $ "Not enough funds to meet fee, your UTxO set is empty."
+            us -> error $ "Not enough funds to meet fee in UTxO set: " <> show us <> "."
         Just unspent -> do
           let
             slotTip          = (\case
