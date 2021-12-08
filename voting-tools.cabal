@@ -104,8 +104,6 @@ executable voting-tools
                      , monad-logger
                      , mtl
                      , optparse-applicative
-                     , ouroboros-consensus
-                     , ouroboros-consensus-cardano
                      , ouroboros-network
                      , persistent-postgresql
                      , safe-exceptions

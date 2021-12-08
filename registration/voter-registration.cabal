@@ -32,7 +32,6 @@ executable voter-registration
                      , aeson
                      , bytestring
                      , cardano-api
-                     , cardano-cli
                      , mtl
                      , optparse-applicative
                      , ouroboros-consensus-shelley
