@@ -35,7 +35,6 @@ library
                      , Cardano.CLI.Fetching
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
-                     , Cardano.CLI.Voting.Fee
                      , Cardano.CLI.Voting.Metadata
                      , Cardano.CLI.Voting.Signing
                      , Contribution
@@ -123,7 +122,6 @@ executable voting-tools
                  , Cardano.CLI.Fetching
                  , Cardano.CLI.Voting
                  , Cardano.CLI.Voting.Error
-                 , Cardano.CLI.Voting.Fee
                  , Cardano.CLI.Voting.Metadata
                  , Cardano.CLI.Voting.Signing
                  , Config

@@ -180,9 +180,6 @@ instance SerialiseAsCBOR VotePayload where
     changeError (CBOR.DecoderErrorCustom "VotePayload" . prettyPrintMetadataParsingError)
       $ votePayloadFromTxMetadata meta
 
--- instance ToCBOR Vote where
---   toCBOR = CBOR.toCBOR . voteToTxMetadata
-
 mkVotePayload
   :: VotingKeyPublic
   -- ^ Voting public key
