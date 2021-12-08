@@ -3,13 +3,9 @@
 
 module Config.Common where
 
-import           Cardano.Api (AnyCardanoEra (..), CardanoEra (..),
-                     IsShelleyBasedEra (shelleyBasedEra))
-import qualified Data.ByteString.Char8 as BC
+import           Cardano.Api (AnyCardanoEra (..), CardanoEra (..), SlotNo (..))
 import           Data.Foldable (asum)
 import           Options.Applicative (Parser, auto, flag', help, long, metavar, option)
-
-import           Cardano.Api.Typed (SlotNo (SlotNo))
 
 data DatabaseConfig
   = DatabaseConfig { _dbName       :: String
@@ -37,7 +33,7 @@ pCardanoEra = asum
       )
   , flag' (AnyCardanoEra ShelleyEra)
       (  long "shelley-era"
-      <> help "Specify the Shelley era (default)"
+      <> help "Specify the Shelley era"
       )
   , flag' (AnyCardanoEra AllegraEra)
       (  long "allegra-era"
@@ -45,9 +41,13 @@ pCardanoEra = asum
       )
   , flag' (AnyCardanoEra MaryEra)
       (  long "mary-era"
-      <> help "Specify the Mary era"
+      <> help "Specify the Mary era (default)"
+      )
+  , flag' (AnyCardanoEra AlonzoEra)
+      (  long "alonzo-era"
+      <> help "Specify the Alonzo era"
       )
 
     -- Default for now:
-  , pure (AnyCardanoEra ShelleyEra)
+  , pure (AnyCardanoEra MaryEra)
   ]

@@ -11,6 +11,8 @@
 with pkgs; with commonLib;
 let
 
+  inherit (pkgs.haskell-nix.haskellLib) selectProjectPackages;
+
   sources = import ./nix/sources.nix {};
 
   cardano-node-nix =
@@ -36,14 +38,11 @@ let
 
     # If shellFor local packages selection is wrong,
     # then list all local packages then include source-repository-package that cabal complains about:
-    packages = ps: with ps; [
-       ps.voting-tools
-       ps.voter-registration
+    packages = ps: lib.attrValues (selectProjectPackages ps);
+
+    nativeBuildInputs = [
+      pkgs.cabalWrapped
     ];
-    # packags = ps: pkgs.lib.attrValues (selectProjectPackages ps);
-
-    tools = { cabal = "3.2.0.0"; };
-
     # These programs will be available inside the nix-shell.
     buildInputs = (with pkgs; [
       # cabal-install

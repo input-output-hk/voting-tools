@@ -14,13 +14,13 @@ import           Hedgehog (Gen, Property, forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.Hedgehog
 import           Test.Tasty.HUnit (Assertion, assertEqual, testCase)
+import           Test.Tasty.Hedgehog
 
 import           Cardano.Api (Lovelace, deserialiseFromRawBytes)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic,
-                     deserialiseFromBech32')
+                   deserialiseFromBech32')
 import           Cardano.CLI.Fetching
 import qualified Test.Generators as Gen
 

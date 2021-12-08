@@ -1,4 +1,4 @@
-cabal-version:       >=1.10
+cabal-version:       3.0
 name:                voting-tools
 version:             0.1.0.0
 -- synopsis:
@@ -13,7 +13,20 @@ maintainer:          mail@sevanspowell.net
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
+common project-config
+  default-language:     Haskell2010
+  default-extensions:   OverloadedStrings
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wpartial-fields
+                        -Wredundant-constraints
+                        -Wunused-packages
+
 library
+  import:              project-config
   hs-source-dirs:      src
 
   exposed-modules:     Cardano.API.Extended
@@ -40,15 +53,11 @@ library
                      , aeson-pretty
                      , attoparsec
                      , base16-bytestring
-                     , resourcet
-                     , time
                      , binary
-                     , binary-strict
                      , bech32
                      , bytestring
                      , cardano-api
                      , cardano-binary
-                     , monad-logger
                      , monoidal-containers
                      , lens-aeson
                      , conduit
@@ -56,76 +65,55 @@ library
                      , cardano-crypto
                      , cardano-crypto-class
                      , cardano-crypto-wrapper
-                     , cardano-ledger-shelley-ma
-                     , cardano-node
+                     , cardano-ledger-core
                      , cborg
                      , containers
-                     , directory
                      , lens
-                     , lens
-                     , memory
                      , mtl
-                     , nothunks
                      , optparse-applicative
-                     , ouroboros-consensus
                      , ouroboros-consensus-cardano
-                     , ouroboros-consensus-shelley
                      , ouroboros-network
-                     , ouroboros-network-framework
                      , safe-exceptions
                      , scientific
-                     , shelley-spec-ledger
                      , text
-                     , transformers-except
-                     , turtle
+                     , time
                      , unordered-containers
 
 executable voting-tools
+  import:              project-config
   main-is:             Main.hs
   other-modules:       Cardano.CLI.Query
   build-depends:       base
                      , aeson
                      , aeson-pretty
                      , attoparsec
-                     , base16-bytestring
                      , bech32
                      , binary
                      , bytestring
                      , cardano-api
                      , cardano-binary
                      , cardano-cli
-                     , cardano-crypto
                      , cardano-crypto-class
                      , cardano-crypto-wrapper
                      , cardano-db
-                     , cardano-ledger
-                     , cardano-ledger-shelley-ma
-                     , conduit
+                     , cardano-ledger-byron
+                     , cardano-ledger-core
                      , containers
-                     , directory
                      , esqueleto
                      , lens
                      , lens-aeson
                      , monad-logger
-                     , monoidal-containers
                      , mtl
-                     , nothunks
                      , optparse-applicative
                      , ouroboros-consensus
                      , ouroboros-consensus-cardano
-                     , ouroboros-consensus-shelley
                      , ouroboros-network
-                     , ouroboros-network-framework
                      , persistent-postgresql
-                     , resourcet
                      , safe-exceptions
                      , scientific
-                     , shelley-spec-ledger
                      , text
                      , time
-                     , transformers-except
                      , unordered-containers
-                     , voting-tools
 
   hs-source-dirs:      src/
   default-language:    Haskell2010
@@ -149,29 +137,23 @@ executable voting-tools
                  , Genesis
 
 test-suite unit-tests
+  import:               project-config
   hs-source-dirs:       test
   main-is:              Main.hs
   type:                 exitcode-stdio-1.0
 
-  build-depends:
-                      base >=4.12 && <5
-                , HUnit
-                , QuickCheck
+  build-depends:  base >=4.12 && <5
                 , aeson
                 , cardano-api
-                , cardano-binary
                 , containers
                 , hedgehog
                 , hedgehog
-                , hspec
                 , mtl
                 , text
                 , tasty
                 , tasty-hedgehog
                 , base16-bytestring
-                , tasty-hspec
                 , tasty-hunit
-                , tasty-quickcheck
                 , unordered-containers
                 , voting-tools
                 , cardano-crypto-class

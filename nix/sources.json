@@ -1,14 +1,14 @@
 {
     "cardano-node": {
-        "branch": "cardano-lib-metadata",
+        "branch": "refs/tags/1.31.0",
         "description": "The core component that is used to participate in a Cardano decentralised blockchain.",
         "homepage": "https://cardano.org",
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "cbd7dcc58be81a5174f6aca9431f93ed370b3993",
-        "sha256": "1fx0sy5hgfqaim1lv1ajx2ih87nb7m4z996cfs7bbmyjchg9nqyy",
+        "rev": "2cbe363874d0261bc62f52185cf23ed492cf4859",
+        "sha256": "0x5j0cynlc9kiyj9w7casax477z3fb74pfsyfl373dn7rv1grg4d",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/cbd7dcc58be81a5174f6aca9431f93ed370b3993.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/2cbe363874d0261bc62f52185cf23ed492cf4859.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "haskell.nix": {
@@ -17,10 +17,10 @@
         "homepage": "https://input-output-hk.github.io/haskell.nix",
         "owner": "input-output-hk",
         "repo": "haskell.nix",
-        "rev": "5f11b1197e3fd6418609f22593e751296d770743",
-        "sha256": "1xc556bdxm2969cdr0071f1wvq6whw2nh5glgw69z3nmcjka7zbr",
+        "rev": "32eb9191a5b2fda5e5ae441285abb17e4c0e60d0",
+        "sha256": "1k9kiskxr56axnsqw4zs83mchljlq9nv371xczbxc8xxhnd1ykff",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/haskell.nix/archive/5f11b1197e3fd6418609f22593e751296d770743.tar.gz",
+        "url": "https://github.com/input-output-hk/haskell.nix/archive/32eb9191a5b2fda5e5ae441285abb17e4c0e60d0.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "iohk-nix": {
@@ -29,10 +29,22 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "5b86d63a0b59b7666d19901b654d8fbde27d9500",
-        "sha256": "1mfb93nnw0x4gyq93v6lh6h7imliw4j0wp5l9gpdafy3rw621xzb",
+        "rev": "1e51437aac8a0e49663cb21e781f34163c81ebfb",
+        "sha256": "03slpwazvnhn9kd37dpxc55bq5xn841v616xmw8j6nkqklmw2vzc",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/iohk-nix/archive/5b86d63a0b59b7666d19901b654d8fbde27d9500.tar.gz",
+        "url": "https://github.com/input-output-hk/iohk-nix/archive/1e51437aac8a0e49663cb21e781f34163c81ebfb.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "jormungandr": {
+        "branch": "refs/tags/v0.13.0",
+        "description": "aspiring blockchain node",
+        "homepage": "https://input-output-hk.github.io/jormungandr/",
+        "owner": "input-output-hk",
+        "repo": "jormungandr",
+        "rev": "1dd3363f6a0cd8beed9afecd1b1d9fdc46b23804",
+        "sha256": "14lvzq9aam58jykvbs0l9zwsy8a7i0k15b89fc4jkb0ngnm1rk9y",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/jormungandr/archive/1dd3363f6a0cd8beed9afecd1b1d9fdc46b23804.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "niv": {

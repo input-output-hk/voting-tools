@@ -6,48 +6,42 @@
 
 module Cardano.CLI.Query where
 
-import           Cardano.Db (DbLovelace (DbLovelace), EntityField (TxId), TxId)
+import           Cardano.Db (DbLovelace (DbLovelace), TxId)
 import           Control.Monad (foldM)
-import           Control.Monad.Except (MonadError, runExceptT, throwError)
+import           Control.Monad.Except (runExceptT, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Reader (MonadReader, ask, asks, runReaderT)
+import           Control.Monad.Reader (MonadReader, ask, runReaderT)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import           Data.Either (partitionEithers)
 import           Data.Foldable (forM_, for_)
 import           Data.Function ((&))
 import           Data.List (foldl', partition)
-import           Data.Monoid (Sum (Sum), getSum)
 import           Data.Ratio (Ratio, denominator, numerator)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import           Data.Traversable (for, forM)
-import           Data.Word (Word64)
-import           Database.Esqueleto (BackendCompatible, Single (Single), fromSqlKey)
-import           Database.Persist.Postgresql (Entity, IsolationLevel (Serializable), SqlBackend,
-                     SqlPersistT, rawExecute, rawSql, runSqlConnWithIsolation)
+import           Database.Esqueleto.Legacy (BackendCompatible, Single (Single), fromSqlKey)
+import           Database.Persist.Postgresql (IsolationLevel (Serializable), SqlBackend,
+                   SqlPersistT, rawExecute, rawSql, runSqlConnWithIsolation)
 import           System.IO (hPutStr, hPutStrLn, stderr)
 
 import           Ouroboros.Network.Block (unSlotNo)
 
+import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Api (SlotNo)
 import qualified Cardano.Api as Api
-import           Cardano.API.Extended (VotingKeyPublic, serialiseToBech32')
-import qualified Cardano.Api.Typed as Api (Lovelace (Lovelace),
-                     StakeCredential (StakeCredentialByKey), metadataFromJson)
-import           Cardano.CLI.Fetching (Fund, Threshold, VotingFunds (VotingFunds), aboveThreshold,
-                     chunkFund, fundFromVotingFunds)
-import           Cardano.CLI.Voting.Metadata (AsMetadataParsingError (..), MetadataParsingError,
-                     Vote, metadataMetaKey, parseMetadataFromJson, prettyPrintMetadataParsingError,
-                     signatureMetaKey, voteFromTxMetadata, voteRegistrationPublicKey,
-                     voteRegistrationRewardsAddress, voteRegistrationVerificationKey, withMetaKey)
-import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKeyHash),
-                     VoteVerificationKeyHash, getStakeHash, getVoteVerificationKeyHash)
+import qualified Cardano.Api.Shelley as Api
+import           Cardano.CLI.Fetching (Threshold, VotingFunds (VotingFunds))
+import           Cardano.CLI.Voting.Metadata (MetadataParsingError, Vote, metadataMetaKey,
+                   parseMetadataFromJson, prettyPrintMetadataParsingError, signatureMetaKey,
+                   voteFromTxMetadata, voteRegistrationPublicKey, voteRegistrationRewardsAddress,
+                   voteRegistrationVerificationKey)
+import           Cardano.CLI.Voting.Signing (getStakeHash)
 import           Contribution (Contributions, causeSumAmounts, contribute, filterAmounts,
-                     proportionalize)
-import           Control.Lens (( # ))
+                   proportionalize)
+import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import qualified Data.Aeson as Aeson
 import qualified Data.HashMap.Strict as HM
@@ -117,7 +111,7 @@ queryStake nw stakeHash = do
       stakeQuerySql = "SELECT SUM(utxo_snapshot.value) FROM utxo_snapshot WHERE stake_credential = decode('" <> stakeAddressHex <> "', 'hex');"
   (stakeValues :: [Single (Maybe DbLovelace)]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
   case stakeValues of
-    x1:(x2:xs)                            -> error "Too many stake values found for stake sum, is SUM missing from your query?"
+    _x1:(_x2:_xs)                         -> error "Too many stake values found for stake sum, is SUM missing from your query?"
     []                                    -> pure 0
     (Single Nothing):[]                   -> pure 0
     (Single (Just (DbLovelace stake))):[] -> pure $ fromIntegral stake
@@ -131,7 +125,7 @@ queryVoteRegistrationInfo
   -> Maybe SlotNo
   -> m (Contributions VotingKeyPublic (Api.StakeAddress, Api.Hash Api.StakeKey) Integer)
 queryVoteRegistrationInfo nw mSlotNo  = do
-  regos <- queryVoteRegistration nw mSlotNo
+  regos <- queryVoteRegistration mSlotNo
 
   liftIO $ hPutStr stderr $ "\nFound " <> show (length regos) <> " vote registrations. Of which, "
 
@@ -223,7 +217,7 @@ queryVoteRegistrationInfo nw mSlotNo  = do
   foldM (\acc (idx, (verKeyHash, (votepub, rewardsAddr))) -> do
     (Api.Lovelace stake) <- queryStake nw verKeyHash
 
-    liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show idx <> " of " <> show (length xs)
+    liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show (idx :: Integer) <> " of " <> show (length xs)
     pure $ contribute votepub (rewardsAddr, verKeyHash) stake acc
         ) mempty xs'
 
@@ -304,10 +298,9 @@ queryVoteRegistration
      , MonadReader backend m
      , BackendCompatible SqlBackend backend
      )
-  => Api.NetworkId
-  -> Maybe SlotNo
+  => Maybe SlotNo
   -> m [Either MetadataRetrievalError (TxId, Vote)]
-queryVoteRegistration nw mSlotNo =
+queryVoteRegistration mSlotNo =
   let
     -- Join the transaction information with the metadata information for that
     -- transaction. The metadata we are interested in is made up of two parts:
@@ -321,7 +314,7 @@ queryVoteRegistration nw mSlotNo =
         Nothing   -> (sqlBase <> " ORDER BY metadata -> '4' ASC;")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
-    sequence $ fmap runExceptT $ (flip fmap) results $ \(Single txHash, Single txId, Single mMetadata, Single mSignature) -> do
+    sequence $ fmap runExceptT $ (flip fmap) results $ \(Single _txHash, Single txId, Single mMetadata, Single mSignature) -> do
       let
           handleEither f =
               either (throwError . f) pure

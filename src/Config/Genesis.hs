@@ -10,32 +10,17 @@
 
 module Config.Genesis (Config(Config), opts, mkConfig, Opts(Opts), parseOpts, ConfigError) where
 
-import           Control.Exception.Safe (try)
-import           Control.Lens (( # ))
+import           Control.Lens ((#))
 import           Control.Lens.TH
-import           Control.Monad.Except (ExceptT, MonadError, catchError, throwError)
+import           Control.Monad.Except (ExceptT, MonadError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Char8 as BC
-import           Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 
 import           Options.Applicative
 
-import           Cardano.Api (Address, Bech32DecodeError, FileError, Lovelace, NetworkId,
-                     PaymentKey, SigningKey, StakeKey, Witness)
-import qualified Cardano.Api as Api
-import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TextEnvelopeError)
-import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
-import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
-import           Cardano.CLI.Shelley.Key (InputDecodeError)
-import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
+import           Cardano.Api (NetworkId, SlotNo)
 
-import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
-                     AsFileError (_FileIOError, __FileError),
-                     AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, pNetworkId, readSigningKeyFile, readerFromAttoParser)
+import           Cardano.API.Extended (pNetworkId)
 import           Cardano.CLI.Fetching (Threshold, VotingFunds)
 import           Cardano.CLI.Voting.Error ()
 
@@ -107,9 +92,10 @@ parseOpts = Opts
   <*> optional (strOption (long "extra-funds" <> metavar "FILE" <> help "File containing extra funds to include in the query (JSON)"))
   <*> optional pSlotNo
   <*> fmap fromIntegral (option auto (long "threshold" <> metavar "INT64" <> showDefault <> value defaultThreshold <> help "Minimum threshold of funds required to vote (Lovelace)"))
-  <*> fmap fromIntegral (option auto (long "scale" <> metavar "DOUBLE" <> showDefault <> value 1 <> help "Scale the voting funds by this amount to arrive at the voting power"))
+  <*> fmap fromIntegral (option auto (long "scale" <> metavar "DOUBLE" <> showDefault <> value (1 :: Integer) <> help "Scale the voting funds by this amount to arrive at the voting power"))
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
 
+opts :: ParserInfo Opts
 opts =
   info
     ( parseOpts )

@@ -11,61 +11,21 @@
 module Cardano.API.Extended.Raw where
 
 import           Control.Applicative ((<|>))
-import           Control.Lens (( # ))
-import           Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
-import           Control.Monad.Fail (MonadFail)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, left, newExceptT, right)
 import           Data.Aeson.Encode.Pretty (Config (..), defConfig, encodePretty', keyOrder)
 import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Foldable (asum)
-import           Data.Set (Set)
-import qualified Data.Set as Set
 import           Data.Text (Text)
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Word (Word64)
 import qualified Options.Applicative as Opt
 
-import           Cardano.Api
-import           Cardano.Api (AsType (AsShelleyAddress), HasTextEnvelope,
-                     NetworkId (Mainnet, Testnet), TextEnvelopeDescr, deserialiseAddress,
-                     queryNodeLocalState, serialiseToTextEnvelope)
-import           Cardano.Api.LocalChainSync (getLocalTip)
-import           Cardano.Api.Modes (AnyConsensusModeParams (..), ConsensusModeParams (..),
-                     EpochSlots (EpochSlots))
-import           Cardano.Api.Protocol (Protocol (ByronProtocol, CardanoProtocol, ShelleyProtocol))
-import           Cardano.Api.Shelley
-import           Cardano.Api.Typed (LocalNodeConnectInfo, NetworkMagic (NetworkMagic),
-                     ShelleyLedgerEra)
-import           Cardano.Api.Typed (Address (ByronAddress, ShelleyAddress),
-                     LocalNodeConnectInfo (LocalNodeConnectInfo),
-                     NodeConsensusMode (ByronMode, CardanoMode, ShelleyMode), Shelley,
-                     StandardShelley, localNodeConsensusMode)
-import           Cardano.CLI.Types (QueryFilter (FilterByAddress, NoFilter))
-import           Ouroboros.Consensus.Cardano.Block
-                     (Either (QueryResultEraMismatch, QueryResultSuccess), EraMismatch (..),
-                     Query (QueryIfCurrentShelley))
-import qualified Ouroboros.Consensus.Cardano.Block as Consensus
-import           Ouroboros.Consensus.HardFork.Combinator.Degenerate as Consensus
-import           Ouroboros.Consensus.HardFork.Combinator.Degenerate (Either (DegenQueryResult),
-                     Query (DegenQuery))
-import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
-import           Ouroboros.Consensus.Shelley.Ledger.Query
-                     (Query (GetCurrentPParams, GetFilteredUTxO, GetUTxO))
-import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
-import           Ouroboros.Network.Block (Tip, getTipPoint, getTipSlotNo)
-import           Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
-                     (AcquireFailure (..))
-import qualified Shelley.Spec.Ledger.Address as Ledger
-import qualified Shelley.Spec.Ledger.Address as Ledger
-import qualified Shelley.Spec.Ledger.Coin as Ledger
-import           Shelley.Spec.Ledger.PParams (PParams)
-import qualified Shelley.Spec.Ledger.PParams as Shelley
-import qualified Shelley.Spec.Ledger.Tx as Ledger
-import qualified Shelley.Spec.Ledger.UTxO as Ledger
+import           Cardano.Api (AddressAny, AnyConsensusModeParams (..),
+                   AsType (AsAddressAny, AsStakeAddress), ConsensusModeParams (..), EpochSlots (..),
+                   HasTextEnvelope, NetworkId (Mainnet, Testnet), NetworkMagic (..), StakeAddress,
+                   TextEnvelopeDescr, deserialiseAddress, serialiseToTextEnvelope)
+import           Cardano.Api.Shelley ()
 
 parseAddressAny :: Atto.Parser AddressAny
 parseAddressAny = do
@@ -80,17 +40,6 @@ parseStakeAddress = do
     case deserialiseAddress AsStakeAddress str of
       Nothing   -> fail "invalid address"
       Just addr -> pure addr
-
-lexPlausibleAddressString :: Atto.Parser Text
-lexPlausibleAddressString =
-    T.decodeLatin1 <$> Atto.takeWhile1 isPlausibleAddressChar
-  where
-    -- Covers both base58 and bech32 (with constrained prefixes)
-    isPlausibleAddressChar c =
-         (c >= 'a' && c <= 'z')
-      || (c >= 'A' && c <= 'Z')
-      || (c >= '0' && c <= '9')
-      || c == '_'
 
 readerFromAttoParser :: Atto.Parser a -> Opt.ReadM a
 readerFromAttoParser p =
@@ -128,17 +77,16 @@ textEnvelopeToJSON mbDescr a  =
 textEnvelopeJSONKeyOrder :: Text -> Text -> Ordering
 textEnvelopeJSONKeyOrder = keyOrder ["type", "description", "cborHex"]
 
--- | Select the appropriate query constructor based on the era
--- 'QueryIfCurrentShelley', 'QueryIfCurrentAllegra' or 'QueryIfCurrentMary'.
---
---
-queryIfCurrentEra :: ShelleyBasedEra era
-                  -> Query (Consensus.ShelleyBlock (ShelleyLedgerEra era)) result
-                  -> Consensus.CardanoQuery StandardCrypto
-                       (Consensus.CardanoQueryResult StandardCrypto result)
-queryIfCurrentEra ShelleyBasedEraShelley = Consensus.QueryIfCurrentShelley
-queryIfCurrentEra ShelleyBasedEraAllegra = Consensus.QueryIfCurrentAllegra
-queryIfCurrentEra ShelleyBasedEraMary    = Consensus.QueryIfCurrentMary
+lexPlausibleAddressString :: Atto.Parser Text
+lexPlausibleAddressString =
+    T.decodeLatin1 <$> Atto.takeWhile1 isPlausibleAddressChar
+  where
+    -- Covers both base58 and bech32 (with constrained prefixes)
+    isPlausibleAddressChar c =
+         (c >= 'a' && c <= 'z')
+      || (c >= 'A' && c <= 'Z')
+      || (c >= '0' && c <= '9')
+      || c == '_'
 
 defaultByronEpochSlots :: Word64
 defaultByronEpochSlots = 21600

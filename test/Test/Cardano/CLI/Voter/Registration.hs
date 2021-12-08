@@ -16,7 +16,7 @@ import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty)
 
 import           Cardano.Api (deserialiseFromRawBytes, deserialiseFromRawBytesHex,
-                     makeTransactionMetadata)
+                   makeTransactionMetadata)
 import           Cardano.Api.Typed
 import           Cardano.Api.Voting (AsType (AsVotingKeyPublic))
 import qualified Cardano.Api.Voting as Voting

@@ -29,7 +29,6 @@ module Cardano.API.Extended ( readSigningKeyFile
                             , VotingKeyPublic
                             , deserialiseFromBech32'
                             , serialiseToBech32'
-                            , liftShelleyBasedEra
                             , liftShelleyBasedMetadata
                             , liftShelleyBasedTxFee
                             , SerialiseAsBech32'(bech32PrefixFor, bech32PrefixesPermitted)
@@ -38,50 +37,26 @@ module Cardano.API.Extended ( readSigningKeyFile
                             , Extended.pConsensusModeParams
                             ) where
 
-import           Control.Lens (( # ))
+import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad (guard)
 import           Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, left, newExceptT, right)
-import           Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
-import qualified Data.Aeson as Aeson
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Base16 as Base16
-import qualified Data.ByteString.Char8 as BC
-import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Text (Text)
-import qualified Data.Text as T
 
-import           Cardano.Api (AnyCardanoEra (AnyCardanoEra), AsType, Bech32DecodeError,
-                     CardanoEra (AllegraEra, MaryEra, ShelleyEra),
-                     CardanoEraStyle (ShelleyBasedEra), FromSomeType, HasTextEnvelope,
-                     IsShelleyBasedEra, Lovelace, SerialiseAsBech32,
-                     ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
-                     SigningKey, TxFee (TxFeeExplicit),
-                     TxFeesExplicitInEra (TxFeesExplicitInAllegraEra, TxFeesExplicitInMaryEra, TxFeesExplicitInShelleyEra),
-                     TxMetadata, TxMetadataInEra (TxMetadataInEra),
-                     TxMetadataSupportedInEra (TxMetadataInAllegraEra, TxMetadataInMaryEra, TxMetadataInShelleyEra),
-                     cardanoEraStyle)
-import           Cardano.Api.Shelley (ShelleyBasedEra)
-import           Cardano.Api.Typed (FileError (FileError, FileIOError), ShelleyLedgerEra)
-import           Cardano.Api.Typed (AsType, Bech32DecodeError (Bech32DataPartToBytesError, Bech32DecodingError, Bech32DeserialiseFromBytesError, Bech32UnexpectedPrefix, Bech32WrongPrefix),
-                     HasTypeProxy (proxyToAsType),
-                     SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes))
-import           Cardano.Api.Typed (Address, FileError, LocalNodeConnectInfo (LocalNodeConnectInfo),
-                     NodeConsensusMode (ByronMode, CardanoMode, ShelleyMode), Shelley,
-                     StandardShelley, localNodeConsensusMode)
+import           Cardano.Api (AsType, Bech32DecodeError (..), FileError (..), FromSomeType,
+                   HasTextEnvelope, HasTypeProxy (..), Lovelace, SerialiseAsBech32,
+                   SerialiseAsRawBytes (..), ShelleyBasedEra (..), SigningKey,
+                   TxFee (TxFeeExplicit), TxFeesExplicitInEra (..), TxMetadata,
+                   TxMetadataInEra (TxMetadataInEra), TxMetadataSupportedInEra (..))
 import           Cardano.CLI.Environment (EnvSocketError (..))
 import qualified Cardano.CLI.Environment as Cardano (readEnvSocketPath)
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import qualified Cardano.CLI.Shelley.Key as Shelley
-import           Cardano.CLI.Types (QueryFilter, SigningKeyFile, SocketPath)
+import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import qualified Codec.Binary.Bech32 as Bech32
-import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
-import           Ouroboros.Network.Block (Tip)
-import           Shelley.Spec.Ledger.PParams (PParams)
-import qualified Shelley.Spec.Ledger.UTxO as Ledger
 
 import qualified Cardano.API.Extended.Raw as Extended
 
@@ -103,6 +78,7 @@ liftShelleyBasedTxFee
 liftShelleyBasedTxFee (ShelleyBasedEraShelley) = (TxFeeExplicit TxFeesExplicitInShelleyEra)
 liftShelleyBasedTxFee (ShelleyBasedEraAllegra) = (TxFeeExplicit TxFeesExplicitInAllegraEra)
 liftShelleyBasedTxFee (ShelleyBasedEraMary)    = (TxFeeExplicit TxFeesExplicitInMaryEra)
+liftShelleyBasedTxFee (ShelleyBasedEraAlonzo)  = (TxFeeExplicit TxFeesExplicitInAlonzoEra)
 
 liftShelleyBasedMetadata
   :: ShelleyBasedEra era
@@ -111,13 +87,7 @@ liftShelleyBasedMetadata
 liftShelleyBasedMetadata (ShelleyBasedEraShelley) = (TxMetadataInEra TxMetadataInShelleyEra)
 liftShelleyBasedMetadata (ShelleyBasedEraAllegra) = (TxMetadataInEra TxMetadataInAllegraEra)
 liftShelleyBasedMetadata (ShelleyBasedEraMary)    = (TxMetadataInEra TxMetadataInMaryEra)
-
-liftShelleyBasedEra
-  :: ShelleyBasedEra era
-  -> CardanoEra era
-liftShelleyBasedEra (ShelleyBasedEraShelley) = ShelleyEra
-liftShelleyBasedEra (ShelleyBasedEraAllegra) = AllegraEra
-liftShelleyBasedEra (ShelleyBasedEraMary)    = MaryEra
+liftShelleyBasedMetadata (ShelleyBasedEraAlonzo)  = (TxMetadataInEra TxMetadataInAlonzoEra)
 
 liftExceptTIO
   :: ( MonadIO m
@@ -143,9 +113,10 @@ readSigningKeyFile
 readSigningKeyFile role f = do
   result <- liftIO $ Shelley.readSigningKeyFile role f
   case result of
-    Right x                 -> pure x
-    Left (FileError fp e)   -> throwError (_FileError # (fp , _InputDecodeError # e))
-    Left (FileIOError fp e) -> throwError (_FileIOError # (fp, e))
+    Right x                           -> pure x
+    Left (FileError fp e)             -> throwError (_FileError # (fp , _InputDecodeError # e))
+    Left (FileIOError fp e)           -> throwError (_FileIOError # (fp, e))
+    Left (FileErrorTempFile fp tmp h) -> throwError (_FileErrorTempFile # (fp, tmp, h))
 
 readSigningKeyFileAnyOf
   :: forall e m fileErr b.
@@ -161,9 +132,10 @@ readSigningKeyFileAnyOf
 readSigningKeyFileAnyOf bech32Types textEnvTypes f = do
   result <- liftIO $ Shelley.readSigningKeyFileAnyOf bech32Types textEnvTypes f
   case result of
-    Right x                 -> pure x
-    Left (FileError fp e)   -> throwError (_FileError # (fp , _InputDecodeError # e))
-    Left (FileIOError fp e) -> throwError (_FileIOError # (fp, e))
+    Right x                           -> pure x
+    Left (FileError fp e)             -> throwError (_FileError # (fp , _InputDecodeError # e))
+    Left (FileIOError fp e)           -> throwError (_FileIOError # (fp, e))
+    Left (FileErrorTempFile fp tmp h) -> throwError (_FileErrorTempFile # (fp, tmp, h))
 
 readEnvSocketPath
   :: ( MonadIO m

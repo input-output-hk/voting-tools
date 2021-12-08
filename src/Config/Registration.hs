@@ -10,9 +10,9 @@
 module Config.Registration (Config(Config), ConfigError, opts, mkConfig, Opts(Opts), parseOpts) where
 
 import           Control.Exception.Safe (try)
-import           Control.Lens (( # ))
+import           Control.Lens ((#))
 import           Control.Lens.TH
-import           Control.Monad.Except (ExceptT, MonadError, catchError, throwError)
+import           Control.Monad.Except (ExceptT, MonadError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -20,23 +20,19 @@ import qualified Data.Text.IO as TIO
 
 import           Options.Applicative
 
-import           Cardano.Api (Address, AddressAny, Bech32DecodeError, FileError, NetworkId,
-                     PaymentKey, SigningKey, StakeAddress, StakeKey, Witness)
+import           Cardano.Api (AddressAny, AnyConsensusModeParams, Bech32DecodeError, NetworkId,
+                   SlotNo (..), StakeAddress, TextEnvelopeError)
 import qualified Cardano.Api as Api
-import           Cardano.Api.Modes
-import           Cardano.Api.Typed (Shelley, SlotNo (SlotNo), TextEnvelopeError)
-import           Cardano.CLI.Environment (EnvSocketError, readEnvSocketPath)
-import           Cardano.CLI.Shelley.Commands (WitnessFile (WitnessFile))
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
-import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
+import           Cardano.CLI.Types (SigningKeyFile (..))
 import           Cardano.CLI.Voting.Signing (VotePaymentKey, VoteSigningKey, readVotePaymentKeyFile,
-                     readVoteSigningKeyFile)
+                   readVoteSigningKeyFile)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
-                     AsFileError (_FileIOError, __FileError),
-                     AsInputDecodeError (_InputDecodeError), AsType (AsVotingKeyPublic),
-                     VotingKeyPublic, deserialiseFromBech32', pConsensusModeParams, pNetworkId,
-                     parseAddressAny, parseStakeAddress, readSigningKeyFile, readerFromAttoParser)
+                   AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),
+                   AsType (AsVotingKeyPublic), VotingKeyPublic, deserialiseFromBech32',
+                   pConsensusModeParams, pNetworkId, parseAddressAny, parseStakeAddress,
+                   readerFromAttoParser)
 import           Cardano.CLI.Voting.Error (AsTextEnvelopeError (_TextEnvelopeError))
 import           Config.Common (pCardanoEra)
 
@@ -118,6 +114,7 @@ parseOpts = Opts
   <*> pCardanoEra
   <*> pConsensusModeParams
 
+opts :: ParserInfo Opts
 opts =
   info
     ( parseOpts )

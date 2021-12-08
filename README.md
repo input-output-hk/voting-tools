@@ -16,6 +16,52 @@ funds and block-zero date. The "rewards" tool calculates the voting
 rewards that should be given to each user and optionally generates the
 appropriate MIR certificates.
 
+## Registering to vote
+
+Register to vote on the testnet with protocol magic id of "1097911063".
+
+- Requires:
+  - cardano-cli executable from the cardano-node project
+  - jcli executable from the jormungandr project
+  - voter-registration executable from this project
+
+```
+cardano-cli address key-gen \
+        --verification-key-file payment.vkey \
+        --signing-key-file payment.skey
+cardano-cli stake-address key-gen \
+        --verification-key-file stake.vkey \
+        --signing-key-file stake.skey
+cardano-cli address build \
+        --payment-verification-key-file payment.vkey \
+        --out-file payment.addr \
+        --testnet-magic 1097911063
+cardano-cli stake-address build \
+        --stake-verification-key-file stake.vkey \
+        --out-file stake.addr \
+        --testnet-magic 1097911063
+jcli key generate \
+        --type ed25519extended \
+        > vote.skey
+jcli key to-public \
+        < vote.skey \
+        > vote.pub
+
+CARDANO_NODE_SOCKET_PATH=/run/cardano-node/node.socket voter-registration \
+        --payment-signing-key payment.skey \
+        --payment-address $(cat payment.addr) \
+        --stake-signing-key stake.skey \
+        --rewards-address $(cat stake.addr) \
+        --vote-public-key vote.pub \
+        --testnet-magic 1097911063 \
+        --out-file vote-tx.signed \
+        --alonzo-era
+        --sign
+CARDANO_NODE_SOCKET_PATH=/run/cardano-node/node.socket cardano-cli transaction submit \
+        --tx-file vote-tx.signed \
+        --testnet-magic 1097911063
+```
+
 ## Running
 
 The latest pre-built statically linked tarball can be found at https://hydra.iohk.io/job/Cardano/voting-tools/native.voterRegistrationTarball.x86_64-linux/latest-finished/download/1/voter-registration.tar.gz

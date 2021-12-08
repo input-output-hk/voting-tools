@@ -21,9 +21,7 @@ module Contribution.Initial
   ) where
 
 import           Data.Function ((&))
-import           Data.List (delete, find, foldl', sort, sortOn)
-import           Data.Maybe (maybe)
-import           Data.Traversable (for)
+import           Data.List (delete, find, foldl', sortOn)
 import           Debug.Trace (trace)
 
 data Contributions cause id amt where
@@ -34,11 +32,11 @@ data Contributions cause id amt where
   Fmap       :: (amt1 -> amt2) -> Contributions cause id amt1 -> Contributions cause id amt2
 
 instance (Show cause, Show id, Show amt) => Show (Contributions cause id amt) where
-  show Empty                        = "mempty"
-  show (Append x y)                 = "( " <> show x <> " ) <> ( " <> show y <> " )"
+  show Empty                           = "mempty"
+  show (Append x y)                    = "( " <> show x <> " ) <> ( " <> show y <> " )"
   show (Contribute cause ident amt xs) = "contribute (" <> show cause <> ") (" <> show ident <> ") (" <> show amt <> ") (" <> show xs <> ")"
   show (Withdraw cause ident xs)       = "withdraw (" <> show cause <> ") (" <> show ident <> ") (" <> show xs <> ")"
-  show (Fmap f xs)                   = "fmap _ _"
+  show (Fmap _f _xs)                   = "fmap _ _"
 
 instance (Ord id, Ord cause, Eq amt) => Eq (Contributions cause id amt) where
   (==) x y = contributions x == contributions y
@@ -97,7 +95,7 @@ contributions (Withdraw cause ident xs)                =
   contributions xs
   & deleteExisting cause ident
   & sortContributions
-contributions (Fmap f Empty)                           = []
+contributions (Fmap _ Empty)                           = []
 contributions (Fmap f (Append x y))                    = contributions $ Append (Fmap f x) (Fmap f y)
 contributions (Fmap f (Contribute cause ident amt cs)) = contributions $ Contribute cause ident (f amt) (Fmap f cs)
 contributions (Fmap f (Withdraw cause ident cs))       = contributions $ Withdraw cause ident (Fmap f cs)
@@ -131,8 +129,8 @@ addContribution :: Eq cause => cause -> id -> amt -> [(cause, [(id, amt)])] -> [
 addContribution cause ident amt cs =
   case find ((== cause) . fst) cs of
     Nothing -> (cause, [(ident, amt)]):cs
-    Just _  -> foldl' (\acc (c :: cause, cs :: [(id, amt)]) ->
+    Just _  -> foldl' (\acc (c :: cause, cs' :: [(id, amt)]) ->
                                            if c == cause
-                                           then ((c, (ident, amt) : cs) :) acc
-                                           else ((c, cs) :) acc
+                                           then ((c, (ident, amt) : cs') :) acc
+                                           else ((c, cs') :) acc
                                         ) mempty cs

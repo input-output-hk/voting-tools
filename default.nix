@@ -46,6 +46,8 @@ let
     # `benchmarks` (only built, not run).
     benchmarks = collectComponents' "benchmarks" haskellPackages;
 
+    nixosTests = pkgs.callPackage ./nix/nixos/tests/default.nix { inherit system; };
+
     checks = recurseIntoAttrs {
       # `checks.tests` collect results of executing the tests:
       tests = collectChecks haskellPackages;

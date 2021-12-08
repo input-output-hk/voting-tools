@@ -39,9 +39,7 @@
 
 module Cardano.API.Jormungandr where
 
-import           Cardano.Api.Typed (AsType, HasTypeProxy (proxyToAsType),
-                     NetworkId (Mainnet, Testnet),
-                     SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes))
+import           Cardano.Api (HasTypeProxy (..), NetworkId (..), SerialiseAsRawBytes (..))
 import           Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.Binary.Get as Bin
@@ -52,8 +50,8 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.Word
 
 import           Cardano.API.Extended
-                     (SerialiseAsBech32' (bech32PrefixFor, bech32PrefixesPermitted),
-                     VotingKeyPublic, deserialiseFromBech32', serialiseToBech32')
+                   (SerialiseAsBech32' (bech32PrefixFor, bech32PrefixesPermitted), VotingKeyPublic,
+                   deserialiseFromBech32', serialiseToBech32')
 
 data Discrimination = Production
                     | Test
