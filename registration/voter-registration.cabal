@@ -29,11 +29,10 @@ executable voter-registration
   import:              project-config
   main-is:             Main.hs
   build-depends:       base
-                     , base16-bytestring
+                     , aeson
                      , bytestring
                      , cardano-api
                      , cardano-cli
-                     , cardano-crypto-class
                      , mtl
                      , optparse-applicative
                      , ouroboros-consensus-shelley

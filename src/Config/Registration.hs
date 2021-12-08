@@ -7,49 +7,48 @@
 -- | Handles configuration, which involves parsing command line
 -- arguments and reading key files.
 
-module Config.Registration (Config(Config), ConfigError, opts, mkConfig, Opts(Opts), parseOpts) where
+module Config.Registration (Config(Config), ConfigError, opts, mkConfig, Opts(Opts), parseOpts, MetadataOutFormat(..)) where
 
 import           Control.Exception.Safe (try)
 import           Control.Lens ((#))
 import           Control.Lens.TH
 import           Control.Monad.Except (ExceptT, MonadError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Data.Foldable (asum)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 
 import           Options.Applicative
 
-import           Cardano.Api (AddressAny, AnyConsensusModeParams, Bech32DecodeError, NetworkId,
-                   SlotNo (..), StakeAddress, TextEnvelopeError)
+import           Cardano.Api (AnyConsensusModeParams, Bech32DecodeError, NetworkId, StakeAddress,
+                   TextEnvelopeError)
 import qualified Cardano.Api as Api
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..))
-import           Cardano.CLI.Voting.Signing (VotePaymentKey, VoteSigningKey, readVotePaymentKeyFile,
-                   readVoteSigningKeyFile)
+import           Cardano.CLI.Voting.Signing (VoteSigningKey, readVoteSigningKeyFile)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),
                    AsType (AsVotingKeyPublic), VotingKeyPublic, deserialiseFromBech32',
-                   pConsensusModeParams, pNetworkId, parseAddressAny, parseStakeAddress,
-                   readerFromAttoParser)
+                   pConsensusModeParams, pNetworkId, parseStakeAddress, readerFromAttoParser)
 import           Cardano.CLI.Voting.Error (AsTextEnvelopeError (_TextEnvelopeError))
 import           Config.Common (pCardanoEra)
 
 data Config = Config
-    { cfgPaymentAddress      :: AddressAny
-    , cfgRewardsAddress      :: StakeAddress
+    { cfgRewardsAddress      :: StakeAddress
     , cfgVoteSigningKey      :: VoteSigningKey
-    , cfgPaymentSigningKey   :: VotePaymentKey
     , cfgVotePublicKey       :: VotingKeyPublic
     , cfgNetworkId           :: NetworkId
-    , cfgTTL                 :: SlotNo
-    , cfgSign                :: Bool
-    , cfgOutFile             :: FilePath
+    , cfgOutFormat           :: MetadataOutFormat
     , cfgEra                 :: Api.AnyCardanoEra
     , cfgConsensusModeParams :: AnyConsensusModeParams
     }
     deriving (Show)
+
+data MetadataOutFormat = MetadataOutFormatJSON
+                       | MetadataOutFormatCBOR
+    deriving (Eq, Show)
 
 data FileErrors = FileErrorInputDecode InputDecodeError
     | FileErrorTextEnvelope TextEnvelopeError
@@ -78,59 +77,41 @@ instance AsBech32DecodeError ConfigError where
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
-mkConfig (Opts pskf paymentAddr rewardsAddr vpkf sskf networkId ttl sign outFile era consensusModeParams) = do
-  stkSign <- readVoteSigningKeyFile (SigningKeyFile sskf)
-  paySign <- readVotePaymentKeyFile (SigningKeyFile pskf)
+mkConfig (Opts rewardsAddr vpkf vskf networkId outFile era consensusModeParams) = do
+  stkSign <- readVoteSigningKeyFile (SigningKeyFile vskf)
   votepk  <- readVotePublicKey vpkf
 
-  pure $ Config paymentAddr rewardsAddr stkSign paySign votepk networkId ttl sign outFile era consensusModeParams
+  pure $ Config rewardsAddr stkSign votepk networkId outFile era consensusModeParams
 
 data Opts = Opts
-    { optPaymentSigningKeyFile :: FilePath
-    , optPaymentAddress        :: AddressAny
-    , optRewardsAddress        :: StakeAddress
-    , optVotePublicKeyFile     :: FilePath
-    , optStakeSigningKeyFile   :: FilePath
-    , optNetworkId             :: NetworkId
-    , optTTL                   :: SlotNo
-    , optSign                  :: Bool
-    , optOutFile               :: FilePath
-    , optEra                   :: Api.AnyCardanoEra
-    , optConsensusModeParams   :: AnyConsensusModeParams
+    { optRewardsAddress      :: StakeAddress
+    , optVotePublicKeyFile   :: FilePath
+    , optVoteSigningKeyFile  :: FilePath
+    , optNetworkId           :: NetworkId
+    , optOutFormat           :: MetadataOutFormat
+    , optEra                 :: Api.AnyCardanoEra
+    , optConsensusModeParams :: AnyConsensusModeParams
     }
     deriving (Show)
 
 parseOpts :: Parser Opts
 parseOpts = Opts
-  <$> strOption (long "payment-signing-key" <> metavar "FILE" <> help "file used to sign transaction")
-  <*> option (readerFromAttoParser parseAddressAny) (long "payment-address" <> metavar "STRING" <> help "address associated with payment (hard-coded to use info from first utxo of address)")
-  <*> option (readerFromAttoParser parseStakeAddress) (long "rewards-address" <> metavar "STRING" <> help "address associated with rewards (Must be a stake address for MIR Certificate)")
-  <*> strOption (long "vote-public-key" <> metavar "FILE" <> help "vote key generated by jcli (corresponding private key must be ed25519extended)")
-  <*> strOption (long "stake-signing-key" <> metavar "FILE" <> help "stake authorizing vote key")
+  <$> option (readerFromAttoParser parseStakeAddress) (long "rewards-address" <> metavar "STRING" <> help "address associated with rewards (Must be a stake address for MIR Certificate)")
+  <*> strOption (long "vote-public-key-file" <> metavar "FILE" <> help "vote key generated by jcli (corresponding private key must be ed25519extended)")
+  <*> strOption (long "stake-signing-key-file" <> metavar "FILE" <> help "stake authorizing vote key")
   <*> pNetworkId
-  <*> pTTL
-  <*> switch (long "sign" <> help "Whether to sign transaction")
-  <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
+  <*> pOutFormat
   <*> pCardanoEra
   <*> pConsensusModeParams
 
 opts :: ParserInfo Opts
 opts =
   info
-    ( parseOpts )
+    ( parseOpts <**> helper )
     ( fullDesc
-    <> progDesc "Create a vote transaction"
-    <> header "voter-registration - a tool to create vote transactions"
+    <> progDesc "Create vote registration metadata"
+    <> header "voter-registration - a tool to create vote registration metadata suitable for attaching to a transaction"
     )
-
-pTTL :: Parser SlotNo
-pTTL = SlotNo
-    <$> option auto
-          ( long "time-to-live"
-          <> metavar "WORD64"
-          <> help "The number of slots from the current slot at which the vote transaction times out."
-          <> showDefault <> value 5000
-          )
 
 stripTrailingNewlines :: Text -> Text
 stripTrailingNewlines = T.intercalate "\n" . filter (not . T.null) . T.lines
@@ -148,3 +129,15 @@ readVotePublicKey path = do
   raw    <- either (\e -> throwError . (_FileIOError #) $ (path, e)) pure result
   let publicKeyBech32 = stripTrailingNewlines raw
   either (throwError . (_Bech32DecodeError #)) pure $ deserialiseFromBech32' AsVotingKeyPublic publicKeyBech32
+
+pOutFormat :: Parser MetadataOutFormat
+pOutFormat = asum
+  [ flag' MetadataOutFormatJSON
+      ( long "json"
+      <> help "Output metadata in JSON format (using the 'NoSchema' TxMetadata JSON format - the default for cardano-cli)"
+      )
+  , flag' MetadataOutFormatCBOR
+      ( long "cbor"
+      <> help "Output metadata in binary CBOR format"
+      )
+  ]
