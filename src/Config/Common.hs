@@ -51,3 +51,12 @@ pCardanoEra = asum
     -- Default for now:
   , pure (AnyCardanoEra MaryEra)
   ]
+
+pVersionParams :: Parser ()
+pVersionParams =
+  asum
+    [ flag' ()
+        (  long "version"
+        <> help "Show the program version"
+        )
+    ]

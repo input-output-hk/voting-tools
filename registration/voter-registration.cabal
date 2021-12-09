@@ -28,6 +28,7 @@ common project-config
 executable voter-registration
   import:              project-config
   main-is:             Main.hs
+  other-modules:       Paths_voter_registration
   build-depends:       base
                      , aeson
                      , bytestring

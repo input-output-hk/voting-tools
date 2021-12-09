@@ -14,8 +14,10 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Data.Version (showVersion)
 import           Database.Persist.Postgresql (ConnectionString, SqlPersistT, withPostgresqlConn)
 import qualified Options.Applicative as Opt
+import           System.Info (arch, compilerName, compilerVersion, os)
 
 import           Cardano.CLI.Fetching (Fund, chunkFund, fundFromVotingFunds, scaleFund)
 import           Cardano.CLI.Query (MetadataRetrievalError)
@@ -25,12 +27,20 @@ import qualified Config.Genesis as Genesis
 import qualified Config.Rewards as Rewards
 import           Genesis (decodeGenesisTemplateJSON, getBlockZeroDate, setBlockZeroDate,
                    setInitialFunds)
+import           Paths_voting_tools (version)
 
 main :: IO ()
 main = do
   options <- Opt.execParser opts
 
   case options of
+    -- Version
+    Version ->
+      putStrLn $ mconcat
+                [ "voting-tools ", showVersion version
+                , " - ", os, "-", arch
+                , " - ", compilerName, "-", showVersion compilerVersion
+                ]
     -- Rewards
     Rewards rOpts -> do
       let (Rewards.Config networkId threshold db slotNo (Lovelace totalRewards) outfile) = Rewards.mkConfig rOpts

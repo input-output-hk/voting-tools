@@ -82,6 +82,7 @@ executable voting-tools
   import:              project-config
   main-is:             Main.hs
   other-modules:       Cardano.CLI.Query
+                       Paths_voting_tools
   build-depends:       base
                      , aeson
                      , aeson-pretty
