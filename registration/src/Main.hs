@@ -4,29 +4,18 @@
 
 module Main where
 
-import           Cardano.Api (ShelleyBasedEra(..), TxMetadataJsonSchema (..), metadataToJson, serialiseToCBOR)
-import           Cardano.Api.Shelley (ShelleyLedgerEra)
+import           Cardano.Api (TxMetadataJsonSchema (..), metadataToJson, serialiseToCBOR)
 import           Control.Monad.Except (runExceptT)
 import           Control.Monad.IO.Class (liftIO)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Options.Applicative as Opt
-import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import           Ouroboros.Network.Block (unSlotNo)
 
 import           Cardano.CLI.Voting (createVoteRegistration)
 import           Cardano.CLI.Voting.Metadata (voteToTxMetadata)
 import qualified Config.Registration as Register
-
-obtainLedgerEraClassConstraints
-  :: ShelleyLedgerEra era ~ ledgerera
-  => ShelleyBasedEra era
-  -> (Consensus.ShelleyBasedEra ledgerera => a) -> a
-obtainLedgerEraClassConstraints ShelleyBasedEraShelley f = f
-obtainLedgerEraClassConstraints ShelleyBasedEraAllegra f = f
-obtainLedgerEraClassConstraints ShelleyBasedEraMary    f = f
-obtainLedgerEraClassConstraints ShelleyBasedEraAlonzo  f = f
 
 main :: IO ()
 main = do

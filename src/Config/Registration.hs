@@ -29,7 +29,8 @@ import           Cardano.CLI.Voting.Signing (VoteSigningKey, readVoteSigningKeyF
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),
-                   AsType (AsVotingKeyPublic), VotingKeyPublic, deserialiseFromBech32', parseStakeAddress, readerFromAttoParser)
+                   AsType (AsVotingKeyPublic), VotingKeyPublic, deserialiseFromBech32',
+                   parseStakeAddress, readerFromAttoParser)
 import           Cardano.CLI.Voting.Error (AsTextEnvelopeError (_TextEnvelopeError))
 
 data Config = Config

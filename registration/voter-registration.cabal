@@ -34,7 +34,6 @@ executable voter-registration
                      , cardano-api
                      , mtl
                      , optparse-applicative
-                     , ouroboros-consensus-shelley
                      , ouroboros-network
                      , voting-tools
 
