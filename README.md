@@ -136,8 +136,8 @@ cardano-cli transaction build-raw \
     --tx-out $(cat payment.addr)+0 \
     --invalid-hereafter 0 \
     --fee 0 \
-    --out-file tx.draft \
     --metadata-json-file metadata.json
+    --out-file tx.draft \
 
 export FEE=$(cardano-cli transaction calculate-min-fee \
     $NETWORK_ID \
@@ -160,6 +160,7 @@ cardano-cli transaction build-raw \
     --tx-out $PAYMENT_ADDR+$AMT_OUT \
     --invalid-hereafter $TTL \
     --fee $FEE \
+    --metadata-json-file metadata.json
     --out-file tx.raw
 ```
 
