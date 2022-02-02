@@ -17,7 +17,7 @@
   }
 
 # The systems that the jobset will be built for.
-, supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
+, supportedSystems ? [ "x86_64-linux" ]
 
 # The systems used for cross-compiling
 , supportedCrossSystems ? [ "x86_64-linux" ]

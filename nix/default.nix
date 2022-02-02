@@ -5,19 +5,22 @@
 , ownHaskellNix ? null
 }:
 let
-  sources = import ./sources.nix { inherit pkgs; }
-    // sourcesOverride;
+  flakeSources = let
+    flakeLock = (builtins.fromJSON (builtins.readFile ../flake.lock)).nodes;
+    compat = s: builtins.fetchGit {
+      url = "https://github.com/${s.locked.owner}/${s.locked.repo}.git";
+      inherit (s.locked) rev;
+      ref = s.original.ref or "master";
+    };
+  in {
+    "haskell.nix" = compat flakeLock.haskellNix;
+    "iohk-nix" = compat flakeLock.iohkNix;
+    "cardano-node" = compat flakeLock.cardano-node;
+  };
+  sources = flakeSources // sourcesOverride;
   iohkNix = import sources.iohk-nix {};
-  haskellNix = if ownHaskellNix != null
-    then ownHaskellNix
-    else (import sources."haskell.nix" { inherit system sourcesOverride; });
-  # use our own nixpkgs if it exists in our sources,
-  # otherwise use iohkNix default nixpkgs.
-  nixpkgs = if (sources ? nixpkgs)
-    then (builtins.trace "Not using IOHK default nixpkgs (use 'niv drop nixpkgs' to use default for better sharing)"
-      sources.nixpkgs)
-    else (builtins.trace "Using Haskell.nix default nixpkgs"
-      haskellNix.sources.nixpkgs-2105);
+  haskellNix = import sources."haskell.nix" { inherit system sourcesOverride; };
+  nixpkgs = haskellNix.sources.nixpkgs-2105;
 
   # for inclusion in pkgs:
   overlays =
@@ -37,7 +40,7 @@ let
         commonLib = lib // iohkNix // iohkNix.cardanoLib
           // import ./util.nix { inherit haskell-nix; }
           # also expose our sources and overlays
-          // { inherit overlays sources; };
+          // { inherit overlays sources nixpkgs; };
 
         svcLib = import ./svclib.nix { inherit pkgs; };
       })

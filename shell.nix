@@ -13,8 +13,6 @@ let
 
   inherit (pkgs.haskell-nix.haskellLib) selectProjectPackages;
 
-  sources = import ./nix/sources.nix {};
-
   cardano-node-nix =
     import (sources.cardano-node) { gitrev = sources.cardano-node.rev; };
   bech32 = cardano-node-nix.bech32;
