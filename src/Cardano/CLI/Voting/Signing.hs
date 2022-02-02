@@ -31,8 +31,12 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
 
 import           Control.Monad.Except (MonadError)
 import           Control.Monad.IO.Class (MonadIO)
+import           Data.Aeson (FromJSON, ToJSON)
+import qualified Data.Aeson as Aeson
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
 import           Cardano.Api
@@ -40,8 +44,9 @@ import           Cardano.Api
                    FromSomeType (..), HasTypeProxy, Hash, Key, NetworkId, PaymentExtendedKey,
                    PaymentKey, SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
                    ShelleyWitnessSigningKey, SigningKey, StakeAddress, StakeExtendedKey, StakeKey,
-                   VerificationKey, castVerificationKey, getVerificationKey, makeStakeAddress,
-                   proxyToAsType, serialiseToRawBytes, verificationKeyHash)
+                   VerificationKey, castVerificationKey, deserialiseFromRawBytesHex,
+                   getVerificationKey, makeStakeAddress, proxyToAsType, serialiseToRawBytes,
+                   serialiseToRawBytesHex, verificationKeyHash)
 import           Cardano.Api.Shelley (ShelleySigningKey, ShelleyWitnessSigningKey (..),
                    SigningKey (..), StakeCredential (..), VerificationKey (StakeVerificationKey),
                    makeShelleySignature, toShelleySigningKey)
@@ -62,6 +67,17 @@ data VoteVerificationKey
   = AStakeVerificationKey (VerificationKey StakeKey)
   | AStakeExtendedVerificationKey (VerificationKey StakeExtendedKey)
   deriving (Eq, Show)
+
+instance ToJSON VoteVerificationKey where
+  toJSON = Aeson.String . ("0x" <>) . T.decodeUtf8 . serialiseToRawBytesHex
+
+instance FromJSON VoteVerificationKey where
+  parseJSON = Aeson.withText "VoteVerificationKey" $ \str -> case T.stripPrefix "0x" str of
+    Nothing  -> fail "Missing hex identifier '0x'."
+    Just hex ->
+      case deserialiseFromRawBytesHex AsVoteVerificationKey $ T.encodeUtf8 hex of
+        Nothing -> fail "Failed to deserialise vote verification key."
+        Just votePub -> pure votePub
 
 data VoteVerificationKeyHash
   = AStakeVerificationKeyHash (Hash StakeKey)
