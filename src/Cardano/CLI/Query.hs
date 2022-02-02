@@ -15,9 +15,9 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import           Data.Either (partitionEithers)
 import           Data.Foldable (forM_, for_)
-import           Data.Function ((&))
 import           Data.List (foldl', partition)
-import           Data.Ratio (Ratio, denominator, numerator)
+import           Data.Set (Set)
+import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -33,22 +33,17 @@ import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Api (SlotNo)
 import qualified Cardano.Api as Api
 import qualified Cardano.Api.Shelley as Api
-import           Cardano.CLI.Fetching (Threshold, VotingFunds (VotingFunds))
+import           Cardano.CLI.Fetching (RegistrationInfo (..), Threshold)
 import           Cardano.CLI.Voting.Metadata (MetadataParsingError, Vote, metadataMetaKey,
                    parseMetadataFromJson, prettyPrintMetadataParsingError, signatureMetaKey,
-                   voteFromTxMetadata, voteRegistrationPublicKey, voteRegistrationRewardsAddress,
-                   voteRegistrationVerificationKey)
+                   voteFromTxMetadata, voteRegistrationPublicKey, voteRegistrationVerificationKey)
 import           Cardano.CLI.Voting.Signing (getStakeHash)
-import           Contribution (Contributions, causeSumAmounts, contribute, filterAmounts,
-                   proportionalize)
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import qualified Data.Aeson as Aeson
 import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-
-import qualified Cardano.API.Jormungandr as Jormungandr
 
 data MetadataRetrievalError
   = MetadataFailedToRetrieveMetadataField !TxId
@@ -123,7 +118,7 @@ queryVoteRegistrationInfo
      )
   => Api.NetworkId
   -> Maybe SlotNo
-  -> m (Contributions VotingKeyPublic (Api.StakeAddress, Api.Hash Api.StakeKey) Integer)
+  -> m [(Vote, Integer)]
 queryVoteRegistrationInfo nw mSlotNo  = do
   regos <- queryVoteRegistration mSlotNo
 
@@ -146,15 +141,13 @@ queryVoteRegistrationInfo nw mSlotNo  = do
     --
     -- Choose the latest vote registration by taking the vote registration with
     -- the highest txid.
-    xs :: Map (Api.Hash Api.StakeKey) (VotingKeyPublic, Api.StakeAddress)
+    xs :: Map (Api.Hash Api.StakeKey) Vote
     xs = fmap snd $ foldl' (\acc (txid, rego) ->
              let
-               verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
-               votePub    = voteRegistrationPublicKey rego
-               rewardsAddr = voteRegistrationRewardsAddress rego
+               verKeyHash = getStakeHash $ voteRegistrationVerificationKey $ rego
              in
                case M.lookup verKeyHash acc of
-                 Nothing      -> M.insert verKeyHash (txid, (votePub, rewardsAddr)) acc
+                 Nothing      -> M.insert verKeyHash (txid, rego) acc
                  -- DECISION #07:
                  --   We successfully parsed a vote registration, but we also
                  --   found a new registration so we'll use that one instead.
@@ -166,7 +159,7 @@ queryVoteRegistrationInfo nw mSlotNo  = do
                  --               └── The metadata constituted a valid vote
                  --                   └── But we found a later vote.
                  Just (t, _)  -> if txid >= t
-                                 then M.insert verKeyHash (txid, (votePub, rewardsAddr)) acc
+                                 then M.insert verKeyHash (txid, rego) acc
                                  else acc
            ) mempty goodRegos
 
@@ -214,54 +207,13 @@ queryVoteRegistrationInfo nw mSlotNo  = do
   r <- ask
 
   _ :: () <- (flip runReaderT) r $ rawExecute stakeTempTableSql []
-  foldM (\acc (idx, (verKeyHash, (votepub, rewardsAddr))) -> do
+  foldM (\acc (idx, (_, rego)) -> do
+    let verKeyHash = getStakeHash . voteRegistrationVerificationKey $ rego
     (Api.Lovelace stake) <- queryStake nw verKeyHash
 
     liftIO $ hPutStr stderr $ "\rProcessing vote stake " <> show (idx :: Integer) <> " of " <> show (length xs)
-    pure $ contribute votepub (rewardsAddr, verKeyHash) stake acc
+    pure $ (rego, stake):acc
         ) mempty xs'
-
-queryVotingProportion
-  :: ( MonadIO m
-     , MonadReader backend m
-     , BackendCompatible SqlBackend backend
-     )
-  => Api.NetworkId
-  -> Maybe SlotNo
-  -> Threshold
-  -> m (Map (Api.StakeAddress, Api.Hash Api.StakeKey) Double)
-queryVotingProportion nw mSlotNo (Api.Lovelace threshold) = do
-  -- DECISION #08:
-  --   We successfully parsed a vote registration, but the voting
-  --   power associated with that registration does not exceed
-  --   the threshold.
-  --
-  --   Found entry
-  --   └── It had the right metadata keys
-  --       └── The metadata was JSON
-  --           └── The metadata was valid cardano-api TxMetadata
-  --               └── The metadata constituted a valid vote
-  --                   └── But the voting power did not exceed the threshold.
-  info <-  queryVoteRegistrationInfo nw mSlotNo
-
-  let
-      didntMeetThreshold =
-          filter ((< fromIntegral threshold) . snd) $ causeSumAmounts info
-  liftIO $
-      mapM_ (hPutStrLn stderr . notEnoughVotingPowerError . fst)
-            didntMeetThreshold
-
-  let
-    proportions :: [((Api.StakeAddress, Api.Hash Api.StakeKey), Double)]
-    proportions =
-      proportionalize (filterAmounts (> threshold) info)
-      & foldMap snd
-      & fmap (fmap convertRatio)
-
-    convertRatio :: Ratio Integer -> Double
-    convertRatio ratio = (fromIntegral $ numerator ratio) / (fromIntegral $ denominator ratio)
-
-  pure $ M.fromList proportions
 
 queryVotingFunds
   :: ( MonadIO m
@@ -271,27 +223,36 @@ queryVotingFunds
   => Api.NetworkId
   -> Maybe SlotNo
   -> Threshold
-  -> m VotingFunds
+  -> m [RegistrationInfo]
 queryVotingFunds nw mSlotNo (Api.Lovelace threshold) = do
-  info <- queryVoteRegistrationInfo nw mSlotNo
+  -- Get each registration and it's voting power
+  (info :: [(Vote, Integer)]) <- queryVoteRegistrationInfo nw mSlotNo
+
+  -- Reject vote registrations whose SUM total voting power (for a particular
+  -- voting key) are below the threshold.
+  let
+    votingPower :: [(VotingKeyPublic, Integer)]
+    votingPower = M.toList $ foldr (\(rego, amt) -> M.insertWith (+) (voteRegistrationPublicKey rego) amt) mempty info
 
   let
-      (aboveThreshold, belowThreshold) =
-          partition (\(_, amt) -> amt > fromIntegral threshold)
-                    (causeSumAmounts info)
+      belowThreshold :: [(VotingKeyPublic, Integer)]
+      (_, belowThreshold) =
+          partition (\(_, amt) -> amt > fromIntegral threshold) votingPower
 
-  forM_ belowThreshold $ \(votepub, _) ->
+  forM_ belowThreshold $ \(votepub, _) -> do
       liftIO $ hPutStr stderr $ notEnoughVotingPowerError votepub
 
+  -- Return vote registrations that are above threshold
   let
-      funds :: [(Jormungandr.Address, Api.Lovelace)]
-      funds = (flip foldMap) aboveThreshold $ \(votepub, amt) ->
-          [ ( Jormungandr.addressFromVotingKeyPublic nw votepub
-            , Api.Lovelace $ numerator amt
-            )
-          ]
+    aboveThreshold :: [(Vote, Integer)]
+    aboveThreshold =
+      let
+        failedRegoPubKeys :: Set VotingKeyPublic
+        failedRegoPubKeys = Set.fromList $ fmap fst belowThreshold
+      in
+        filter (\(rego, _amt) -> voteRegistrationPublicKey rego `Set.notMember` failedRegoPubKeys) info
 
-  pure $ VotingFunds $ M.fromList funds
+  pure $ fmap (\(vote, amt) -> RegistrationInfo vote amt) $ aboveThreshold
 
 queryVoteRegistration
   :: ( MonadIO m
@@ -311,6 +272,7 @@ queryVoteRegistration mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slot) <> " ORDER BY metadata -> '4' ASC;")
+        -- ^ TODO handle lower bound on slot no too
         Nothing   -> (sqlBase <> " ORDER BY metadata -> '4' ASC;")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []

@@ -14,13 +14,6 @@ import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 
 import           Cardano.CLI.Fetching (Fund)
 
-decodeGenesisTemplateJSON :: IO (Aeson.Value)
-decodeGenesisTemplateJSON = do
-  result <- Aeson.eitherDecodeFileStrict' "genesis-template.json"
-  case result of
-    Left err                               -> error err
-    Right (genesisTemplate :: Aeson.Value) -> pure genesisTemplate
-
 getBlockZeroDate :: IO UTCTime
 getBlockZeroDate = do
   (UTCTime day dayTime) <- getCurrentTime
@@ -41,3 +34,10 @@ setBlockZeroDate time =
          . floor
          . utcTimeToPOSIXSeconds
          $ time )))
+
+unsafeDecodeJSONFile :: FilePath -> IO (Aeson.Value)
+unsafeDecodeJSONFile fp = do
+  result <- Aeson.eitherDecodeFileStrict' fp
+  case result of
+    Left err                               -> error err
+    Right (genesisTemplate :: Aeson.Value) -> pure genesisTemplate
