@@ -1,38 +1,78 @@
 {
-  description = "Cardano Node";
+  description = "Voting Tools";
 
   inputs = {
-    haskell-nix.url = "github:input-output-hk/haskell.nix";
+    nixpkgs.follows = "haskellNix/nixpkgs-2105";
+    haskellNix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-20.09";
     utils.url = "github:numtide/flake-utils";
+    iohkNix = {
+      url = "github:input-output-hk/iohk-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    cardano-node = {
+      url = "github:input-output-hk/cardano-node?ref=refs/tags/1.31.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.haskellNix.follows = "haskellNix";
+    };
   };
 
-  outputs = { self, nixpkgs, utils, haskell-nix, ... }:
-    (utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ] (system:
+  outputs = { self, nixpkgs, utils, haskellNix, iohkNix, ... }:
+    let
+      inherit (nixpkgs) lib;
+      inherit (lib) head systems mapAttrs recursiveUpdate mkDefault
+        getAttrs optionalAttrs nameValuePair attrNames;
+      inherit (utils.lib) eachSystem mkApp flattenTree;
+      inherit (iohkNix.lib) prefixNamesWith collectExes;
+
+      supportedSystems = import ./supported-systems.nix;
+      defaultSystem = head supportedSystems;
+
+      overlays = [
+        haskellNix.overlay
+        iohkNix.overlays.haskell-nix-extra
+        iohkNix.overlays.crypto
+        iohkNix.overlays.cardano-lib
+        iohkNix.overlays.utils
+        (final: prev: {
+          gitrev = self.rev or "dirty";
+          commonLib = lib // iohkNix.lib;
+        })
+        (import ./nix/pkgs.nix)
+      ];
+
+    in eachSystem supportedSystems (system:
       let
-        legacyPackages = import ./nix {
-          inherit system;
-          ownHaskellNix = haskell-nix.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system overlays;
+          inherit (haskellNix) config;
         };
 
-        lib = nixpkgs.lib;
+        flake = pkgs.votingToolsHaskellPackages.flake {
+          crossPlatforms = p: with p; [
+            mingwW64
+            musl64
+          ];
+        };
+        packages = collectExes
+           flake.packages;
 
-        sources = import ./nix/sources.nix { };
-        iohkNix = import sources.iohk-nix { inherit system; };
+      in recursiveUpdate flake {
 
-        names = [ "voter-registration" "voting-tools" ];
-        eachName = f:
-          lib.listToAttrs
-          (lib.forEach names (name: lib.nameValuePair name (f name)));
+        inherit packages;
 
-        packages = eachName (name:
-          legacyPackages.votingToolsHaskellPackages.${name}.components.exes.${name});
-      in {
-        inherit legacyPackages packages;
+        legacyPackages = pkgs;
 
-        apps = eachName (name: utils.lib.mkApp {
-          drv = packages.${name};
-          exePath = "/bin/${name}";
-        });
-      }));
+        # Built by `nix build .`
+        defaultPackage = flake.packages."voting-tools:exe:voting-tools";
+
+        # Run by `nix run .`
+        defaultApp = flake.apps."voting-tools:exe:voting-tools";
+
+        inherit (flake) apps;
+      }
+    );
 }
