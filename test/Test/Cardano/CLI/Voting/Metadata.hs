@@ -29,8 +29,14 @@ tests = testGroup "Vote Metadata type tests"
       [ testCase "TxMetadata/decode-eg" unit_txMetadata_can_decode_example
       , testProperty "Vote/txMetadata/format" prop_vote_serialized_format
       , testProperty "Vote/toTxMetadata/fromTxMetadata/roundtrips" prop_vote_txMetadata_roundtrips
+      , testProperty "JSON roundrip RewardsAddress" prop_rewardsAddress_json_roundtrips
       ]
   ]
+
+prop_rewardsAddress_json_roundtrips :: H.Property
+prop_rewardsAddress_json_roundtrips = property $ do
+  rewardsAddr <- forAllT Gen.rewardsAddress
+  tripping rewardsAddr Aeson.encode Aeson.eitherDecode'
 
 prop_vote_txMetadata_roundtrips :: H.Property
 prop_vote_txMetadata_roundtrips = property $ do

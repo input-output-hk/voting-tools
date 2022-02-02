@@ -15,6 +15,7 @@ import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), Lovelace,
                    verificationKeyHash)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
+import           Cardano.CLI.Fetching (VotingPower (..))
 import           Cardano.CLI.Voting
 import           Cardano.CLI.Voting.Metadata (RewardsAddress (..), Vote, VotePayload, mkVotePayload)
 import           Cardano.CLI.Voting.Signing (VoteSigningKey, VoteVerificationKey,
@@ -70,6 +71,14 @@ txMetadataValue = Gen.choice [ TxMetaNumber <$> Gen.integral (Range.linear (toIn
 
 txMetadata :: Gen TxMetadata
 txMetadata = TxMetadata <$> Gen.map (Range.linear 0 20) ((,) <$> txMetadataKey <*> txMetadataValue)
+
+votingPower :: (MonadGen m, MonadIO m) => m VotingPower
+votingPower =
+  VotingPower
+  <$> votingKeyPublic
+  <*> voteVerificationKey
+  <*> rewardsAddress
+  <*> (fromIntegral <$> Gen.word64 Range.constantBounded)
 
 votingKeyPublic :: MonadGen m => m VotingKeyPublic
 votingKeyPublic =
