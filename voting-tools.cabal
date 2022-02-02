@@ -128,10 +128,13 @@ test-suite unit-tests
 
   build-depends:  base >=4.12 && <5
                 , aeson
+                , aeson-qq
                 , cardano-api
                 , containers
                 , hedgehog
                 , hedgehog
+                , lens
+                , lens-aeson
                 , mtl
                 , text
                 , tasty
@@ -144,3 +147,8 @@ test-suite unit-tests
 
   other-modules:        Test.Generators
                         Test.Cardano.CLI.Voting.Metadata
+                        Test.Cardano.API.Extended
+                        Test.Cardano.API.Jormungandr
+                        Test.Cardano.CLI.Fetching
+                        Test.Cardano.CLI.Voting.Signing
+                        Test.Genesis
