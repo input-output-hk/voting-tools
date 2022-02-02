@@ -9,20 +9,17 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), Lovelace,
-                   NetworkId (Mainnet, Testnet), NetworkMagic (..), StakeAddress,
-                   TxMetadata (TxMetadata),
+                   NetworkId (Mainnet, Testnet), NetworkMagic (..), TxMetadata (TxMetadata),
                    TxMetadataValue (TxMetaBytes, TxMetaList, TxMetaMap, TxMetaNumber, TxMetaText),
                    deserialiseFromRawBytes, generateSigningKey, getVerificationKey,
                    verificationKeyHash)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Voting
-import           Cardano.CLI.Voting.Metadata (Vote, VotePayload, mkVotePayload)
+import           Cardano.CLI.Voting.Metadata (RewardsAddress (..), Vote, VotePayload, mkVotePayload)
 import           Cardano.CLI.Voting.Signing (VoteSigningKey, VoteVerificationKey,
                    getVoteVerificationKey, toStakeAddr, voteSigningKeyFromStakeExtendedSigningKey,
                    voteSigningKeyFromStakeSigningKey)
-import           Contribution (Contributions)
-import qualified Contribution as Contrib
 
 -- votingFunds :: Gen VotingFunds
 -- votingFunds = VotingFunds <$> Gen.map (Range.linear 0 16) ((,) <$> jaddr <*> lovelace)
@@ -53,21 +50,6 @@ instance Ord OrderedPayload where
 
 orderedPayload :: Gen OrderedPayload
 orderedPayload = OrderedPayload <$> Gen.int (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound)
-
--- | Generate random contributions.
---
--- Word8 was chosen because it is large enough to give us a decent
--- range of values, but small enough that generating random Word8's is
--- fairly likely to result in duplicate values, which are exactly the
--- values we are interested in testing. You are also more likely to
--- encounter overflow errors with such a small maximum bound.
-contributions :: Gen (Contributions Word8 Word8 Word8)
-contributions = Gen.recursive Gen.choice
-  [ mempty ]
-  [ Contrib.contribute <$> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> contributions
-  , Contrib.withdraw <$> Gen.word8 (Range.linear 0 maxBound) <*> Gen.word8 (Range.linear 0 maxBound) <*> contributions
-  , (<>) <$> contributions <*> contributions
-  ]
 
 txMetadataKey :: Gen Word64
 txMetadataKey = Gen.word64 (Range.linear minBound maxBound)
@@ -107,14 +89,14 @@ voteVerificationKey :: (MonadGen m, MonadIO m) => m VoteVerificationKey
 voteVerificationKey =
   getVoteVerificationKey <$> voteSigningKey
 
-rewardsAddress :: (MonadGen m, MonadIO m) => m StakeAddress
+rewardsAddress :: (MonadGen m, MonadIO m) => m RewardsAddress
 rewardsAddress = do
   signingKey <- liftIO $ generateSigningKey AsStakeKey
   let hashStakeKey = verificationKeyHash . getVerificationKey $ signingKey
 
-  toStakeAddr
+  RewardsAddress <$> (toStakeAddr
     <$> Gen.choice [ Testnet . NetworkMagic <$> Gen.word32 (Range.linear minBound maxBound), pure Mainnet ]
-    <*> pure hashStakeKey
+    <*> pure hashStakeKey)
 
 slotNo :: MonadGen m => m Integer
 slotNo = fromIntegral <$> Gen.word64 Range.constantBounded
