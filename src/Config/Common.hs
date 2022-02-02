@@ -22,9 +22,6 @@ pSlotNo = SlotNo
           <> help "Slot number to query"
           )
 
-defaultThreshold :: Integer
-defaultThreshold = 8000000000
-
 pCardanoEra :: Parser AnyCardanoEra
 pCardanoEra = asum
   [ flag' (AnyCardanoEra ByronEra)

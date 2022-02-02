@@ -29,9 +29,9 @@ main = do
       case eCfg of
         Left (err :: Genesis.ConfigError) ->
           fail $ show err
-        Right (Genesis.Config networkId threshold scale db slotNo outfile) -> do
+        Right (Genesis.Config networkId scale db slotNo outfile) -> do
           votingFunds <-
-            runQuery db $ Query.queryVotingFunds networkId slotNo threshold
+            runQuery db $ Query.queryVotingFunds networkId slotNo
 
           let
             scaled = votingPowerFromRegistrationInfo scale <$> votingFunds

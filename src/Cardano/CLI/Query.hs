@@ -14,10 +14,8 @@ import           Control.Monad.Reader (MonadReader, ask, runReaderT)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import           Data.Either (partitionEithers)
-import           Data.Foldable (forM_, for_)
-import           Data.List (foldl', partition)
-import           Data.Set (Set)
-import qualified Data.Set as Set
+import           Data.Foldable (for_)
+import           Data.List (foldl')
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -29,14 +27,13 @@ import           System.IO (hPutStr, hPutStrLn, stderr)
 
 import           Ouroboros.Network.Block (unSlotNo)
 
-import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Api (SlotNo)
 import qualified Cardano.Api as Api
 import qualified Cardano.Api.Shelley as Api
-import           Cardano.CLI.Fetching (RegistrationInfo (..), Threshold)
+import           Cardano.CLI.Fetching (RegistrationInfo (..))
 import           Cardano.CLI.Voting.Metadata (MetadataParsingError, Vote, metadataMetaKey,
                    parseMetadataFromJson, prettyPrintMetadataParsingError, signatureMetaKey,
-                   voteFromTxMetadata, voteRegistrationPublicKey, voteRegistrationVerificationKey)
+                   voteFromTxMetadata, voteRegistrationVerificationKey)
 import           Cardano.CLI.Voting.Signing (getStakeHash)
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
@@ -222,37 +219,12 @@ queryVotingFunds
      )
   => Api.NetworkId
   -> Maybe SlotNo
-  -> Threshold
   -> m [RegistrationInfo]
-queryVotingFunds nw mSlotNo (Api.Lovelace threshold) = do
+queryVotingFunds nw mSlotNo = do
   -- Get each registration and it's voting power
   (info :: [(Vote, Integer)]) <- queryVoteRegistrationInfo nw mSlotNo
 
-  -- Reject vote registrations whose SUM total voting power (for a particular
-  -- voting key) are below the threshold.
-  let
-    votingPower :: [(VotingKeyPublic, Integer)]
-    votingPower = M.toList $ foldr (\(rego, amt) -> M.insertWith (+) (voteRegistrationPublicKey rego) amt) mempty info
-
-  let
-      belowThreshold :: [(VotingKeyPublic, Integer)]
-      (_, belowThreshold) =
-          partition (\(_, amt) -> amt > fromIntegral threshold) votingPower
-
-  forM_ belowThreshold $ \(votepub, _) -> do
-      liftIO $ hPutStr stderr $ notEnoughVotingPowerError votepub
-
-  -- Return vote registrations that are above threshold
-  let
-    aboveThreshold :: [(Vote, Integer)]
-    aboveThreshold =
-      let
-        failedRegoPubKeys :: Set VotingKeyPublic
-        failedRegoPubKeys = Set.fromList $ fmap fst belowThreshold
-      in
-        filter (\(rego, _amt) -> voteRegistrationPublicKey rego `Set.notMember` failedRegoPubKeys) info
-
-  pure $ fmap (\(vote, amt) -> RegistrationInfo vote amt) $ aboveThreshold
+  pure $ (\(vote, amt) -> RegistrationInfo vote amt) <$> info
 
 queryVoteRegistration
   :: ( MonadIO m
@@ -385,18 +357,3 @@ queryVoteRegistration mSlotNo =
 
 runQuery :: (MonadIO m) => SqlBackend -> SqlPersistT IO a -> m a
 runQuery backend query = liftIO $ runSqlConnWithIsolation query backend Serializable
-
-notEnoughVotingPowerError :: VotingKeyPublic -> String
-notEnoughVotingPowerError votepub =
-    -- We choose to print the data in hexadecimal because that is the
-    -- format it is stored in the database. This makes it easier for the
-    -- user of the tool to trace the database entry that was rejected. For
-    -- example with a query like:
-    --
-    -- > SELECT * FROM tx_metadata WHERE key = '61284' AND json->'1' = '"0xde3179910ca76d8a8a391e89e8d4057fd0388e7696c1d6f0c3d6545bc16a0c64"';
-    --
-    -- the user can see the metadata that was associated with each transaction
-    -- that tried to register to vote with this public key.
-    "\nRejecting 0x"
-      <> BC.unpack (Api.serialiseToRawBytesHex votepub)
-      <> ", not enough voting power."
