@@ -49,8 +49,8 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import           Data.Word
 
-import           Cardano.API.Extended
-                   (SerialiseAsBech32' (bech32PrefixFor, bech32PrefixesPermitted), VotingKeyPublic,
+import           Cardano.API.Extended (AsType (..),
+                   SerialiseAsBech32' (bech32PrefixFor, bech32PrefixesPermitted), VotingKeyPublic,
                    deserialiseFromBech32', serialiseToBech32')
 
 data Discrimination = Production
@@ -63,6 +63,21 @@ data Address = Address { unAddress :: B.ByteString }
 addressFromVotingKeyPublic :: NetworkId -> VotingKeyPublic -> Address
 addressFromVotingKeyPublic nw =
   mkAccountAddress (discriminationFromNetworkId nw) . serialiseToRawBytes
+
+votingKeyPublicFromAddress :: Address -> Either String VotingKeyPublic
+votingKeyPublicFromAddress (Address bs) =
+  let
+    result = flip Bin.runGetOrFail (BL.fromStrict bs) $ do
+        _discriminant <- Bin.getWord8
+        Bin.getRemainingLazyByteString
+  in
+    case result of
+      Right ("", _offset, votePubBytes) ->
+        case deserialiseFromRawBytes AsVotingKeyPublic (BL.toStrict votePubBytes) of
+          Nothing -> Left "Failed to deserialise VotingKeyPublic."
+          Just votePub  -> Right votePub
+      Right (_unconsumed, _offset, _) -> Left "Failed to consume all bytes in Address."
+      Left (_unconsumed, _offset, err) -> Left err
 
 discriminationFromNetworkId :: NetworkId -> Discrimination
 discriminationFromNetworkId Mainnet          = Production
