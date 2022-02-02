@@ -37,13 +37,9 @@ library
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Metadata
                      , Cardano.CLI.Voting.Signing
-                     , Contribution
-                     , Contribution.Initial
-                     , Contribution.Efficient
                      , Config
                      , Config.Genesis
                      , Config.Registration
-                     , Config.Rewards
                      , Config.Common
                      , Genesis
 
@@ -51,32 +47,27 @@ library
                      , aeson
                      , aeson-pretty
                      , attoparsec
-                     , base16-bytestring
-                     , binary
                      , bech32
+                     , binary
                      , bytestring
                      , cardano-api
                      , cardano-binary
-                     , monoidal-containers
-                     , lens-aeson
-                     , conduit
                      , cardano-cli
-                     , cardano-crypto
                      , cardano-crypto-class
                      , cardano-crypto-wrapper
                      , cardano-ledger-core
-                     , cborg
                      , containers
                      , lens
+                     , lens-aeson
+                     , monoidal-containers
                      , mtl
                      , optparse-applicative
-                     , ouroboros-consensus-cardano
-                     , ouroboros-network
                      , safe-exceptions
                      , scientific
                      , text
                      , time
                      , unordered-containers
+                     , vector
 
 executable voting-tools
   import:              project-config
@@ -111,6 +102,7 @@ executable voting-tools
                      , text
                      , time
                      , unordered-containers
+                     , vector
 
   hs-source-dirs:      src/
   default-language:    Haskell2010
@@ -126,10 +118,6 @@ executable voting-tools
                  , Config.Common
                  , Config.Genesis
                  , Config.Registration
-                 , Config.Rewards
-                 , Contribution
-                 , Contribution.Efficient
-                 , Contribution.Initial
                  , Genesis
 
 test-suite unit-tests
@@ -154,6 +142,5 @@ test-suite unit-tests
                 , voting-tools
                 , cardano-crypto-class
 
-  other-modules:        Test.Contribution
-                        Test.Generators
+  other-modules:        Test.Generators
                         Test.Cardano.CLI.Voting.Metadata

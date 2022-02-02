@@ -9,18 +9,14 @@ import           Options.Applicative
 
 import           Config.Common
 import qualified Config.Genesis as Genesis
-import qualified Config.Rewards as Rewards
 
 data Command
   = Genesis Genesis.Opts
-  | Rewards Rewards.Opts
   deriving (Eq, Show)
 
 parseOpts :: Parser Command
 parseOpts = hsubparser
-  (  command "genesis"  (Genesis  <$> Genesis.opts)
-  <> command "rewards"  (Rewards  <$> Rewards.opts)
-  )
+  (  command "genesis"  (Genesis  <$> Genesis.opts) )
 
 opts :: ParserInfo Command
 opts =
