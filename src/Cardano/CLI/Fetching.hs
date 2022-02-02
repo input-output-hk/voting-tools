@@ -3,6 +3,8 @@
 
 module Cardano.CLI.Fetching where
 
+import           Cardano.CLI.Voting.Metadata
+import           Cardano.CLI.Voting.Signing
 import           Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
 import qualified Data.Aeson as Aeson
 import           Data.Char (toLower)
@@ -18,7 +20,7 @@ import           GHC.Generics
 import           Cardano.Api (Lovelace (Lovelace))
 import qualified Cardano.Api as Api
 
-import           Cardano.API.Extended (deserialiseFromBech32', serialiseToBech32')
+import           Cardano.API.Extended (VotingKeyPublic, deserialiseFromBech32', serialiseToBech32')
 import qualified Cardano.API.Jormungandr as Jormungandr
 
 type Threshold = Api.Lovelace
@@ -68,6 +70,44 @@ fundFromVotingFunds (VotingFunds m) = Fund . fmap (\(addr, (Lovelace val)) -> Fu
 
 scaleFund :: Int -> Fund -> Fund
 scaleFund scale (Fund fs) = Fund $ fmap (\(FundItem addr val) -> FundItem addr (val `div` scale)) fs
+
+scaleRegistrationAmt :: Int -> [(a, Integer)] -> [(a, Integer)]
+scaleRegistrationAmt scale = fmap (fmap (`div` fromIntegral scale))
+
+data RegistrationInfo
+  = RegistrationInfo { _regoInfoRego :: Vote
+                     , _regoInfoAmount :: Integer
+                     }
+  deriving (Eq, Show)
+
+votingPowerFromRegistrationInfo :: Int -> RegistrationInfo -> VotingPower
+votingPowerFromRegistrationInfo scale (RegistrationInfo rego amt) =
+  let
+    power = (amt `div` fromIntegral scale)
+
+    votePub = voteRegistrationPublicKey rego
+    stakePub = voteRegistrationVerificationKey rego
+    rewardAddr = voteRegistrationRewardsAddress rego
+  in
+    VotingPower votePub stakePub rewardAddr power
+
+data VotingPower
+  = VotingPower { _powerVotingPublicKey :: VotingKeyPublic
+                , _powerStakePublicKey :: VoteVerificationKey
+                , _powerRewardAddress :: RewardsAddress
+                , _powerVotingPower:: Integer
+                }
+  deriving (Eq, Show, Generic)
+
+votingPowerJsonParserOptions :: Aeson.Options
+votingPowerJsonParserOptions = Aeson.defaultOptions
+    { Aeson.fieldLabelModifier = fmap toLower . Aeson.camelTo2 '_' . (drop 6) }
+
+instance ToJSON VotingPower where
+  toJSON = Aeson.genericToJSON votingPowerJsonParserOptions
+
+instance FromJSON VotingPower where
+  parseJSON = Aeson.genericParseJSON votingPowerJsonParserOptions
 
 data FundItem
   = FundItem { fiAddress :: Jormungandr.Address
