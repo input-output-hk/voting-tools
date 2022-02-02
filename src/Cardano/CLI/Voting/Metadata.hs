@@ -1,6 +1,10 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -14,7 +18,7 @@
 -- considered a valid vote.
 module Cardano.CLI.Voting.Metadata ( VotePayload(..)
                                    , Vote(..)
-                                   , RewardsAddress
+                                   , RewardsAddress(..)
                                    , mkVotePayload
                                    , signVotePayload
                                    , voteToTxMetadata
@@ -47,6 +51,7 @@ import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad.Except (throwError)
+import           Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import           Data.Bifunctor (first)
 import           Data.ByteString (ByteString)
@@ -55,13 +60,36 @@ import           Data.List (find)
 import qualified Data.Map.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import           Data.Word (Word64)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKey), VoteVerificationKey,
                    verify)
 
-type RewardsAddress = Api.StakeAddress
+newtype RewardsAddress = RewardsAddress Api.StakeAddress
+  deriving (Eq, Show)
+
+instance Api.SerialiseAsRawBytes RewardsAddress where
+  serialiseToRawBytes (RewardsAddress stakeAddr) =
+    Api.serialiseToRawBytes stakeAddr
+  deserialiseFromRawBytes AsRewardsAddress =
+    fmap RewardsAddress . Api.deserialiseFromRawBytes Api.AsStakeAddress
+
+instance HasTypeProxy RewardsAddress where
+  data AsType RewardsAddress = AsRewardsAddress
+  proxyToAsType _ = AsRewardsAddress
+
+instance ToJSON RewardsAddress where
+  toJSON = Aeson.String . ("0x" <>) . T.decodeUtf8 . Api.serialiseToRawBytesHex
+
+instance FromJSON RewardsAddress where
+  parseJSON = Aeson.withText "RewardsAddress" $ \str -> case T.stripPrefix "0x" str of
+    Nothing  -> fail "Missing hex identifier '0x'."
+    Just hex ->
+      case Api.deserialiseFromRawBytesHex AsRewardsAddress $ T.encodeUtf8 hex of
+        Nothing -> fail "Failed to decode rewards address."
+        Just votePub -> pure votePub
 
 -- | The payload of a vote (vote public key and stake verification
 -- key).
@@ -255,7 +283,7 @@ votePayloadFromTxMetadata meta = do
     Nothing -> throwError (_MetadataParseFailure # (RegoRewardsAddress, "Failed to deserialise."))
     Just x  -> pure x
 
-  pure $ mkVotePayload votePub stkVerify rewardsAddr slot
+  pure $ mkVotePayload votePub stkVerify (RewardsAddress rewardsAddr) slot
 
 voteToTxMetadata :: Vote -> TxMetadata
 voteToTxMetadata (Vote payload sig) =

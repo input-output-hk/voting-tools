@@ -42,21 +42,26 @@ import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad (guard)
 import           Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Data.Aeson (FromJSON, ToJSON)
 import           Data.ByteString (ByteString)
 import qualified Data.Set as Set
 import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
 import           Cardano.Api (AsType, Bech32DecodeError (..), FileError (..), FromSomeType,
                    HasTextEnvelope, HasTypeProxy (..), Lovelace, SerialiseAsBech32,
                    SerialiseAsRawBytes (..), ShelleyBasedEra (..), SigningKey,
                    TxFee (TxFeeExplicit), TxFeesExplicitInEra (..), TxMetadata,
-                   TxMetadataInEra (TxMetadataInEra), TxMetadataSupportedInEra (..))
+                   TxMetadataInEra (TxMetadataInEra), TxMetadataSupportedInEra (..),
+                   deserialiseFromRawBytesHex, serialiseToRawBytesHex)
 import           Cardano.CLI.Environment (EnvSocketError (..))
 import qualified Cardano.CLI.Environment as Cardano (readEnvSocketPath)
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import qualified Cardano.CLI.Shelley.Key as Shelley
 import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
 import qualified Codec.Binary.Bech32 as Bech32
+import qualified Data.Aeson as Aeson
 
 import qualified Cardano.API.Extended.Raw as Extended
 
@@ -156,6 +161,17 @@ data VotingKeyPublic = VotingKeyPublic
     { votingKeyPublicRawBytes :: ByteString
     }
     deriving (Eq, Ord, Show)
+
+instance ToJSON VotingKeyPublic where
+  toJSON = Aeson.String . ("0x" <>) . T.decodeUtf8 . serialiseToRawBytesHex
+
+instance FromJSON VotingKeyPublic where
+  parseJSON = Aeson.withText "VotingKeyPublic" $ \str -> case T.stripPrefix "0x" str of
+    Nothing  -> fail "Missing hex identifier '0x'."
+    Just hex ->
+      case deserialiseFromRawBytesHex AsVotingKeyPublic $ T.encodeUtf8 hex of
+        Nothing -> fail "Failed to deserialise voting public key."
+        Just votePub -> pure votePub
 
 instance HasTypeProxy VotingKeyPublic where
   data AsType VotingKeyPublic = AsVotingKeyPublic
