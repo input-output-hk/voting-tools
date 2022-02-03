@@ -5,7 +5,7 @@ import qualified Test.Cardano.API.Jormungandr
 import qualified Test.Cardano.CLI.Fetching
 import qualified Test.Cardano.CLI.Voting.Metadata
 import qualified Test.Cardano.CLI.Voting.Signing
-import qualified Test.Genesis
+import qualified Test.Snapshot
 
 main :: IO ()
 main = defaultMain tests
@@ -18,5 +18,5 @@ tests = do
     , Test.Cardano.API.Jormungandr.tests
     , Test.Cardano.CLI.Fetching.tests
     , Test.Cardano.CLI.Voting.Signing.tests
-    , Test.Genesis.tests
+    , Test.Snapshot.tests
     ]

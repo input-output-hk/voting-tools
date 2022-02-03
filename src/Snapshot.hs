@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Genesis where
+module Snapshot where
 
 import           Control.Lens
 import qualified Data.Aeson as Aeson
@@ -45,7 +45,7 @@ unsafeDecodeJSONFile fp = do
   result <- Aeson.eitherDecodeFileStrict' fp
   case result of
     Left err                               -> error err
-    Right (genesisTemplate :: Aeson.Value) -> pure genesisTemplate
+    Right (snapshotTemplate :: Aeson.Value) -> pure snapshotTemplate
 
 getAllFundContents :: Aeson.Value -> Aeson.Value
 getAllFundContents x =
