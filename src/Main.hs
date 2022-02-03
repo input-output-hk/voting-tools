@@ -33,6 +33,9 @@ main = do
       let
         scaled = votingPowerFromRegistrationInfo scale <$> votingFunds
 
+      print $ show votingFunds
+      print $ show scaled
+      print $ outfile
       BLC.writeFile outfile . toJSON Aeson.Generic $ scaled
 
 toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString
