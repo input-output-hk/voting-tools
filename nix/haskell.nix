@@ -1,44 +1,72 @@
 ############################################################################
 # Builds Haskell packages with Haskell.nix
 ############################################################################
-{ pkgs
+{ haskell-nix
 , lib
-, stdenv
-, haskell-nix
-, buildPackages
-# GHC attribute name
-, compiler
-# Enable profiling
-, profiling ? false
-# Link with -eventlog
-, eventlog ? false
-# Enable asserts for given packages
-, assertedPackages ? []
-# Version info, to be passed when not building from a git work tree
-, gitrev ? null
-, libsodium ? pkgs.libsodium
 }:
 
 let
-  src = haskell-nix.haskellLib.cleanGit {
-    name = "voting-tools";
-    src = ../.;
-  };
+  inherit (haskell-nix) haskellLib;
 
-  projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
+  src = haskellLib.cleanSourceWith {
+    src = ../.;
+    name = "voting-tools-src";
+    filter = name: type: (lib.cleanSourceFilter name type)
+      && (haskell-nix.haskellSourceFilter name type)
+      # removes socket files
+      && lib.elem type [ "regular" "directory" "symlink" ];
+  };
+  compiler-nix-name = "ghc8107";
+  cabalProjectLocal = ''
+    allow-newer: terminfo:base
+  '';
+
+  projectPackages = lib.attrNames (haskellLib.selectProjectPackages
     (haskell-nix.cabalProject {
-      inherit src;
-      compiler-nix-name = compiler;
+      inherit src compiler-nix-name cabalProjectLocal;
     }));
 
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
-  pkgSet = haskell-nix.cabalProject ({
-    inherit src;
-    compiler-nix-name = compiler;
-    cabalProjectLocal = ''
-      allow-newer: terminfo:base
-    '';
+  pkgSet = haskell-nix.cabalProject' ({ pkgs
+   , config
+   , buildProject
+   , ...
+   }:{
+    inherit src compiler-nix-name cabalProjectLocal;
+
+    # This provides a development environment that can be used with nix-shell or
+    # lorri. See https://input-output-hk.github.io/haskell.nix/user-guide/development/
+    shell = {
+      name = "voting-tools-shell";
+
+      # If shellFor local packages selection is wrong,
+      # then list all local packages then include source-repository-package that cabal complains about:
+      packages = ps: lib.attrValues (haskellLib.selectProjectPackages ps);
+
+      # These programs will be available inside the nix-shell.
+      nativeBuildInputs = with buildProject.hsPkgs; [
+          bech32.components.exes.bech32
+        ] ++ (with pkgs.buildPackages.buildPackages; [
+        git
+        ghcid
+        hlint
+        pkgconfig
+        stylish-haskell
+        jormungandr
+        cabalWrapped
+        # we also add cabal (even if cabalWrapped will be used by default) for shell completion:
+        cabal-install
+      ]);
+
+      # Prevents cabal from choosing alternate plans, so that
+      # *all* dependencies are provided by Nix.
+      exactDeps = true;
+
+      withHoogle = true;
+
+      GIT_SSL_CAINFO = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    };
     modules = [
       # Allow reinstallation of Win32
       ({ pkgs, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isWindows {
@@ -57,33 +85,31 @@ let
           # "stm" "terminfo"
         ];
       })
-      {
-        # Needed for the CLI tests.
-        # Coreutils because we need 'paste'.
-        packages.cardano-cli.components.tests.cardano-cli-test.build-tools =
-          lib.mkForce [buildPackages.jq buildPackages.coreutils buildPackages.shellcheck];
-        packages.cardano-cli.components.tests.cardano-cli-golden.build-tools =
-          lib.mkForce [buildPackages.jq buildPackages.coreutils buildPackages.shellcheck];
-      }
-      {
+      ({ pkgs, ...}: {
+        # Use the VRF fork of libsodium
+        packages = lib.genAttrs [ "cardano-crypto-praos" "cardano-crypto-class" ] (_: {
+          components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf ] ];
+        });
+      })
+      ({ pkgs, ...}: {
         # make sure that libsodium DLLs are available for windows binaries:
         packages = lib.genAttrs projectPackages (name: {
-          postInstall = lib.optionalString stdenv.hostPlatform.isWindows ''
+          postInstall = lib.optionalString pkgs.stdenv.hostPlatform.isWindows ''
             if [ -d $out/bin ]; then
-              ${setLibSodium}
+              ${setLibSodium pkgs}
             fi
           '';
         });
-      }
-      {
+      })
+      ({config, pkgs, ...}: {
         # Stamp executables with the git revision
         packages = lib.genAttrs ["cardano-node" "cardano-cli"] (name: {
           components.exes.${name}.postInstall = ''
-            ${lib.optionalString stdenv.hostPlatform.isWindows setLibSodium}
-            ${setGitRev}
+            ${lib.optionalString pkgs.stdenv.hostPlatform.isWindows (setLibSodium pkgs)}
+            ${setGitRev pkgs config.packages.cardano-node.src.rev}
           '';
         });
-      }
+      })
       ({ pkgs, config, ... }: {
         # Packages we wish to ignore version bounds of.
         # This is similar to jailbreakCabal, however it
@@ -93,50 +119,30 @@ let
         # split data output for ekg to reduce closure size
         packages.ekg.components.library.enableSeparateDataOutput = true;
 
-        # cardano-cli-test depends on cardano-cli
-        packages.cardano-cli.preCheck = "export CARDANO_CLI=${config.hsPkgs.cardano-cli.components.exes.cardano-cli}/bin/cardano-cli${pkgs.stdenv.hostPlatform.extensions.executable}";
-
-        packages.cardano-node-chairman.components.tests.chairman-tests.build-tools =
-          lib.mkForce [
-            config.hsPkgs.cardano-node.components.exes.cardano-node
-            config.hsPkgs.cardano-cli.components.exes.cardano-cli
-            config.hsPkgs.cardano-node-chairman.components.exes.cardano-node-chairman];
-
-        # cardano-node-chairman depends on cardano-node and cardano-cli
-        packages.cardano-node-chairman.preCheck = "
-          export CARDANO_CLI=${config.hsPkgs.cardano-cli.components.exes.cardano-cli}/bin/cardano-cli${pkgs.stdenv.hostPlatform.extensions.executable}
-          export CARDANO_NODE=${config.hsPkgs.cardano-node.components.exes.cardano-node}/bin/cardano-node${pkgs.stdenv.hostPlatform.extensions.executable}
-          export CARDANO_NODE_CHAIRMAN=${config.hsPkgs.cardano-node-chairman.components.exes.cardano-node-chairman}/bin/cardano-node-chairman${pkgs.stdenv.hostPlatform.extensions.executable}
-          export CARDANO_NODE_SRC=${src}
-        ";
       })
       {
         packages = lib.genAttrs projectPackages
           (name: { configureFlags = [ "--ghc-option=-Werror" ]; });
       }
-      (lib.optionalAttrs eventlog {
-        packages = lib.genAttrs ["cardano-node"]
-          (name: { configureFlags = [ "--ghc-option=-eventlog" ]; });
-      })
-      (lib.optionalAttrs profiling {
-        enableLibraryProfiling = true;
-        packages.cardano-node.components.exes.cardano-node.enableExecutableProfiling = true;
-      })
-      {
-        packages = lib.genAttrs assertedPackages
-          (name: { flags.asserts = true; });
-      }
       ({ pkgs, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
         # systemd can't be statically linked
         packages.cardano-config.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
         packages.cardano-node.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
+
+        # FIXME: Error loading shared library libHSvoting-tools-0.2.0.0-HDZeaOp1VIwKhm4zJgwaOj.so: No such file or directory
+        packages.voting-tools.components.tests.unit-tests.buildable = lib.mkForce (!pkgs.stdenv.hostPlatform.isMusl);
       })
       # Musl libc fully static build
-      (lib.optionalAttrs stdenv.hostPlatform.isMusl (let
+      ({ pkgs, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isMusl (let
         # Module options which adds GHC flags and libraries for a fully static build
         fullyStaticOptions = {
           enableShared = false;
           enableStatic = true;
+          configureFlags = [
+            "--ghc-option=-optl=-lssl"
+            "--ghc-option=-optl=-lcrypto"
+            "--ghc-option=-optl=-L${pkgs.openssl.out}/lib"
+          ];
         };
       in
         {
@@ -158,12 +164,8 @@ let
   # setGitRev is a postInstall script to stamp executables with
   # version info. It uses the "gitrev" argument, if set. Otherwise,
   # the revision is sourced from the local git work tree.
-  setGitRev = ''${haskellBuildUtils}/bin/set-git-rev "${gitrev'}" $out/bin/*'';
+  setGitRev = pkgs: rev: ''${pkgs.buildPackages.haskellBuildUtils}/bin/set-git-rev "${rev}" $out/bin/*'';
   # package with libsodium:
-  setLibSodium = "ln -s ${libsodium}/bin/libsodium-23.dll $out/bin/libsodium-23.dll";
-  gitrev' = if (gitrev == null)
-    then buildPackages.commonLib.commitIdFromGitRepoOrZero ../.git
-    else gitrev;
-  haskellBuildUtils = buildPackages.haskellBuildUtils.package;
+  setLibSodium = pkgs : "ln -s ${pkgs.libsodium-vrf}/bin/libsodium-23.dll $out/bin/libsodium-23.dll";
 in
   pkgSet

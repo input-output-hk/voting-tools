@@ -208,3 +208,6 @@ package cardano-crypto-praos
 
 package cardano-api
   flags: -Wno-unused-packages
+
+package postgresql-libpq
+   flags: +use-pkg-config

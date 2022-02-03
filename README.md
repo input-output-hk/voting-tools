@@ -18,7 +18,7 @@ The latest static binary can be found [here](https://hydra.iohk.io/job/Cardano/v
 Or built with:
 
 ```
-nix-build -A voterRegistrationTarball
+nix build .#voterRegistrationTarball
 ```
 
 ### Build it yourself

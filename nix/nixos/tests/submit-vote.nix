@@ -1,8 +1,5 @@
 { config, pkgs, system, lib, ... }:
 let
-  nixpkgs = pkgs.lib.cleanSource pkgs.path;
-
-  sources = import ../../sources.nix;
 
   cardano-cli = (import sources.cardano-node { inherit system; }).cardano-cli;
   jormungandr = (import sources.iohk-nix { inherit system; }).jormungandrLib.environments.beta.packages.jcli;
