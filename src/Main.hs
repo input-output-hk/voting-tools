@@ -17,6 +17,7 @@ import           Cardano.CLI.Query (MetadataRetrievalError)
 import qualified Cardano.CLI.Query as Query
 import           Config.Common (DatabaseConfig (..))
 import qualified Config.Snapshot as Snapshot
+import           System.Directory (getCurrentDirectory)
 
 main :: IO ()
 main = do
@@ -32,10 +33,10 @@ main = do
 
       let
         scaled = votingPowerFromRegistrationInfo scale <$> votingFunds
+      currentDir <- getCurrentDirectory
 
-      print $ show votingFunds
-      print $ show scaled
-      print $ outfile
+      print $ "Writing output to " ++ show outfile
+      print $ "Current directory " ++ show currentDir
       BLC.writeFile outfile . toJSON Aeson.Generic $ scaled
 
 toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString

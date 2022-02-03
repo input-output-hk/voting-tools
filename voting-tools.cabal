@@ -99,6 +99,7 @@ executable voting-tools
                      , safe-exceptions
                      , scientific
                      , text
+                     , directory
                      , time
                      , unordered-containers
                      , vector
