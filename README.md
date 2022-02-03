@@ -5,12 +5,7 @@ interact with the voting capabilities of Catalyst.
 
 The "voter-registration" executable creates transaction metadata in the correct format for submission with a transaction, to register a user to vote.
 
-The "voting-tools" executable has two functions: "genesis" and
-"rewards". The "genesis" tool creates a genesis JSON file from a
-"genesis-template.json" file, populating the file with the initial
-funds and block-zero date. The "rewards" tool calculates the voting
-rewards that should be given to each user and optionally generates the
-appropriate MIR certificates.
+The "voting-tools" creates a snapshot of the voting power of registrations and outputs it as JSON file.
 
 ## Obtaining
 
@@ -34,9 +29,7 @@ nix-build -A voterRegistrationTarball
 nix-build -A voter-registration -o voter-registration
 nix-build -A voting-tools -o voting-tools
 
-./voting-tools/bin/voting-tools genesis --mainnet --db-user cardano-node --out-file genesis.json
-
-./voting-tools/bin/voting-tools rewards --mainnet --db-user cardano-node --total-rewards 8000 --out-file rewards.json
+./voting-tools/bin/voting-tools --mainnet --db-user cardano-node --out-file snapshot.json
 ```
 
 ## Registering to vote

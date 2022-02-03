@@ -15,28 +15,25 @@ import qualified Options.Applicative as Opt
 import           Cardano.CLI.Fetching (votingPowerFromRegistrationInfo)
 import           Cardano.CLI.Query (MetadataRetrievalError)
 import qualified Cardano.CLI.Query as Query
-import           Config
-import qualified Config.Genesis as Genesis
+import           Config.Common (DatabaseConfig (..))
+import qualified Config.Snapshot as Snapshot
 
 main :: IO ()
 main = do
-  options <- Opt.execParser opts
+  options <- Opt.execParser Snapshot.opts
 
-  case options of
-    -- Genesis
-    Genesis gOpts -> do
-      eCfg <- runExceptT (Genesis.mkConfig gOpts)
-      case eCfg of
-        Left (err :: Genesis.ConfigError) ->
-          fail $ show err
-        Right (Genesis.Config networkId scale db slotNo outfile) -> do
-          votingFunds <-
-            runQuery db $ Query.queryVotingFunds networkId slotNo
+  eCfg <- runExceptT (Snapshot.mkConfig options)
+  case eCfg of
+    Left (err :: Snapshot.ConfigError) ->
+      fail $ show err
+    Right (Snapshot.Config networkId scale db slotNo outfile) -> do
+      votingFunds <-
+        runQuery db $ Query.queryVotingFunds networkId slotNo
 
-          let
-            scaled = votingPowerFromRegistrationInfo scale <$> votingFunds
+      let
+        scaled = votingPowerFromRegistrationInfo scale <$> votingFunds
 
-          BLC.writeFile outfile . toJSON Aeson.Generic $ scaled
+      BLC.writeFile outfile . toJSON Aeson.Generic $ scaled
 
 toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString
 toJSON numFormat = Aeson.encodePretty' (Aeson.defConfig { Aeson.confCompare = Aeson.compare, Aeson.confNumFormat = numFormat })
