@@ -37,11 +37,10 @@ library
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Metadata
                      , Cardano.CLI.Voting.Signing
-                     , Config
-                     , Config.Genesis
+                     , Config.Snapshot
                      , Config.Registration
                      , Config.Common
-                     , Genesis
+                     , Snapshot
 
   build-depends:       base
                      , aeson
@@ -114,11 +113,10 @@ executable voting-tools
                  , Cardano.CLI.Voting.Error
                  , Cardano.CLI.Voting.Metadata
                  , Cardano.CLI.Voting.Signing
-                 , Config
                  , Config.Common
-                 , Config.Genesis
+                 , Config.Snapshot
                  , Config.Registration
-                 , Genesis
+                 , Snapshot
 
 test-suite unit-tests
   import:               project-config
@@ -151,4 +149,4 @@ test-suite unit-tests
                         Test.Cardano.API.Jormungandr
                         Test.Cardano.CLI.Fetching
                         Test.Cardano.CLI.Voting.Signing
-                        Test.Genesis
+                        Test.Snapshot

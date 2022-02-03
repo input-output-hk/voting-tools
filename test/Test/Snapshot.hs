@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module Test.Genesis
+module Test.Snapshot
   ( tests
   )
 where
@@ -16,20 +16,20 @@ import           Data.Maybe (fromJust)
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (Assertion, testCase, (@?=))
 
-import           Genesis
+import           Snapshot
 
 import qualified Data.Aeson as Aeson
 import qualified Data.HashMap.Strict as HM
 
 tests :: TestTree
-tests = testGroup "Test.Genesis"
-  [ testCase "Funds from genesis template" unit_funds_from_genesis_template
+tests = testGroup "Test.Snapshot"
+  [ testCase "Funds from snapshot template" unit_funds_from_snapshot_template
   , testCase "Funds from new output" unit_funds_from_new_output
   ]
 
-unit_funds_from_genesis_template :: Assertion
-unit_funds_from_genesis_template = do
-  getAllFundContents exampleGenesis @?= Aeson.toJSON (sorted $ fund1 <> fund2)
+unit_funds_from_snapshot_template :: Assertion
+unit_funds_from_snapshot_template = do
+  getAllFundContents exampleSnapshot @?= Aeson.toJSON (sorted $ fund1 <> fund2)
 
   where
     sorted = sortOn (^?! at "address")
@@ -64,8 +64,8 @@ fund2 = [ HM.fromList [ ("address", Aeson.String "ca1q5mvekdfq3mgeszpyv5hyefh4g2
                       ]
         ]
 
-exampleGenesis :: Aeson.Value
-exampleGenesis = [aesonQQ|
+exampleSnapshot :: Aeson.Value
+exampleSnapshot = [aesonQQ|
     {
       "blockchain_configuration": {
         "block0_date": 1605546000,

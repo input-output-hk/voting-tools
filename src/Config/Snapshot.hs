@@ -8,7 +8,7 @@
 -- | Handles configuration, which involves parsing command line
 -- arguments and reading key files.
 
-module Config.Genesis (Config(Config), opts, mkConfig, Opts(Opts), parseOpts, ConfigError) where
+module Config.Snapshot (Config(Config), opts, mkConfig, Opts(Opts), parseOpts, ConfigError) where
 
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad.Except (ExceptT)
@@ -32,7 +32,7 @@ data Config = Config
     , cfgSlot              :: Maybe SlotNo
     -- ^ Slot to view state of, defaults to tip of chain. Queries registrations placed before or equal to (<=) this slotNo.
     , cfgOutFile           :: FilePath
-    -- ^ File to output genesis to
+    -- ^ File to output snapshot to
     }
   deriving (Eq, Show)
 
@@ -73,6 +73,6 @@ opts =
   info
     ( parseOpts )
     ( fullDesc
-    <> progDesc "Create a genesis file"
-    <> header "rego-fetch - a tool to create a genesis file"
+    <> progDesc "Create a voting power snapshot"
+    <> header "voting-tools snapshot - tool to grab snapshot of voting power"
     )
