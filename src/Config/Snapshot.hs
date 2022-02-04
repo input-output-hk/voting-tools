@@ -15,12 +15,12 @@ import           Control.Monad.Except (ExceptT)
 
 import           Options.Applicative
 
-import           Cardano.Api (NetworkId, SlotNo)
+import           Cardano.Api (NetworkId, SlotNo (..))
 
 import           Cardano.API.Extended (pNetworkId)
 import           Cardano.CLI.Voting.Error ()
 
-import           Config.Common (DatabaseConfig (DatabaseConfig), pSlotNo)
+import           Config.Common (DatabaseConfig (DatabaseConfig), SlotInterval (..))
 
 data Config = Config
     { cfgNetworkId         :: NetworkId
@@ -29,8 +29,8 @@ data Config = Config
     -- ^ Scale the voting funds by this amount to arrive at the voting power
     , cfgDb                :: DatabaseConfig
     -- ^ cardano-db-sync database configuration
-    , cfgSlot              :: Maybe SlotNo
-    -- ^ Slot to view state of, defaults to tip of chain. Queries registrations placed before or equal to (<=) this slotNo.
+    , cfgSlotInterval      :: SlotInterval
+    -- ^ Queries registrations made within this slot interval
     , cfgOutFile           :: FilePath
     -- ^ File to output snapshot to
     }
@@ -52,7 +52,7 @@ data Opts = Opts
     , optDbName         :: String
     , optDbUser         :: String
     , optDbHost         :: FilePath
-    , optSlotNo         :: Maybe SlotNo
+    , optSlotInterval   :: SlotInterval
     , optScale          :: Int
     , optOutFile        :: FilePath
     }
@@ -64,9 +64,22 @@ parseOpts = Opts
   <*> strOption (long "db" <> metavar "DB_NAME" <> showDefault <> value "cexplorer" <> help "Name of the cardano-db-sync database")
   <*> strOption (long "db-user" <> metavar "DB_USER" <> showDefault <> value "cexplorer" <> help "User to connect to the cardano-db-sync database with")
   <*> strOption (long "db-host" <> metavar "DB_HOST" <> showDefault <> value "/run/postgresql" <> help "Host for the cardano-db-sync database connection")
-  <*> optional pSlotNo
+  <*> pSlotInterval
   <*> fmap fromIntegral (option auto (long "scale" <> metavar "DOUBLE" <> showDefault <> value (1 :: Integer) <> help "Scale the voting funds by this amount to arrive at the voting power"))
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
+
+pSlotInterval :: Parser SlotInterval
+pSlotInterval = SlotInterval
+  <$> optional (option (SlotNo <$> auto)
+          ( long "lower-slot-no"
+          <> metavar "WORD64"
+          <> help "lower bound of slot number interval (inclusive). Registrations made on or after this slot number are included in the snapshot. Leave blank for -INF."
+          ))
+  <*> optional (option (SlotNo <$> auto)
+          ( long "upper-slot-no"
+          <> metavar "WORD64"
+          <> help "upper bound of slot number interval (inclusive). Registrations made on or before this slot number are included in the snapshot. Leave blank for +INF."
+          ))
 
 opts :: ParserInfo Opts
 opts =

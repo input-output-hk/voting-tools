@@ -5,7 +5,10 @@ module Config.Common where
 
 import           Cardano.Api (AnyCardanoEra (..), CardanoEra (..), SlotNo (..))
 import           Data.Foldable (asum)
+import           Data.Text (Text)
 import           Options.Applicative (Parser, auto, flag', help, long, metavar, option)
+
+import qualified Data.Text as T
 
 data DatabaseConfig
   = DatabaseConfig { _dbName       :: String
@@ -13,6 +16,33 @@ data DatabaseConfig
                    , _dbHost       :: String
                    }
   deriving (Eq, Show)
+
+data SlotInterval
+  = SlotInterval { _slotNoLowerIntervalInclusive :: Maybe SlotNo
+                 , _slotNoUpperIntervalInclusive :: Maybe SlotNo
+                 }
+  deriving (Eq, Show)
+
+inclusiveUpperInterval :: SlotInterval -> Maybe SlotNo
+inclusiveUpperInterval = _slotNoUpperIntervalInclusive
+
+inclusiveLowerInterval :: SlotInterval -> Maybe SlotNo
+inclusiveLowerInterval = _slotNoUpperIntervalInclusive
+
+slotIntervalQuery :: SlotInterval -> Text
+slotIntervalQuery (SlotInterval Nothing Nothing)
+  = ""
+slotIntervalQuery (SlotInterval (Just lower) Nothing)
+  = "block.slot_no >= " <> T.pack (show $ unSlotNo lower)
+slotIntervalQuery (SlotInterval Nothing (Just upper))
+  = "block.slot_no <= " <> T.pack (show $ unSlotNo upper)
+slotIntervalQuery (SlotInterval lower upper)
+  = slotIntervalQuery (SlotInterval lower Nothing)
+  <> " AND "
+  <> slotIntervalQuery (SlotInterval Nothing upper)
+
+isInfiniteRange :: SlotInterval -> Bool
+isInfiniteRange = (SlotInterval Nothing Nothing ==)
 
 pSlotNo :: Parser SlotNo
 pSlotNo = SlotNo

@@ -26,9 +26,9 @@ main = do
   case eCfg of
     Left (err :: Snapshot.ConfigError) ->
       fail $ show err
-    Right (Snapshot.Config networkId scale db slotNo outfile) -> do
+    Right (Snapshot.Config networkId scale db slotInterval outfile) -> do
       votingFunds <-
-        runQuery db $ Query.queryVotingFunds networkId slotNo
+        runQuery db $ Query.queryVotingFunds networkId slotInterval
 
       let
         scaled = votingPowerFromRegistrationInfo scale <$> votingFunds

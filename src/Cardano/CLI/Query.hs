@@ -25,9 +25,7 @@ import           Database.Persist.Postgresql (IsolationLevel (Serializable), Sql
                    SqlPersistT, rawExecute, rawSql, runSqlConnWithIsolation)
 import           System.IO (hPutStr, hPutStrLn, stderr)
 
-import           Ouroboros.Network.Block (unSlotNo)
 
-import           Cardano.Api (SlotNo)
 import qualified Cardano.Api as Api
 import qualified Cardano.Api.Shelley as Api
 import           Cardano.CLI.Fetching (RegistrationInfo (..))
@@ -35,6 +33,7 @@ import           Cardano.CLI.Voting.Metadata (MetadataParsingError, Vote, metada
                    parseMetadataFromJson, prettyPrintMetadataParsingError, signatureMetaKey,
                    voteFromTxMetadata, voteRegistrationVerificationKey)
 import           Cardano.CLI.Voting.Signing (getStakeHash)
+import           Config.Common (SlotInterval, isInfiniteRange, slotIntervalQuery)
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import qualified Data.Aeson as Aeson
@@ -114,10 +113,10 @@ queryVoteRegistrationInfo
      , BackendCompatible SqlBackend backend
      )
   => Api.NetworkId
-  -> Maybe SlotNo
+  -> SlotInterval
   -> m [(Vote, Integer)]
-queryVoteRegistrationInfo nw mSlotNo  = do
-  regos <- queryVoteRegistration mSlotNo
+queryVoteRegistrationInfo nw slotInterval  = do
+  regos <- queryVoteRegistration slotInterval
 
   liftIO $ hPutStr stderr $ "\nFound " <> show (length regos) <> " vote registrations. Of which, "
 
@@ -164,13 +163,13 @@ queryVoteRegistrationInfo nw mSlotNo  = do
 
   let
     xs' = zip [1..] (M.toList xs)
-  stakeTempTableSql <- case mSlotNo of
-    Nothing     -> do
+  stakeTempTableSql <- case isInfiniteRange slotInterval of
+    True -> do
       let stake_credential_index = "CREATE INDEX IF NOT EXISTS utxo_snapshot_stake_credential ON utxo_snapshot(stake_credential);"
           analyze_table = "ANALYZE utxo_snapshot;"
           utxo_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS utxo_snapshot AS (SELECT tx_out.*, stake_address.hash_raw AS stake_credential FROM tx_out LEFT OUTER JOIN tx_in ON tx_out.tx_id = tx_in.tx_out_id AND tx_out.index = tx_in.tx_out_index INNER JOIN stake_address ON stake_address.id = tx_out.stake_address_id WHERE tx_in.tx_in_id IS NULL);"
       pure $ utxo_snapshot <> stake_credential_index <> analyze_table
-    Just slotNo -> do
+    False -> do
       let tx_out_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS tx_out_snapshot AS (\
             \ SELECT tx_out.*,\
             \ stake_address.hash_raw AS stake_credential\
@@ -178,12 +177,12 @@ queryVoteRegistrationInfo nw mSlotNo  = do
               \ INNER JOIN tx ON tx_out.tx_id = tx.id\
               \ INNER JOIN block ON tx.block_id = block.id\
               \ INNER JOIN stake_address ON stake_address.id = tx_out.stake_address_id\
-              \ WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slotNo) <> ");"
+              \ WHERE " <> slotIntervalQuery slotInterval <> ");"
           tx_in_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS tx_in_snapshot AS (\
             \ SELECT tx_in.* FROM tx_in\
               \ INNER JOIN tx ON tx_in.tx_in_id = tx.id\
               \ INNER JOIN block ON tx.block_id = block.id\
-              \ WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slotNo) <> ");"
+              \ WHERE " <> slotIntervalQuery slotInterval <> ");"
           utxo_snapshot = "CREATE TEMPORARY TABLE IF NOT EXISTS utxo_snapshot AS (\
             \ SELECT tx_out_snapshot.* FROM tx_out_snapshot\
               \ LEFT OUTER JOIN tx_in_snapshot\
@@ -218,11 +217,11 @@ queryVotingFunds
      , BackendCompatible SqlBackend backend
      )
   => Api.NetworkId
-  -> Maybe SlotNo
+  -> SlotInterval
   -> m [RegistrationInfo]
-queryVotingFunds nw mSlotNo = do
+queryVotingFunds nw slotInterval = do
   -- Get each registration and it's voting power
-  (info :: [(Vote, Integer)]) <- queryVoteRegistrationInfo nw mSlotNo
+  (info :: [(Vote, Integer)]) <- queryVoteRegistrationInfo nw slotInterval
 
   pure $ (\(vote, amt) -> RegistrationInfo vote amt) <$> info
 
@@ -231,9 +230,9 @@ queryVoteRegistration
      , MonadReader backend m
      , BackendCompatible SqlBackend backend
      )
-  => Maybe SlotNo
+  => SlotInterval
   -> m [Either MetadataRetrievalError (TxId, Vote)]
-queryVoteRegistration mSlotNo =
+queryVoteRegistration slotInterval =
   let
     -- Join the transaction information with the metadata information for that
     -- transaction. The metadata we are interested in is made up of two parts:
@@ -242,10 +241,9 @@ queryVoteRegistration mSlotNo =
     sqlBase = "WITH meta_table AS (select tx_id, json AS metadata from tx_metadata where key = '" <> T.pack (show metadataMetaKey) <> "') , sig_table AS (select tx_id, json AS signature from tx_metadata where key = '" <> T.pack (show signatureMetaKey) <> "') SELECT tx.hash,tx_id,metadata,signature FROM meta_table INNER JOIN tx ON tx.id = meta_table.tx_id INNER JOIN sig_table USING(tx_id)"
   in do
     let
-      sql = case mSlotNo of
-        Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slot) <> " ORDER BY metadata -> '4' ASC;")
-        -- ^ TODO handle lower bound on slot no too
-        Nothing   -> (sqlBase <> " ORDER BY metadata -> '4' ASC;")
+      sql = case isInfiniteRange slotInterval of
+        False -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE " <> slotIntervalQuery slotInterval <> " ORDER BY metadata -> '4' ASC;")
+        True -> (sqlBase <> " ORDER BY metadata -> '4' ASC;")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []
     sequence $ fmap runExceptT $ (flip fmap) results $ \(Single _txHash, Single txId, Single mMetadata, Single mSignature) -> do
