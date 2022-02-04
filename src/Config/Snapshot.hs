@@ -73,18 +73,18 @@ pSlotInterval = SlotInterval
   <$> optional (option (SlotNo <$> auto)
           ( long "lower-slot-no"
           <> metavar "WORD64"
-          <> help "lower bound of slot number interval (inclusive). Registrations made on or after this slot number are included in the snapshot. Leave blank for -INF."
+          <> help "Lower bound of slot number interval (inclusive). Registrations made on or after this slot number are included in the snapshot (default: -INF)"
           ))
   <*> optional (option (SlotNo <$> auto)
           ( long "upper-slot-no"
           <> metavar "WORD64"
-          <> help "upper bound of slot number interval (inclusive). Registrations made on or before this slot number are included in the snapshot. Leave blank for +INF."
+          <> help "Upper bound of slot number interval (inclusive). Registrations made on or before this slot number are included in the snapshot (default: +INF)"
           ))
 
 opts :: ParserInfo Opts
 opts =
   info
-    ( parseOpts )
+    ( parseOpts <**> helper )
     ( fullDesc
     <> progDesc "Create a voting power snapshot"
     <> header "voting-tools snapshot - tool to grab snapshot of voting power"

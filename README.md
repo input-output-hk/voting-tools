@@ -5,7 +5,7 @@ interact with the voting capabilities of Catalyst.
 
 The "voter-registration" executable creates transaction metadata in the correct format for submission with a transaction, to register a user to vote.
 
-The "voting-tools" creates a snapshot of the voting power of registrations and outputs it as JSON file.
+The "voting-tools" creates a snapshot of the voting power of registrations and outputs it as JSON file. The "--lower-bound" and "--upper-bound" arguments can be used to restrict the snapshot to a particular fund (using the starting and ending slots of the fund).
 
 ## Obtaining
 
@@ -29,7 +29,7 @@ nix-build -A voterRegistrationTarball
 nix-build -A voter-registration -o voter-registration
 nix-build -A voting-tools -o voting-tools
 
-./voting-tools/bin/voting-tools --mainnet --db-user cardano-node --out-file snapshot.json
+./voting-tools/bin/voting-tools --mainnet --db-user cardano-node --out-file snapshot.json --lower-bound 33300 --upper-bound 40000
 ```
 
 ## Registering to vote
