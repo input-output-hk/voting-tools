@@ -82,8 +82,9 @@ voter-registration \
     --slot-no $SLOT_TIP \
     --json > metadata.json
 ```
-
 Both CBOR (--cbor) and JSON (--json) formats exist.
+
+> :information_source: For details on registration metadata format refer to [CIP 15](https://cips.cardano.org/cips/cip15/).
 
 ### Submission of vote registration
 
@@ -179,6 +180,59 @@ And then look it up, e.g.:
  - https://testnet.cardanoscan.io/transaction/fccfa6c3af309fc8ec10e20217546d3447798cf1efe85d3cd9e13865d1369cde
 
 But once we've confirmed the transaction has entered the chain, we're registered!
+
+## Getting snapshot of the voting power of registrations
+
+- Requires:
+  - Running `cardano-node` and `cardano-db-sync` ([cardano-db-sync](https://github.com/input-output-hk/cardano-db-sync))
+  - `voting-tools` executable from this project
+
+### Starting cardano-db-sync
+There are few ways to build and start `cardano-db-sync` together with `cardano-node`. You can refer to [cardano-db-sync](https://github.com/input-output-hk/cardano-db-sync) for details.
+
+In this example we'll start it using [docker-compose.yaml](https://github.com/input-output-hk/cardano-db-sync/blob/master/docker-compose.yml) as described in [Docker](https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/docker.md).
+
+First, let's clone the repository:
+
+```
+git clone git@github.com:input-output-hk/cardano-db-sync.git
+cd cardano-db-sync
+git checkout <latest-official-tag> -b tag-<latest-official-tag>
+```
+And launch `cardano-node` and `cardano-db-sync` from latest available snapshot:
+```
+RESTORE_SNAPSHOT=https://updates-cardano-testnet.s3.amazonaws.com/cardano-db-sync/12/db-sync-snapshot-schema-12-block-3336499-x86_64.tgz \
+NETWORK=testnet docker-compose up && docker-compose logs -f
+```
+
+We'll need to give it some time to sync with the tip of the blockchain.
+
+## Getting snapshot
+
+```
+export NETWORK_ID="--testnet-magic 1097911063"
+# Or use --mainnet
+export SLOT_TIP=$(cardano-cli query tip $NETWORK_ID | jq '.slot')
+
+voting-tools $NETWORK_ID \
+    --db $(cat ./config/secrets/postgres_db) \
+    --db-user $(cat ./config/secrets/postgres_user) \
+    --db-pass $(cat ./config/secrets/postgres_password) \
+    --db-host localhost \
+    --slot-no $SLOT_TIP \
+    --out-file voting-snaphot.json
+```
+File `voting-snaphot.json` will have snapshot of all voting registrations along with their voting power registered up until the slot number specified in `--slot-no`:
+```
+[
+    {
+        "reward_address": "0xe0ff8263a56e9955a4ef29290399ee482633ba1623ecdbd79ac7a87d7c",
+        "stake_public_key": "0xd4af79e030104aad8dacc94658656e33cf0d1622b491755d965ecdf48deb9e35",
+        "voting_power": 3001317931,
+        "voting_public_key": "0x05cc9b910fab1e61d835e0a63c7c816c5218790e65f06c786e91a6c0a25dda02"
+    },
+    ...
+```
 
 ## Development
 
