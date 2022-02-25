@@ -35,10 +35,10 @@ nix-build -A voting-tools -o voting-tools
 ## Registering to vote
 
 - Requires:
-  - cardano-cli executable from the cardano-node project
-  - jcli executable from the jormungandr project
-  - voter-registration executable from this project
-  - jq
+  - `cardano-cli` executable from the [cardano-node](https://github.com/input-output-hk/cardano-node) project
+  - `jcli` executable from the [jormungandr](https://github.com/input-output-hk/jormungandr) project
+  - `voter-registration` executable from this project
+  - `jq`
 
 ### Generating vote registration transaction metadata
 
@@ -97,7 +97,7 @@ cardano-cli query protocol-parameters \
     --out-file protocol.json
 ```
 
-And find some funds to use:
+And find some funds to use (for `testnet` it can be grabbed from the [faucet](https://testnets.cardano.org/en/testnets/cardano/tools/faucet/)):
 
 ```
 export PAYMENT_ADDR=$(cat payment.addr)
@@ -121,39 +121,18 @@ export UTXO_TXIX=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | 
 echo "UTxO: $UTXO#$UTXO_TXIX"
 ```
 
-Here we'll make draft transaction for the purposes of fee estimation. This transaction will simply send the entire UTxO value back to us, minus the fee. We don't need to send money anywhere else, we simply have to make a valid transaction with the metadata attached.
+Here we'll build a transaction. This transaction will simply send the entire UTxO value back to us, minus the fee. We don't need to send money anywhere else, we simply have to make a valid transaction with the metadata attached.
 
 ```
-cardano-cli transaction build-raw \
-    --tx-in $UTXO#$UTXO_TXIX \
-    --tx-out $(cat payment.addr)+0 \
-    --invalid-hereafter 0 \
-    --fee 0 \
-    --out-file tx.draft \
-    --metadata-json-file metadata.json
+cardano-cli transaction build  \
+	$NETWORK_ID \
+	--tx-in $UTXO#$UTXO_TXIX \
+	--change-address $(cat payment.addr) \
+	--metadata-json-file metadata.json \
+	--protocol-params-file protocol.json  \
+	--out-file tx.raw
 
-export FEE=$(cardano-cli transaction calculate-min-fee \
-    $NETWORK_ID \
-    --tx-body-file tx.draft \
-    --tx-in-count 1 \
-    --tx-out-count 1 \
-    --witness-count 1 \
-    --protocol-params-file protocol.json | awk '{print $1;}')
-
-export AMT_OUT=$(expr $AMT - $FEE)
-```
-
-Then we have to decide on a TTL for the transaction, and build the final transaction:
-
-```
-export TTL=$(expr $SLOT_TIP + 200)
-
-cardano-cli transaction build-raw \
-    --tx-in $UTXO#$UTXO_TXIX \
-    --tx-out $PAYMENT_ADDR+$AMT_OUT \
-    --invalid-hereafter $TTL \
-    --fee $FEE \
-    --out-file tx.raw
+Estimated transaction fee: Lovelace 173905
 ```
 
 Then we can sign the transaction:
@@ -172,6 +151,8 @@ And finally submit our transaction:
 cardano-cli transaction submit \
     --tx-file tx.signed \
     $NETWORK_ID
+
+Transaction successfully submitted.
 ```
 
 We'll have to wait a little while for the transaction to be incorporated into the chain:
@@ -187,6 +168,15 @@ cardano-cli query utxo --address $(cat payment.addr) $NETWORK_ID
 --------------------------------------------------------------------------------------
 4fbd6149f9cbbeb8f91b618ae3813bc451c22059c626637d3b343d3114cb92c5     0        999642026 lovelace + TxOutDatumNone
 ```
+
+We can also make sure transaction is in the ledger by checking it on the explorer. First let's see what's the transaction id:
+```
+cardano-cli transaction txid --tx-file tx.signed
+fccfa6c3af309fc8ec10e20217546d3447798cf1efe85d3cd9e13865d1369cde
+```
+And then look it up, e.g.:
+ - https://explorer.cardano-testnet.iohkdev.io/en/transaction?id=fccfa6c3af309fc8ec10e20217546d3447798cf1efe85d3cd9e13865d1369cde
+ - https://testnet.cardanoscan.io/transaction/fccfa6c3af309fc8ec10e20217546d3447798cf1efe85d3cd9e13865d1369cde
 
 But once we've confirmed the transaction has entered the chain, we're registered!
 
