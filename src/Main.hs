@@ -50,4 +50,9 @@ runQuery dbConfig q = runNoLoggingT $ do
 
 
 pgConnectionString :: DatabaseConfig -> ConnectionString
-pgConnectionString (DatabaseConfig dbName dbUser dbHost) = BSC.pack $ "host=" <> dbHost <> " dbname=" <> dbName <> " user=" <> dbUser
+pgConnectionString (DatabaseConfig dbName dbUser dbHost mDbPassword) =
+  BSC.pack
+    $ "host=" <> dbHost
+    <> " dbname=" <> dbName
+    <> " user=" <> dbUser
+    <> maybe "" (" password=" <>) mDbPassword
