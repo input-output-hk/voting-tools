@@ -16,5 +16,5 @@ let
   } // args);
   callTest = fn: args: (importTest fn args system);
 in rec {
-
+  db-password-auth = callTest ./db-password-auth.nix {};
 }
