@@ -2,12 +2,11 @@
   description = "Voting Tools";
 
   inputs = {
-    nixpkgs.follows = "haskellNix/nixpkgs-2105";
+    nixpkgs.follows = "haskellNix/nixpkgs-2111";
     haskellNix = {
       url = "github:input-output-hk/haskell.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-20.09";
     utils.url = "github:numtide/flake-utils";
     iohkNix = {
       url = "github:input-output-hk/iohk-nix";
@@ -44,27 +43,34 @@
         (import ./nix/pkgs.nix)
       ];
 
-    in eachSystem supportedSystems (system:
+    in (eachSystem supportedSystems (system:
       let
         pkgs = import nixpkgs {
           inherit system overlays;
           inherit (haskellNix) config;
         };
 
-        flake = pkgs.votingToolsHaskellPackages.flake {
+        flake = pkgs.votingToolsHaskellProject.flake {
           crossPlatforms = p: with p; [
-            mingwW64
             musl64
           ];
         };
-        packages = collectExes
-           flake.packages;
+        packages = collectExes flake.packages // {
+          voterRegistrationTarball = pkgs.runCommandNoCC "voter-registration-tarball" { buildInputs = [ pkgs.gnutar pkgs.gzip ]; } ''
+            cp ${flake.packages."x86_64-unknown-linux-musl:voter-registration:exe:voter-registration"}/bin/voter-registration ./
+            mkdir -p $out/nix-support
+            tar -czvf $out/voter-registration.tar.gz voter-registration
+            echo "file binary-dist $out/voter-registration.tar.gz" > $out/nix-support/hydra-build-products
+          '';
+        };
 
       in recursiveUpdate flake {
 
         inherit packages;
 
         legacyPackages = pkgs;
+
+        devShells.stylish = pkgs.mkShell { packages = with pkgs; [ stylish-haskell git ]; };
 
         # Built by `nix build .`
         defaultPackage = flake.packages."voting-tools:exe:voting-tools";
@@ -74,5 +80,15 @@
 
         inherit (flake) apps;
       }
-    );
+    )) // {
+      hydraJobs = let jobs = lib.recursiveUpdate self.packages self.checks; in
+        jobs // {
+          required = with self.legacyPackages.${lib.head supportedSystems}; releaseTools.aggregate {
+            name = "github-required";
+            meta.description = "All jobs required to pass CI";
+            constituents = lib.collect lib.isDerivation jobs ++ lib.singleton
+              (writeText "forceNewEval" self.rev or "dirty");
+          };
+        };
+    };
 }

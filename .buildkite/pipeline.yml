@@ -1,11 +1,5 @@
 steps:
-  - label: 'build'
-    command:
-      - 'nix-build'
-    agents:
-      system: x86_64-linux
-
   - label: 'Check Stylish Haskell'
-    command: 'nix-shell --run .buildkite/check-stylish.sh'
+    command: 'nix develop .#stylish --command .buildkite/check-stylish.sh'
     agents:
       system: x86_64-linux
