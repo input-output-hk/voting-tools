@@ -69,6 +69,10 @@ in
     # Succeed with password authentication
     machine.succeed("${voting-tools}/bin/voting-tools --db db_sync --db-user db-sync --db-host localhost --db-pass ${dbPassword} --mainnet --out-file out.json")
     machine.succeed("cat out.json 1>&2")
+
+    # Fail with wrong password
+    machine.fail("${voting-tools}/bin/voting-tools --db db_sync --db-user db-sync --db-host localhost --db-pass wrongPassword --mainnet --out-file out.json")
+
     # Fail with peer authentication
     machine.fail("${voting-tools}/bin/voting-tools --db db_sync --db-user db-sync --db-host /run/postgresql --mainnet --out-file out.json")
   '';
