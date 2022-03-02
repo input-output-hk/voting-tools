@@ -78,16 +78,20 @@
         defaultApp = flake.apps."voting-tools:exe:voting-tools";
 
         inherit (flake) apps;
+
+        hydraJobs =
+          let
+            jobs =
+              lib.recursiveUpdate self.packages.${system} self.checks.${system};
+          in
+            jobs // {
+              required = with self.legacyPackages.${lib.head supportedSystems}; releaseTools.aggregate {
+                name = "github-required";
+                meta.description = "All jobs required to pass CI";
+                constituents = lib.collect lib.isDerivation jobs ++ lib.singleton
+                  (writeText "forceNewEval" self.rev or "dirty");
+              };
+            };
       }
-    )) // {
-      hydraJobs = let jobs = lib.recursiveUpdate self.packages self.checks; in
-        jobs // {
-          required = with self.legacyPackages.${lib.head supportedSystems}; releaseTools.aggregate {
-            name = "github-required";
-            meta.description = "All jobs required to pass CI";
-            constituents = lib.collect lib.isDerivation jobs ++ lib.singleton
-              (writeText "forceNewEval" self.rev or "dirty");
-          };
-        };
-    };
+    ));
 }
