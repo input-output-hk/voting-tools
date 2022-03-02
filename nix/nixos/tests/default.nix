@@ -1,22 +1,20 @@
 { pkgs
+, inputs
 , system
-, supportedSystems ? [ "x86_64-linux" ]
 }:
 
 with pkgs;
+with pkgs.commonLib;
 
- let
-  forAllSystems = pkgs.lib.genAttrs supportedSystems;
-
+let
+  forAllSystems = genAttrs supportedSystems;
   importTest = fn: args: system: let
     imported = import fn;
     test = import (pkgs.path + "/nixos/tests/make-test-python.nix") imported;
   in test ({
-    inherit pkgs system config;
+    inherit pkgs system config inputs;
   } // args);
+  callTest = fn: args: (importTest fn args system);
+in rec {
 
-  callTest = fn: args: forAllSystems (system: let test = importTest fn args system; in { inherit test; });
-
-in {
-  submit-vote = callTest ./submit-vote.nix {};
 }
