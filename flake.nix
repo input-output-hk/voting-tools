@@ -5,21 +5,20 @@
     nixpkgs.follows = "haskellNix/nixpkgs-2111";
     haskellNix = {
       url = "github:input-output-hk/haskell.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
     utils.url = "github:numtide/flake-utils";
     iohkNix = {
       url = "github:input-output-hk/iohk-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
     cardano-node = {
       url = "github:input-output-hk/cardano-node?ref=refs/tags/1.31.0";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.haskellNix.follows = "haskellNix";
+    };
+    cardano-db-sync = {
+      url = "github:input-output-hk/cardano-db-sync";
     };
   };
 
-  outputs = { self, nixpkgs, utils, haskellNix, iohkNix, ... }:
+  outputs = { self, nixpkgs, utils, haskellNix, iohkNix, cardano-db-sync, ... } @ inputs:
     let
       inherit (nixpkgs) lib;
       inherit (lib) head systems mapAttrs recursiveUpdate mkDefault
