@@ -42,6 +42,14 @@
         (import ./nix/pkgs.nix)
       ];
 
+      mkHydraJobs = system:
+        lib.recursiveUpdate self.packages.${system} self.checks.${system} // {
+          nixosTests = import ./nix/nixos/tests/default.nix {
+            inherit system inputs;
+            pkgs = self.legacyPackages.${system};
+          };
+        };
+
     in
       recursiveUpdate
         # System-dependent jobs
@@ -82,16 +90,7 @@
 
             inherit (flake) apps;
 
-            hydraJobs =
-              let
-                jobs =
-                  lib.recursiveUpdate self.packages.${system} self.checks.${system} // {
-                    nixosTests = import ./nix/nixos/tests/default.nix {
-                      inherit pkgs system inputs;
-                    };
-                  };
-              in
-                jobs;
+            hydraJobs = mkHydraJobs system;
           }
         )
       )
@@ -100,7 +99,7 @@
       hydraJobs.required = with self.legacyPackages.${lib.head supportedSystems}; releaseTools.aggregate {
         name = "github-required";
         meta.description = "All jobs required to pass CI";
-        constituents = lib.collect lib.isDerivation jobs ++ lib.singleton
+        constituents = lib.collect lib.isDerivation (mkHydraJobs (lib.head supportedSystems)) ++ lib.singleton
           (writeText "forceNewEval" self.rev or "dirty");
       };
     };
