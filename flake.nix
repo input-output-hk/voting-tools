@@ -82,7 +82,11 @@
         hydraJobs =
           let
             jobs =
-              lib.recursiveUpdate self.packages.${system} self.checks.${system};
+              lib.recursiveUpdate self.packages.${system} self.checks.${system} // {
+                nixosTests = import ./nix/nixos/tests/default.nix {
+                  inherit pkgs system inputs;
+                };
+              };
           in
             jobs // {
               required = with self.legacyPackages.${lib.head supportedSystems}; releaseTools.aggregate {
