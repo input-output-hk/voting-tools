@@ -73,7 +73,7 @@ parseOpts = Opts
 opts :: ParserInfo Opts
 opts =
   info
-    ( parseOpts )
+    ( parseOpts <**> helper )
     ( fullDesc
     <> progDesc "Create a voting power snapshot"
     <> header "voting-tools snapshot - tool to grab snapshot of voting power"
