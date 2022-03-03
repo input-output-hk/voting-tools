@@ -11,6 +11,7 @@ data DatabaseConfig
   = DatabaseConfig { _dbName       :: String
                    , _dbUser       :: String
                    , _dbHost       :: String
+                   , _dbPassword   :: Maybe String
                    }
   deriving (Eq, Show)
 

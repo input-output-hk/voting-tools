@@ -44,14 +44,15 @@ makeClassyPrisms ''ConfigError
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
-mkConfig (Opts networkId dbName dbUser dbHost mSlotNo scale outfile) = do
-  pure $ Config networkId scale (DatabaseConfig dbName dbUser dbHost) mSlotNo outfile
+mkConfig (Opts networkId dbName dbUser dbHost dbPass mSlotNo scale outfile) = do
+  pure $ Config networkId scale (DatabaseConfig dbName dbUser dbHost dbPass) mSlotNo outfile
 
 data Opts = Opts
     { optNetworkId      :: NetworkId
     , optDbName         :: String
     , optDbUser         :: String
     , optDbHost         :: FilePath
+    , optDbPass         :: Maybe String
     , optSlotNo         :: Maybe SlotNo
     , optScale          :: Int
     , optOutFile        :: FilePath
@@ -64,6 +65,7 @@ parseOpts = Opts
   <*> strOption (long "db" <> metavar "DB_NAME" <> showDefault <> value "cexplorer" <> help "Name of the cardano-db-sync database")
   <*> strOption (long "db-user" <> metavar "DB_USER" <> showDefault <> value "cexplorer" <> help "User to connect to the cardano-db-sync database with")
   <*> strOption (long "db-host" <> metavar "DB_HOST" <> showDefault <> value "/run/postgresql" <> help "Host for the cardano-db-sync database connection")
+  <*> optional (strOption (long "db-pass" <> metavar "DB_PASS" <> showDefault <> value "" <> help "Password for the cardano-db-sync database connection"))
   <*> optional pSlotNo
   <*> fmap fromIntegral (option auto (long "scale" <> metavar "DOUBLE" <> showDefault <> value (1 :: Integer) <> help "Scale the voting funds by this amount to arrive at the voting power"))
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
@@ -71,7 +73,7 @@ parseOpts = Opts
 opts :: ParserInfo Opts
 opts =
   info
-    ( parseOpts )
+    ( parseOpts <**> helper )
     ( fullDesc
     <> progDesc "Create a voting power snapshot"
     <> header "voting-tools snapshot - tool to grab snapshot of voting power"
