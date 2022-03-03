@@ -35,10 +35,10 @@ nix-build -A voting-tools -o voting-tools
 ## Registering to vote
 
 - Requires:
-  - cardano-cli executable from the cardano-node project
-  - jcli executable from the jormungandr project
-  - voter-registration executable from this project
-  - jq
+  - `cardano-cli` executable from the [cardano-node](https://github.com/input-output-hk/cardano-node) project
+  - `jcli` executable from the [jormungandr](https://github.com/input-output-hk/jormungandr) project
+  - `voter-registration` executable from this project
+  - `jq`
 
 ### Generating vote registration transaction metadata
 
@@ -82,8 +82,9 @@ voter-registration \
     --slot-no $SLOT_TIP \
     --json > metadata.json
 ```
-
 Both CBOR (--cbor) and JSON (--json) formats exist.
+
+> :information_source: For details on registration metadata format refer to [CIP 15](https://cips.cardano.org/cips/cip15/).
 
 ### Submission of vote registration
 
@@ -97,7 +98,7 @@ cardano-cli query protocol-parameters \
     --out-file protocol.json
 ```
 
-And find some funds to use:
+And find some funds to use (for `testnet` it can be grabbed from the [faucet](https://testnets.cardano.org/en/testnets/cardano/tools/faucet/)):
 
 ```
 export PAYMENT_ADDR=$(cat payment.addr)
@@ -121,39 +122,18 @@ export UTXO_TXIX=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | 
 echo "UTxO: $UTXO#$UTXO_TXIX"
 ```
 
-Here we'll make draft transaction for the purposes of fee estimation. This transaction will simply send the entire UTxO value back to us, minus the fee. We don't need to send money anywhere else, we simply have to make a valid transaction with the metadata attached.
+Here we'll build a transaction. This transaction will simply send the entire UTxO value back to us, minus the fee. We don't need to send money anywhere else, we simply have to make a valid transaction with the metadata attached.
 
 ```
-cardano-cli transaction build-raw \
-    --tx-in $UTXO#$UTXO_TXIX \
-    --tx-out $(cat payment.addr)+0 \
-    --invalid-hereafter 0 \
-    --fee 0 \
-    --out-file tx.draft \
-    --metadata-json-file metadata.json
+cardano-cli transaction build  \
+	$NETWORK_ID \
+	--tx-in $UTXO#$UTXO_TXIX \
+	--change-address $(cat payment.addr) \
+	--metadata-json-file metadata.json \
+	--protocol-params-file protocol.json  \
+	--out-file tx.raw
 
-export FEE=$(cardano-cli transaction calculate-min-fee \
-    $NETWORK_ID \
-    --tx-body-file tx.draft \
-    --tx-in-count 1 \
-    --tx-out-count 1 \
-    --witness-count 1 \
-    --protocol-params-file protocol.json | awk '{print $1;}')
-
-export AMT_OUT=$(expr $AMT - $FEE)
-```
-
-Then we have to decide on a TTL for the transaction, and build the final transaction:
-
-```
-export TTL=$(expr $SLOT_TIP + 200)
-
-cardano-cli transaction build-raw \
-    --tx-in $UTXO#$UTXO_TXIX \
-    --tx-out $PAYMENT_ADDR+$AMT_OUT \
-    --invalid-hereafter $TTL \
-    --fee $FEE \
-    --out-file tx.raw
+Estimated transaction fee: Lovelace 173905
 ```
 
 Then we can sign the transaction:
@@ -172,6 +152,8 @@ And finally submit our transaction:
 cardano-cli transaction submit \
     --tx-file tx.signed \
     $NETWORK_ID
+
+Transaction successfully submitted.
 ```
 
 We'll have to wait a little while for the transaction to be incorporated into the chain:
@@ -188,7 +170,69 @@ cardano-cli query utxo --address $(cat payment.addr) $NETWORK_ID
 4fbd6149f9cbbeb8f91b618ae3813bc451c22059c626637d3b343d3114cb92c5     0        999642026 lovelace + TxOutDatumNone
 ```
 
+We can also make sure transaction is in the ledger by checking it on the explorer. First let's see what's the transaction id:
+```
+cardano-cli transaction txid --tx-file tx.signed
+fccfa6c3af309fc8ec10e20217546d3447798cf1efe85d3cd9e13865d1369cde
+```
+And then look it up, e.g.:
+ - https://explorer.cardano-testnet.iohkdev.io/en/transaction?id=fccfa6c3af309fc8ec10e20217546d3447798cf1efe85d3cd9e13865d1369cde
+ - https://testnet.cardanoscan.io/transaction/fccfa6c3af309fc8ec10e20217546d3447798cf1efe85d3cd9e13865d1369cde
+
 But once we've confirmed the transaction has entered the chain, we're registered!
+
+## Getting snapshot of the voting power of registrations
+
+- Requires:
+  - Running `cardano-node` and `cardano-db-sync` ([cardano-db-sync](https://github.com/input-output-hk/cardano-db-sync))
+  - `voting-tools` executable from this project
+
+### Starting cardano-db-sync
+There are few ways to build and start `cardano-db-sync` together with `cardano-node`. You can refer to [cardano-db-sync](https://github.com/input-output-hk/cardano-db-sync) for details.
+
+In this example we'll start it using [docker-compose.yaml](https://github.com/input-output-hk/cardano-db-sync/blob/master/docker-compose.yml) as described in [Docker](https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/docker.md).
+
+First, let's clone the repository:
+
+```
+git clone git@github.com:input-output-hk/cardano-db-sync.git
+cd cardano-db-sync
+git checkout <latest-official-tag> -b tag-<latest-official-tag>
+```
+And launch `cardano-node` and `cardano-db-sync` from latest available snapshot:
+```
+RESTORE_SNAPSHOT=https://updates-cardano-testnet.s3.amazonaws.com/cardano-db-sync/12/db-sync-snapshot-schema-12-block-3336499-x86_64.tgz \
+NETWORK=testnet docker-compose up && docker-compose logs -f
+```
+
+We'll need to give it some time to sync with the tip of the blockchain.
+
+## Getting snapshot
+
+```
+export NETWORK_ID="--testnet-magic 1097911063"
+# Or use --mainnet
+export SLOT_TIP=$(cardano-cli query tip $NETWORK_ID | jq '.slot')
+
+voting-tools $NETWORK_ID \
+    --db $(cat ./config/secrets/postgres_db) \
+    --db-user $(cat ./config/secrets/postgres_user) \
+    --db-pass $(cat ./config/secrets/postgres_password) \
+    --db-host localhost \
+    --slot-no $SLOT_TIP \
+    --out-file voting-snaphot.json
+```
+File `voting-snaphot.json` will have snapshot of all voting registrations along with their voting power registered up until the slot number specified in `--slot-no`:
+```
+[
+    {
+        "reward_address": "0xe0ff8263a56e9955a4ef29290399ee482633ba1623ecdbd79ac7a87d7c",
+        "stake_public_key": "0xd4af79e030104aad8dacc94658656e33cf0d1622b491755d965ecdf48deb9e35",
+        "voting_power": 3001317931,
+        "voting_public_key": "0x05cc9b910fab1e61d835e0a63c7c816c5218790e65f06c786e91a6c0a25dda02"
+    },
+    ...
+```
 
 ## Development
 
