@@ -64,6 +64,7 @@ in
     machine.wait_for_unit("postgresql.service")
     machine.succeed("echo 'Running db_sync migrations...'")
     machine.succeed("for file in ${nodes.machine.config.services.cardano-db-sync.dbSyncPkgs.schema}/*; do PGPASSWORD=${dbPassword} psql -U db-sync -d db_sync -h localhost -f $file; done")
+    machine.succeed("exit 1")
 
     # Run voting-tools tests
     # Succeed with password authentication
