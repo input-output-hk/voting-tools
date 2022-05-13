@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -16,6 +17,7 @@ import qualified Data.ByteString.Char8 as BC
 import           Data.Either (partitionEithers)
 import           Data.Foldable (for_)
 import           Data.List (foldl')
+import           Data.Monoid (Sum (..))
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -23,9 +25,8 @@ import qualified Data.Text.Lazy.Encoding as TL
 import           Database.Esqueleto.Legacy (BackendCompatible, Single (Single), fromSqlKey)
 import           Database.Persist.Postgresql (IsolationLevel (Serializable), SqlBackend,
                    SqlPersistT, rawExecute, rawSql, runSqlConnWithIsolation)
-import           System.IO (hPutStr, hPutStrLn, stderr)
-
 import           Ouroboros.Network.Block (unSlotNo)
+import           System.IO (hPutStr, hPutStrLn, stderr)
 
 import           Cardano.Api (SlotNo)
 import qualified Cardano.Api as Api
@@ -33,7 +34,7 @@ import qualified Cardano.Api.Shelley as Api
 import           Cardano.CLI.Fetching (RegistrationInfo (..))
 import           Cardano.CLI.Voting.Metadata (MetadataParsingError, Vote, metadataMetaKey,
                    parseMetadataFromJson, prettyPrintMetadataParsingError, signatureMetaKey,
-                   voteFromTxMetadata, voteRegistrationVerificationKey)
+                   voteFromTxMetadata, voteRegistrationSlot, voteRegistrationVerificationKey)
 import           Cardano.CLI.Voting.Signing (getStakeHash)
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
@@ -95,18 +96,35 @@ queryStake
   -> Api.Hash Api.StakeKey
   -> m Api.Lovelace
 queryStake nw stakeHash = do
-  r <- ask
   let
       -- TODO: figure out how to obtain this from NetworkId via cardano-api
       stakeAddress = Api.makeStakeAddress nw (Api.StakeCredentialByKey stakeHash)
+
+  queryStake' stakeAddress
+
+queryStake'
+  :: ( MonadIO m
+     , MonadReader backend m
+     , BackendCompatible SqlBackend backend
+     )
+  => Api.StakeAddress
+  -> m Api.Lovelace
+queryStake' stakeAddress = do
+  r <- ask
+  let
       stakeAddressHex = T.pack (BC.unpack $ Api.serialiseToRawBytesHex stakeAddress)
-      stakeQuerySql = "SELECT SUM(utxo_snapshot.value) FROM utxo_snapshot WHERE stake_credential = decode('" <> stakeAddressHex <> "', 'hex');"
+      -- Don't do SUM here, lovelace is a bounded integer type defined by
+      -- cardano-db-sync, unless you perform a conversion to an unbounded type,
+      -- it will overflow if the SUM exceeds the max value of a lovelace db
+      -- type.
+      stakeQuerySql = "SELECT utxo_snapshot.value FROM utxo_snapshot WHERE stake_credential = decode('" <> stakeAddressHex <> "', 'hex');"
   (stakeValues :: [Single (Maybe DbLovelace)]) <- (flip runReaderT) r $ rawSql stakeQuerySql []
-  case stakeValues of
-    _x1:(_x2:_xs)                         -> error "Too many stake values found for stake sum, is SUM missing from your query?"
-    []                                    -> pure 0
-    (Single Nothing):[]                   -> pure 0
-    (Single (Just (DbLovelace stake))):[] -> pure $ fromIntegral stake
+  pure $ getSum $ foldMap (\case
+                           Single Nothing ->
+                             Sum 0
+                           Single (Just (DbLovelace stake)) ->
+                             Sum $ fromIntegral stake
+                       ) stakeValues
 
 queryVoteRegistrationInfo
   :: ( MonadIO m
@@ -141,6 +159,7 @@ queryVoteRegistrationInfo nw mSlotNo  = do
     xs :: Map (Api.Hash Api.StakeKey) Vote
     xs = fmap snd $ foldl' (\acc (txid, rego) ->
              let
+               -- The staking key
                verKeyHash = getStakeHash $ voteRegistrationVerificationKey $ rego
              in
                case M.lookup verKeyHash acc of
@@ -154,16 +173,23 @@ queryVoteRegistrationInfo nw mSlotNo  = do
                  --       └── The metadata was JSON
                  --           └── The metadata was valid cardano-api TxMetadata
                  --               └── The metadata constituted a valid vote
-                 --                   └── But we found a later vote.
-                 Just (t, _)  -> if txid >= t
-                                 then M.insert verKeyHash (txid, rego) acc
-                                 else acc
+                 --                   └── But we found a later vote with a higher nonce (slot number).
+                 Just (_txid, existingRego)  ->
+                   -- NOTE: This check relies on goodRegos being in order from
+                   -- lowest txId to highest.
+                   if voteRegistrationSlot rego > voteRegistrationSlot existingRego
+                   then M.insert verKeyHash (txid, rego) acc
+                   else acc
            ) mempty goodRegos
 
   liftIO $ hPutStrLn stderr $ "\nKeys eligible: " <> show (length xs)
 
   let
     xs' = zip [1..] (M.toList xs)
+  -- Voting power is calculated from unspent UTxOs, so we look for TxOuts that
+  -- have no associated TxIn.
+  -- In the following, txIn.tx_in_id is NULL when the transaction output has not
+  -- been spent (due to the left outer join).
   stakeTempTableSql <- case mSlotNo of
     Nothing     -> do
       let stake_credential_index = "CREATE INDEX IF NOT EXISTS utxo_snapshot_stake_credential ON utxo_snapshot(stake_credential);"
