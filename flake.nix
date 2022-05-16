@@ -14,7 +14,7 @@
       url = "github:input-output-hk/cardano-node?ref=refs/tags/1.31.0";
     };
     cardano-db-sync = {
-      url = "github:input-output-hk/cardano-db-sync";
+      url = "github:input-output-hk/cardano-db-sync?ref=refs/tags/12.0.2";
     };
   };
 
