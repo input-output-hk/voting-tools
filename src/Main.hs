@@ -6,16 +6,15 @@ import           Control.Monad.Except (ExceptT, runExceptT)
 import           Control.Monad.Logger (logInfoN, runNoLoggingT)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Encode.Pretty as Aeson
-import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy.Char8 as BLC
 import qualified Data.Text as T
-import           Database.Persist.Postgresql (ConnectionString, SqlPersistT, withPostgresqlConn)
+import           Database.Persist.Postgresql (SqlPersistT, withPostgresqlConn)
 import qualified Options.Applicative as Opt
 
 import           Cardano.CLI.Fetching (votingPowerFromRegistrationInfo)
 import           Cardano.CLI.Query (MetadataRetrievalError)
 import qualified Cardano.CLI.Query as Query
-import           Config.Common (DatabaseConfig (..))
+import           Config.Common (DatabaseConfig (..), pgConnectionString)
 import qualified Config.Snapshot as Snapshot
 
 main :: IO ()
@@ -47,12 +46,3 @@ runQuery dbConfig q = runNoLoggingT $ do
     case result of
       Left (err :: MetadataRetrievalError) -> fail $ show err
       Right x                              -> pure x
-
-
-pgConnectionString :: DatabaseConfig -> ConnectionString
-pgConnectionString (DatabaseConfig dbName dbUser dbHost mDbPassword) =
-  BSC.pack
-    $ "host=" <> dbHost
-    <> " dbname=" <> dbName
-    <> " user=" <> dbUser
-    <> maybe "" (" password=" <>) mDbPassword

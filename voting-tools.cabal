@@ -61,6 +61,7 @@ library
                      , monoidal-containers
                      , mtl
                      , optparse-applicative
+                     , persistent-postgresql
                      , safe-exceptions
                      , scientific
                      , text
