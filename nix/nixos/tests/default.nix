@@ -18,4 +18,5 @@ let
 in rec {
   db-password-auth = callTest ./db-password-auth.nix {};
   mock-db = callTest ./mock-db.nix {};
+  db-tests = callTest ./db-tests.nix {};
 }

@@ -14,6 +14,9 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , getVoteVerificationKeyHash
                                   , getVoteVerificationKey
                                   , withVoteVerificationKey
+                                  , serialiseVoteVerificationKeyToBech32
+                                  , voteVerificationKeyHashRaw
+                                  , voteVerificationKeyStakeAddressHashRaw
                                   , hashVotePayload
                                   , withVoteSigningKey
                                   , withVoteShelleySigningKey
@@ -27,6 +30,7 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , withWitnessPaymentKey
                                   , toStakeAddr
                                   , readVotePaymentKeyFile
+                                  , voteVerificationKeyToStakeAddress
                                   ) where
 
 import           Control.Monad.Except (MonadError)
@@ -56,6 +60,11 @@ import qualified Cardano.Crypto.Hashing as Crypto
 import qualified Cardano.Crypto.Util as Crypto
 import qualified Cardano.Ledger.Keys as Shelley
 
+import qualified Cardano.Api as Api
+import qualified Cardano.Api.Shelley as Api
+import qualified Data.ByteString.Char8 as BC
+import           Data.Text (Text)
+
 import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
 
 data VoteSigningKey
@@ -63,10 +72,38 @@ data VoteSigningKey
   | AStakeExtendedSigningKey (SigningKey StakeExtendedKey)
   deriving Show
 
+instance Eq VoteSigningKey where
+  skey1 == skey2 = getVoteVerificationKey skey1 == getVoteVerificationKey skey2
+
+instance Ord VoteSigningKey where
+  skey1 <= skey2 = getVoteVerificationKey skey1 <= getVoteVerificationKey skey2
+
 data VoteVerificationKey
   = AStakeVerificationKey (VerificationKey StakeKey)
   | AStakeExtendedVerificationKey (VerificationKey StakeExtendedKey)
   deriving (Eq, Show)
+
+instance Ord VoteVerificationKey where
+  compare a b =
+    compare (serialiseVoteVerificationKeyToBech32 a)
+            (serialiseVoteVerificationKeyToBech32 b)
+
+serialiseVoteVerificationKeyToBech32 :: VoteVerificationKey -> Text
+serialiseVoteVerificationKeyToBech32 (AStakeVerificationKey verKey)
+  = Api.serialiseToBech32 verKey
+serialiseVoteVerificationKeyToBech32 (AStakeExtendedVerificationKey verKey)
+  = Api.serialiseToBech32 verKey
+
+voteVerificationKeyHashRaw :: VoteVerificationKey -> ByteString
+voteVerificationKeyHashRaw (AStakeVerificationKey vKey)
+  = Api.serialiseToRawBytesHex $ Api.verificationKeyHash vKey
+voteVerificationKeyHashRaw (AStakeExtendedVerificationKey vKey)
+  = Api.serialiseToRawBytesHex $ Api.verificationKeyHash vKey
+
+voteVerificationKeyStakeAddressHashRaw :: NetworkId -> VoteVerificationKey -> ByteString
+voteVerificationKeyStakeAddressHashRaw nw vKey =
+  Api.serialiseToRawBytes
+  $ Api.makeStakeAddress nw (Api.StakeCredentialByKey (getStakeHash vKey))
 
 instance ToJSON VoteVerificationKey where
   toJSON = Aeson.String . ("0x" <>) . T.decodeUtf8 . serialiseToRawBytesHex
@@ -253,3 +290,14 @@ instance SerialiseAsRawBytes VoteVerificationKey where
     case (AStakeExtendedVerificationKey <$> deserialiseFromRawBytes (AsVerificationKey AsStakeExtendedKey) bs) of
       Nothing -> (AStakeVerificationKey <$> deserialiseFromRawBytes (AsVerificationKey AsStakeKey) bs)
       x       -> x
+
+voteVerificationKeyToStakeAddress :: NetworkId -> Text -> Either String Text
+voteVerificationKeyToStakeAddress nw verKeyHex =
+  case Aeson.fromJSON (Aeson.String verKeyHex) of
+      Aeson.Error err -> Left err
+      Aeson.Success verKey ->
+          let
+              stakeAddress = Api.makeStakeAddress nw (Api.StakeCredentialByKey (getStakeHash verKey))
+              stakeAddressHex = T.pack $ BC.unpack $ Api.serialiseToRawBytesHex stakeAddress
+          in
+              Right stakeAddressHex

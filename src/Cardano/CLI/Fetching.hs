@@ -78,7 +78,7 @@ data RegistrationInfo
   = RegistrationInfo { _regoInfoRego :: Vote
                      , _regoInfoAmount :: Integer
                      }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 votingPowerFromRegistrationInfo :: Int -> RegistrationInfo -> VotingPower
 votingPowerFromRegistrationInfo scale (RegistrationInfo rego amt) =

@@ -131,6 +131,8 @@ let
 
         # FIXME: Error loading shared library libHSvoting-tools-0.2.0.0-HDZeaOp1VIwKhm4zJgwaOj.so: No such file or directory
         packages.voting-tools.components.tests.unit-tests.buildable = lib.mkForce (!pkgs.stdenv.hostPlatform.isMusl);
+        # Run as part of a NixOS test
+        packages.voting-tools.components.tests.integration-tests.doCheck = false;
       })
       # Musl libc fully static build
       ({ pkgs, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isMusl (let
