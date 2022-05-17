@@ -2,18 +2,20 @@
 
 module Main where
 
-import           Control.Monad.Except (ExceptT, runExceptT)
+import           Cardano.Catalyst.VotePower (getVoteRegistrationADA)
+import           Control.Monad.Except (runExceptT)
+import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Logger (logInfoN, runNoLoggingT)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Encode.Pretty as Aeson
 import qualified Data.ByteString.Lazy.Char8 as BLC
 import qualified Data.Text as T
-import           Database.Persist.Postgresql (SqlPersistT, withPostgresqlConn)
+import           Database.Persist.Postgresql (IsolationLevel (Serializable), SqlPersistT,
+                   runSqlConnWithIsolation, withPostgresqlConn)
 import qualified Options.Applicative as Opt
 
-import           Cardano.CLI.Fetching (votingPowerFromRegistrationInfo)
-import           Cardano.CLI.Query (MetadataRetrievalError)
-import qualified Cardano.CLI.Query as Query
+import           Cardano.CLI.Fetching (RegistrationInfo (..), votingPowerFromRegistrationInfo)
+import qualified Cardano.Catalyst.Query.Sql as Sql
 import           Config.Common (DatabaseConfig (..), pgConnectionString)
 import qualified Config.Snapshot as Snapshot
 
@@ -26,23 +28,20 @@ main = do
     Left (err :: Snapshot.ConfigError) ->
       fail $ show err
     Right (Snapshot.Config networkId scale db slotNo outfile) -> do
-      votingFunds <-
-        runQuery db $ Query.queryVotingFunds networkId slotNo
+      votingFunds <- runQuery db $ getVoteRegistrationADA (Sql.sqlQuery) networkId slotNo
 
       let
-        scaled = votingPowerFromRegistrationInfo scale <$> votingFunds
+        scaled =
+          (votingPowerFromRegistrationInfo scale . (uncurry RegistrationInfo))
+          <$> votingFunds
 
       BLC.writeFile outfile . toJSON Aeson.Generic $ scaled
 
 toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString
 toJSON numFormat = Aeson.encodePretty' (Aeson.defConfig { Aeson.confCompare = Aeson.compare, Aeson.confNumFormat = numFormat })
 
-runQuery :: DatabaseConfig -> ExceptT MetadataRetrievalError (SqlPersistT IO) a -> IO a
+runQuery :: DatabaseConfig -> SqlPersistT IO a -> IO a
 runQuery dbConfig q = runNoLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
-    result <- Query.runQuery backend $ runExceptT $ q
-
-    case result of
-      Left (err :: MetadataRetrievalError) -> fail $ show err
-      Right x                              -> pure x
+    liftIO $ runSqlConnWithIsolation q backend Serializable

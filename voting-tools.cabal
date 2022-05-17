@@ -42,6 +42,7 @@ library
                      , Cardano.Catalyst.Test.DSL.Internal.Db
                      , Cardano.Catalyst.Test.DSL.Internal.Types
                      , Cardano.Catalyst.Query.Types
+                     , Cardano.Catalyst.Query.Sql
                      , Cardano.Catalyst.Registration
                      , Cardano.Catalyst.VotePower
                      , Cardano.Db.Extended
@@ -72,6 +73,7 @@ library
                      , monoidal-containers
                      , mtl
                      , optparse-applicative
+                     , ouroboros-network
                      , persistent
                      , persistent-postgresql
                      , safe-exceptions
@@ -84,7 +86,6 @@ library
 executable voting-tools
   import:              project-config
   main-is:             Main.hs
-  other-modules:       Cardano.CLI.Query
   build-depends:       base
                      , aeson
                      , aeson-pretty
@@ -101,7 +102,6 @@ executable voting-tools
                      , cardano-ledger-byron
                      , cardano-ledger-core
                      , containers
-                     , esqueleto
                      , lens
                      , lens-aeson
                      , monad-logger
@@ -121,6 +121,10 @@ executable voting-tools
   other-modules:   Cardano.API.Extended
                  , Cardano.API.Extended.Raw
                  , Cardano.API.Jormungandr
+                 , Cardano.Catalyst.Query.Sql
+                 , Cardano.Catalyst.Query.Types
+                 , Cardano.Catalyst.Registration
+                 , Cardano.Catalyst.VotePower
                  , Cardano.CLI.Fetching
                  , Cardano.CLI.Voting
                  , Cardano.Db.Extended
@@ -203,7 +207,6 @@ test-suite integration-tests
                 , cardano-ledger-byron
                 , cardano-ledger-core
                 , containers
-                , esqueleto
                 , lens
                 , monad-logger
                 , mtl
@@ -216,7 +219,12 @@ test-suite integration-tests
                 , unordered-containers
 
   other-modules:        Test.Cardano.Catalyst.Db
-                        Cardano.CLI.Query
+                        Cardano.Catalyst.Query.Sql
+                        Test.Cardano.Catalyst.Helpers
+                        Cardano.Catalyst.Query.Sql
+                        Cardano.Catalyst.Query.Types
+                        Cardano.Catalyst.Registration
+                        Cardano.Catalyst.VotePower
                         Cardano.API.Extended
                         Cardano.API.Extended.Raw
                         Cardano.API.Jormungandr

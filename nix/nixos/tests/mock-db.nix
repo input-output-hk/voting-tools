@@ -93,6 +93,7 @@ in
     machine.succeed("sed -i -e '$a\\' out.json")
 
     # Ensure generated file matches golden file
-    machine.succeed("diff ${mock-data}/out.json out.json")
+    # Ensure sorted for comparison purposes
+    machine.succeed("diff <(jq -c 'sort_by(.stake_public_key)' ${mock-data}/out.json) <(jq -c 'sort_by(.stake_public_key)' out.json)")
   '';
 }
