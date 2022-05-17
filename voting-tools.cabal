@@ -42,6 +42,8 @@ library
                      , Cardano.Catalyst.Test.DSL.Internal.Db
                      , Cardano.Catalyst.Test.DSL.Internal.Types
                      , Cardano.Catalyst.Query.Types
+                     , Cardano.Catalyst.Registration
+                     , Cardano.Catalyst.VotePower
                      , Cardano.Db.Extended
                      , Config.Snapshot
                      , Config.Registration
