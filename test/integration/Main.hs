@@ -11,6 +11,7 @@ import           Test.Tasty (TestTree, askOption, defaultIngredients, defaultMai
 import           Test.Tasty.Options (IsOption (..), OptionDescription (..))
 import           Test.Tasty.Runners (NumThreads (..))
 
+import qualified Cardano.Catalyst.Query.Esqueleto as Esql
 import qualified Cardano.Catalyst.Query.Sql as Sql
 import qualified Data.Pool as Pool
 import qualified Data.Text as T
@@ -51,7 +52,9 @@ tests =
     withPostgresPool connStr $ \getConnPool -> do
       testGroup "Integration tests"
         [ Test.Cardano.Catalyst.Db.tests (Sql.sqlQuery) getConnPool
+        , Test.Cardano.Catalyst.Db.tests (Esql.esqlQuery) getConnPool
         , Test.Cardano.Catalyst.Query.tests (Sql.sqlQuery) getConnPool
+        , Test.Cardano.Catalyst.Query.tests (Esql.esqlQuery) getConnPool
         ]
 
 newtype DbName = DbName Text

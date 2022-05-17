@@ -207,6 +207,7 @@ test-suite integration-tests
                 , cardano-ledger-byron
                 , cardano-ledger-core
                 , containers
+                , esqueleto
                 , lens
                 , monad-logger
                 , mtl
@@ -223,6 +224,7 @@ test-suite integration-tests
                         Cardano.Catalyst.Query.Sql
                         Test.Cardano.Catalyst.Helpers
                         Cardano.Catalyst.Query.Sql
+                        Cardano.Catalyst.Query.Esqueleto
                         Cardano.Catalyst.Query.Types
                         Cardano.Catalyst.Registration
                         Cardano.Catalyst.VotePower
