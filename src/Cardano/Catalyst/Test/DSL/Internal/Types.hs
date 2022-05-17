@@ -100,7 +100,7 @@ import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.CLI.Voting (createVoteRegistration)
 import           Cardano.CLI.Voting.Metadata (RewardsAddress, Vote, VotePayload (..),
                    voteRegistrationSlot)
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, getVoteVerificationKey)
+import           Cardano.CLI.Voting.Signing (VoteSigningKey, getStakeHash, getVoteVerificationKey)
 import           Cardano.Db.Extended ()
 import           Data.Kind (Type)
 import           Data.Maybe (catMaybes)
@@ -108,6 +108,8 @@ import           Data.Word (Word32)
 import           Database.Persist.Postgresql (Key)
 import           Database.Persist.Sql (Entity (..), entityKey, entityVal)
 
+import qualified Cardano.Api as Api
+import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Db as Db
 
 -- | The backbone of this module, 'PersistState' indicates whether the object:
@@ -412,6 +414,14 @@ instance StakeRegistrationState 'Persisted where
 -- Available to 'StakeRegistration's in the 'Persisted' state.
 getStakeRegoKey :: StakeRegistration 'Persisted -> Key (Db.StakeAddress)
 getStakeRegoKey = entityKey . stakeRegoAddrP
+
+getStakeAddress
+  :: StakeRegistrationState state
+  => Api.NetworkId
+  -> StakeRegistration state
+  -> Api.StakeAddress
+getStakeAddress nw =
+  Api.makeStakeAddress nw . Api.StakeCredentialByKey . getStakeHash . getVoteVerificationKey . stakeRegoKey
 
 deriving instance Show (StakeRegistration 'Ephemeral)
 deriving instance Show (StakeRegistration 'Persisted)

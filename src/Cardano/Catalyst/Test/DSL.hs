@@ -50,6 +50,7 @@ module Cardano.Catalyst.Test.DSL
   , Types.stakeRegoTx
   , Types.stakeRegoAddress
   , Types.getStakeRegoKey
+  , Types.getStakeAddress
   , Types.setStakeAddressRegistrationSlot
   -- ** Graph
   , Types.Graph(..)

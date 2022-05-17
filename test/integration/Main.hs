@@ -17,6 +17,7 @@ import qualified Data.Text as T
 import qualified Test.Tasty as Tasty
 
 import qualified Test.Cardano.Catalyst.Db
+import qualified Test.Cardano.Catalyst.Query
 
 main :: IO ()
 main =
@@ -50,6 +51,7 @@ tests =
     withPostgresPool connStr $ \getConnPool -> do
       testGroup "Integration tests"
         [ Test.Cardano.Catalyst.Db.tests (Sql.sqlQuery) getConnPool
+        , Test.Cardano.Catalyst.Query.tests (Sql.sqlQuery) getConnPool
         ]
 
 newtype DbName = DbName Text

@@ -219,6 +219,7 @@ test-suite integration-tests
                 , unordered-containers
 
   other-modules:        Test.Cardano.Catalyst.Db
+                        Test.Cardano.Catalyst.Query
                         Cardano.Catalyst.Query.Sql
                         Test.Cardano.Catalyst.Helpers
                         Cardano.Catalyst.Query.Sql
