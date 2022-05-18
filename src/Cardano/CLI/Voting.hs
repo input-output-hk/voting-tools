@@ -19,18 +19,18 @@ import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
 
 import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.CLI.Voting.Metadata (RewardsAddress, Vote, mkVotePayload, signVotePayload)
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, getVoteVerificationKey, sign)
+import           Cardano.CLI.Voting.Signing (StakeSigningKey, getStakeVerificationKey, sign)
 
 -- | Create a vote registration payload.
 createVoteRegistration
-  :: VoteSigningKey
+  :: StakeSigningKey
   -> VotingKeyPublic
   -> RewardsAddress
   -> Integer
   -> Vote
 createVoteRegistration skey votepub rewardsAddr slot =
     let
-      payload     = mkVotePayload votepub (getVoteVerificationKey skey) rewardsAddr slot
+      payload     = mkVotePayload votepub (getStakeVerificationKey skey) rewardsAddr slot
       payloadCBOR = serialiseToCBOR payload
 
       payloadSig  :: SigDSIGN (DSIGN StandardCrypto)

@@ -64,9 +64,9 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genInt64
   ) where
 
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, VoteVerificationKey,
-                   getVoteVerificationKey, serialiseVoteVerificationKeyToBech32,
-                   voteVerificationKeyStakeAddressHashRaw)
+import           Cardano.CLI.Voting.Signing (StakeSigningKey, StakeVerificationKey,
+                   getStakeVerificationKey, serialiseStakeVerificationKeyToBech32,
+                   stakeVerificationKeyHash)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),
                    Registration (..), StakeRegistration (..), Transaction (..), UTxO (..),
                    stakeRegoKey)
@@ -381,7 +381,7 @@ genVoteRegistration
      , MonadState [Word32] m
      , MonadIO m
      )
-  => VoteSigningKey
+  => StakeSigningKey
   -> m (Registration 'Ephemeral)
 genVoteRegistration skey = do
   Registration
@@ -409,9 +409,9 @@ genStakeAddressRegistration = do
   stakeAddress         <- genStakeAddress
 
   let
-    verKey = getVoteVerificationKey stakingKey
-    verKeyHashRaw = voteVerificationKeyStakeAddressHashRaw Cardano.Mainnet verKey
-    verKeyView = serialiseVoteVerificationKeyToBech32 verKey
+    verKey = getStakeVerificationKey stakingKey
+    verKeyHashRaw = Cardano.serialiseToRawBytesHex $ stakeVerificationKeyHash verKey
+    verKeyView = serialiseStakeVerificationKeyToBech32 verKey
 
   pure $
     StakeRegistrationE
@@ -421,6 +421,58 @@ genStakeAddressRegistration = do
                     , Db.stakeAddressView = verKeyView
                     }
       )
+
+genStakeAddress :: (MonadGen m, MonadState [Word32] m) => m Db.StakeAddress
+genStakeAddress =
+  Db.StakeAddress
+  <$> genUniqueHash32
+  <*> Gen.text (Range.linear 0 256) Gen.unicodeAll
+  <*> pure Nothing
+  <*> (Persist.toSqlKey <$> genInt64)
+
+genStakeAddressForVerificationKey
+  :: MonadGen m
+  => StakeVerificationKey
+  -> m Db.StakeAddress
+genStakeAddressForVerificationKey verKey = do
+  let verKeyHashRaw = Cardano.serialiseToRawBytesHex $ stakeVerificationKeyHash verKey
+      verKeyView = serialiseStakeVerificationKeyToBech32 verKey
+
+  Db.StakeAddress verKeyHashRaw verKeyView
+  <$> pure Nothing
+  <*> (Persist.toSqlKey <$> genInt64)
+
+genTxOut :: MonadGen m => m Db.TxOut
+genTxOut = Db.TxOut
+  <$> (Persist.toSqlKey <$> genInt64)
+  -- ^ tx id
+  <*> (fromIntegral <$> Gen.int16 (Range.linear 0 (maxBound :: Int16)))
+  -- ^ index (uses smallint >= 0)
+  <*> Gen.text (Range.linear 0 103) Gen.ascii
+  -- ^ address
+  <*> genHash32
+  -- ^ address raw
+  <*> Gen.bool
+  -- ^ has script
+  <*> Gen.maybe genHash28
+  -- ^ Payment credential
+  <*> Gen.maybe (Persist.toSqlKey <$> genInt64)
+  -- ^ stake address id
+  <*> genLovelace
+  -- ^ Value
+  <*> Gen.maybe genHash32
+  -- ^ Data hash
+
+genTxIn :: MonadGen m => m Db.TxIn
+genTxIn = Db.TxIn
+  <$> (Persist.toSqlKey <$> genInt64)
+  -- ^ Tx in id
+  <*> (Persist.toSqlKey <$> genInt64)
+  -- ^ Tx out id
+  <*> genWord16
+  -- ^ Tx out index
+  <*> pure Nothing
+  -- ^ Redeemer id
 
 -- | Generate a DSL 'UTxO' term.
 --

@@ -9,7 +9,7 @@ module Test.Cardano.Catalyst.Db where
 
 import           Cardano.CLI.Voting.Metadata (mkVotePayload, signatureMetaKey,
                    votePayloadToTxMetadata)
-import           Cardano.CLI.Voting.Signing (getVoteVerificationKey)
+import           Cardano.CLI.Voting.Signing (getStakeVerificationKey)
 import           Cardano.Catalyst.Query.Types
 import           Cardano.Catalyst.Test.DSL (apiToDbMetadata, contributionAmount, genGraph,
                    genStakeAddressRegistration, genTransaction, genUInteger, genUTxO,
@@ -334,7 +334,7 @@ prop_signatureMalformed intf getConnPool =
         votePayload <-
           mkVotePayload
           <$> Gen.votingKeyPublic
-          <*> pure (getVoteVerificationKey stakeKey)
+          <*> pure (getStakeVerificationKey stakeKey)
           <*> Gen.rewardsAddress
           <*> Gen.slotNo
         let

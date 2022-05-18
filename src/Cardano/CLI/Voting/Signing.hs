@@ -6,27 +6,35 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.CLI.Voting.Signing ( VoteSigningKey
-                                  , VoteVerificationKey
-                                  , AsType(AsVoteVerificationKey)
-                                  , getVoteVerificationKey
-                                  , withVoteVerificationKey
-                                  , serialiseVoteVerificationKeyToBech32
-                                  , voteVerificationKeyHashRaw
-                                  , voteVerificationKeyStakeAddressHashRaw
-                                  , hashVotePayload
-                                  , withVoteSigningKey
-                                  , withVoteShelleySigningKey
-                                  , voteSigningKeyFromStakeSigningKey
-                                  , voteSigningKeyFromStakeExtendedSigningKey
-                                  , getStakeHash
-                                  , sign
-                                  , verify
-                                  , readVoteSigningKeyFile
-                                  , verificationKeyRawBytes
-                                  , toStakeAddr
-                                  , voteVerificationKeyToStakeAddress
-                                  ) where
+module Cardano.CLI.Voting.Signing
+  ( -- * SigningKey (private key)
+   StakeSigningKey
+  -- ** Creation
+  , readStakeSigningKeyFile
+  -- *** From Cardano.Api types
+  , signingKeyFromStakeSigningKey
+  , signingKeyFromStakeExtendedSigningKey
+  -- ** Conversion
+  -- *** To Cardano.Api types
+  , withStakeSigningKey
+  , withShelleySigningKey
+  -- *** To verification key
+  , getStakeVerificationKey
+  -- * VerificationKey (public key)
+  , StakeVerificationKey
+  , AsType(AsStakeVerificationKey)
+  , stakeVerificationKeyHash
+  , serialiseStakeVerificationKeyToBech32
+  -- ** Conversion
+  , withStakeVerificationKey
+  -- ** StakeAddress
+  , stakeAddressFromKeyHash
+  , stakeAddressFromVerificationKey
+  -- * Operations
+  , hashPayload
+  , sign
+  , verify
+  ) where
 
 import           Control.Monad.Except (MonadError)
 import           Control.Monad.IO.Class (MonadIO)
@@ -55,70 +63,57 @@ import qualified Cardano.Crypto.Util as Crypto
 import qualified Cardano.Ledger.Keys as Shelley
 
 import qualified Cardano.Api as Api
-import qualified Cardano.Api.Shelley as Api
-import qualified Data.ByteString.Char8 as BC
 import           Data.Text (Text)
 
 import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
 
-data VoteSigningKey
+data StakeSigningKey
   = AStakeSigningKey         (SigningKey StakeKey)
   | AStakeExtendedSigningKey (SigningKey StakeExtendedKey)
   deriving Show
 
-instance Eq VoteSigningKey where
-  skey1 == skey2 = getVoteVerificationKey skey1 == getVoteVerificationKey skey2
+instance Eq StakeSigningKey where
+  skey1 == skey2 = getStakeVerificationKey skey1 == getStakeVerificationKey skey2
 
-instance Ord VoteSigningKey where
-  skey1 <= skey2 = getVoteVerificationKey skey1 <= getVoteVerificationKey skey2
+instance Ord StakeSigningKey where
+  skey1 <= skey2 = getStakeVerificationKey skey1 <= getStakeVerificationKey skey2
 
-data VoteVerificationKey
+data StakeVerificationKey
   = AStakeVerificationKey (VerificationKey StakeKey)
   | AStakeExtendedVerificationKey (VerificationKey StakeExtendedKey)
   deriving (Eq, Show)
 
-instance Ord VoteVerificationKey where
+instance Ord StakeVerificationKey where
   compare a b =
-    compare (serialiseVoteVerificationKeyToBech32 a)
-            (serialiseVoteVerificationKeyToBech32 b)
+    compare (serialiseStakeVerificationKeyToBech32 a)
+            (serialiseStakeVerificationKeyToBech32 b)
 
-serialiseVoteVerificationKeyToBech32 :: VoteVerificationKey -> Text
-serialiseVoteVerificationKeyToBech32 (AStakeVerificationKey verKey)
+serialiseStakeVerificationKeyToBech32 :: StakeVerificationKey -> Text
+serialiseStakeVerificationKeyToBech32 (AStakeVerificationKey verKey)
   = Api.serialiseToBech32 verKey
-serialiseVoteVerificationKeyToBech32 (AStakeExtendedVerificationKey verKey)
+serialiseStakeVerificationKeyToBech32 (AStakeExtendedVerificationKey verKey)
   = Api.serialiseToBech32 verKey
 
-voteVerificationKeyHashRaw :: VoteVerificationKey -> ByteString
-voteVerificationKeyHashRaw (AStakeVerificationKey vKey)
-  = Api.serialiseToRawBytesHex $ Api.verificationKeyHash vKey
-voteVerificationKeyHashRaw (AStakeExtendedVerificationKey vKey)
-  = Api.serialiseToRawBytesHex $ Api.verificationKeyHash vKey
+stakeVerificationKeyHash :: StakeVerificationKey -> Hash StakeKey
+stakeVerificationKeyHash v = withStakeVerificationKey v (verificationKeyHash)
 
-voteVerificationKeyStakeAddressHashRaw :: NetworkId -> VoteVerificationKey -> ByteString
-voteVerificationKeyStakeAddressHashRaw nw vKey =
-  Api.serialiseToRawBytes
-  $ Api.makeStakeAddress nw (Api.StakeCredentialByKey (getStakeHash vKey))
-
-instance ToJSON VoteVerificationKey where
+instance ToJSON StakeVerificationKey where
   toJSON = Aeson.String . ("0x" <>) . T.decodeUtf8 . serialiseToRawBytesHex
 
-instance FromJSON VoteVerificationKey where
-  parseJSON = Aeson.withText "VoteVerificationKey" $ \str -> case T.stripPrefix "0x" str of
+instance FromJSON StakeVerificationKey where
+  parseJSON = Aeson.withText "StakeVerificationKey" $ \str -> case T.stripPrefix "0x" str of
     Nothing  -> fail "Missing hex identifier '0x'."
     Just hex ->
-      case deserialiseFromRawBytesHex AsVoteVerificationKey $ T.encodeUtf8 hex of
+      case deserialiseFromRawBytesHex AsStakeVerificationKey $ T.encodeUtf8 hex of
         Nothing -> fail "Failed to deserialise vote verification key."
         Just votePub -> pure votePub
 
-getVoteVerificationKey :: VoteSigningKey -> VoteVerificationKey
-getVoteVerificationKey (AStakeSigningKey skey)         = AStakeVerificationKey         $ getVerificationKey skey
-getVoteVerificationKey (AStakeExtendedSigningKey skey) = AStakeExtendedVerificationKey $ getVerificationKey skey
+getStakeVerificationKey :: StakeSigningKey -> StakeVerificationKey
+getStakeVerificationKey (AStakeSigningKey skey)         = AStakeVerificationKey         $ getVerificationKey skey
+getStakeVerificationKey (AStakeExtendedSigningKey skey) = AStakeExtendedVerificationKey $ getVerificationKey skey
 
-getStakeHash :: VoteVerificationKey -> Hash StakeKey
-getStakeHash v = withVoteVerificationKey v (verificationKeyHash)
-
-withVoteVerificationKey :: VoteVerificationKey -> (VerificationKey StakeKey -> a) -> a
-withVoteVerificationKey ver f =
+withStakeVerificationKey :: StakeVerificationKey -> (VerificationKey StakeKey -> a) -> a
+withStakeVerificationKey ver f =
   let
     vkey = case ver of
       (AStakeVerificationKey vkey')         -> vkey'
@@ -126,76 +121,75 @@ withVoteVerificationKey ver f =
   in
     f vkey
 
-toStakeAddr :: NetworkId -> Hash StakeKey -> StakeAddress
-toStakeAddr nw = makeStakeAddress nw . StakeCredentialByKey
+stakeAddressFromKeyHash :: NetworkId -> Hash StakeKey -> StakeAddress
+stakeAddressFromKeyHash nw = makeStakeAddress nw . StakeCredentialByKey
 
-verificationKeyRawBytes :: VoteSigningKey -> ByteString
-verificationKeyRawBytes (AStakeSigningKey k)         = serialiseToRawBytes $ getVerificationKey k
-verificationKeyRawBytes (AStakeExtendedSigningKey k) = serialiseToRawBytes $ getVerificationKey k
+stakeAddressFromVerificationKey :: NetworkId -> StakeVerificationKey -> StakeAddress
+stakeAddressFromVerificationKey nw = stakeAddressFromKeyHash nw . stakeVerificationKeyHash
 
-hashVotePayload :: ByteString -> ByteString
-hashVotePayload payload = Crypto.hashToBytes . Crypto.hashRaw $ LBS.fromStrict payload
+hashPayload :: ByteString -> ByteString
+hashPayload payload = Crypto.hashToBytes . Crypto.hashRaw $ LBS.fromStrict payload
 
-sign :: ByteString -> VoteSigningKey -> Crypto.SigDSIGN (DSIGN StandardCrypto)
-sign payload vsk = sign' (hashVotePayload payload) vsk
+sign :: ByteString -> StakeSigningKey -> Crypto.SigDSIGN (DSIGN StandardCrypto)
+sign payload vsk = sign' (hashPayload payload) vsk
 
 sign'
   :: Crypto.SignableRepresentation tosign
   => tosign
-  -> VoteSigningKey
+  -> StakeSigningKey
   -> Crypto.SigDSIGN (DSIGN StandardCrypto)
 sign' payload vsk =
-  withVoteShelleySigningKey vsk $ \skey ->
+  withShelleySigningKey vsk $ \skey ->
     let
       (Crypto.SignedDSIGN sig) = makeShelleySignature payload skey
     in sig
 
 verify
-  :: VoteVerificationKey
+  :: StakeVerificationKey
   -> ByteString
   -> Crypto.SigDSIGN (DSIGN StandardCrypto)
   -> Bool
-verify vkey payload sig = verify' vkey (hashVotePayload payload) sig
+verify vkey payload sig = verify' vkey (hashPayload payload) sig
 
 verify'
   :: Crypto.SignableRepresentation tosign
-  => VoteVerificationKey
+  => StakeVerificationKey
   -> tosign
   -> Crypto.SigDSIGN (DSIGN StandardCrypto)
   -> Bool
 verify' vkey payload sig =
-  withVoteVerificationKey vkey $ \(StakeVerificationKey (Shelley.VKey v)) ->
+  withStakeVerificationKey vkey $ \(StakeVerificationKey (Shelley.VKey v)) ->
     either (const False) (const True) $ Crypto.verifyDSIGN () v payload sig
 
-withVoteSigningKey :: VoteSigningKey
+withStakeSigningKey :: StakeSigningKey
                    -> (forall keyrole. Key keyrole => SigningKey keyrole -> a)
                    -> a
-withVoteSigningKey vsk f =
+withStakeSigningKey vsk f =
   case vsk of
     AStakeSigningKey sk         -> f sk
     AStakeExtendedSigningKey sk -> f sk
 
-withVoteShelleySigningKey :: VoteSigningKey -> (ShelleySigningKey -> a) -> a
-withVoteShelleySigningKey vsk f =
+withShelleySigningKey :: StakeSigningKey -> (ShelleySigningKey -> a) -> a
+withShelleySigningKey vsk f =
   case vsk of
     AStakeSigningKey (StakeSigningKey dsign)                -> f ( toShelleySigningKey $ WitnessStakeKey (StakeSigningKey dsign))
     AStakeExtendedSigningKey (StakeExtendedSigningKey xprv) -> f ( toShelleySigningKey $ WitnessStakeExtendedKey (StakeExtendedSigningKey xprv))
 
-voteSigningKeyFromStakeSigningKey :: SigningKey StakeKey -> VoteSigningKey
-voteSigningKeyFromStakeSigningKey sk = AStakeSigningKey sk
+signingKeyFromStakeSigningKey :: SigningKey StakeKey -> StakeSigningKey
+signingKeyFromStakeSigningKey sk = AStakeSigningKey sk
 
-voteSigningKeyFromStakeExtendedSigningKey :: SigningKey StakeExtendedKey -> VoteSigningKey
-voteSigningKeyFromStakeExtendedSigningKey sk = AStakeExtendedSigningKey sk
+signingKeyFromStakeExtendedSigningKey :: SigningKey StakeExtendedKey -> StakeSigningKey
+signingKeyFromStakeExtendedSigningKey sk = AStakeExtendedSigningKey sk
 
-readVoteSigningKeyFile
+readStakeSigningKeyFile
   :: ( MonadIO m
      , MonadError e m
      , AsFileError e fileErr
      , AsInputDecodeError fileErr
      )
   => SigningKeyFile
-  -> m VoteSigningKey
-readVoteSigningKeyFile skFile =
+  -> m StakeSigningKey
+readStakeSigningKeyFile skFile =
   readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
 
   where
@@ -213,26 +207,15 @@ readVoteSigningKeyFile skFile =
                       AStakeExtendedSigningKey
       ]
 
-instance HasTypeProxy VoteVerificationKey where
-  data AsType VoteVerificationKey = AsVoteVerificationKey
-  proxyToAsType _ = AsVoteVerificationKey
+instance HasTypeProxy StakeVerificationKey where
+  data AsType StakeVerificationKey = AsStakeVerificationKey
+  proxyToAsType _ = AsStakeVerificationKey
 
-instance SerialiseAsRawBytes VoteVerificationKey where
+instance SerialiseAsRawBytes StakeVerificationKey where
   serialiseToRawBytes (AStakeVerificationKey vkey)         = serialiseToRawBytes vkey
   serialiseToRawBytes (AStakeExtendedVerificationKey vkey) = serialiseToRawBytes vkey
 
-  deserialiseFromRawBytes AsVoteVerificationKey bs =
+  deserialiseFromRawBytes AsStakeVerificationKey bs =
     case (AStakeExtendedVerificationKey <$> deserialiseFromRawBytes (AsVerificationKey AsStakeExtendedKey) bs) of
       Nothing -> (AStakeVerificationKey <$> deserialiseFromRawBytes (AsVerificationKey AsStakeKey) bs)
       x       -> x
-
-voteVerificationKeyToStakeAddress :: NetworkId -> Text -> Either String Text
-voteVerificationKeyToStakeAddress nw verKeyHex =
-  case Aeson.fromJSON (Aeson.String verKeyHex) of
-      Aeson.Error err -> Left err
-      Aeson.Success verKey ->
-          let
-              stakeAddress = Api.makeStakeAddress nw (Api.StakeCredentialByKey (getStakeHash verKey))
-              stakeAddressHex = T.pack $ BC.unpack $ Api.serialiseToRawBytesHex stakeAddress
-          in
-              Right stakeAddressHex

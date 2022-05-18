@@ -25,7 +25,7 @@ import           Cardano.Api (Bech32DecodeError, StakeAddress)
 import qualified Cardano.Api as Api
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..))
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, readVoteSigningKeyFile)
+import           Cardano.CLI.Voting.Signing (StakeSigningKey, readStakeSigningKeyFile)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),
@@ -34,7 +34,7 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
 
 data Config = Config
     { cfgRewardsAddress      :: StakeAddress
-    , cfgVoteSigningKey      :: VoteSigningKey
+    , cfgStakeSigningKey      :: StakeSigningKey
     , cfgVotePublicKey       :: VotingKeyPublic
     , cfgSlotNo              :: Api.SlotNo
     , cfgOutFormat           :: MetadataOutFormat
@@ -69,7 +69,7 @@ mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
 mkConfig (Opts rewardsAddr vpkf vskf slotNo outFormat) = do
-  stkSign <- readVoteSigningKeyFile (SigningKeyFile vskf)
+  stkSign <- readStakeSigningKeyFile (SigningKeyFile vskf)
   votepk  <- readVotePublicKey vpkf
 
   pure $ Config rewardsAddr stkSign votepk slotNo outFormat
@@ -77,7 +77,7 @@ mkConfig (Opts rewardsAddr vpkf vskf slotNo outFormat) = do
 data Opts = Opts
     { optRewardsAddress      :: StakeAddress
     , optVotePublicKeyFile   :: FilePath
-    , optVoteSigningKeyFile  :: FilePath
+    , optStakeSigningKeyFile  :: FilePath
     , optSlotNo              :: Api.SlotNo
     , optOutFormat           :: MetadataOutFormat
     }

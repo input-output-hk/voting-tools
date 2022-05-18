@@ -13,10 +13,10 @@ import qualified Test.Generators as Gen
 
 tests :: TestTree
 tests = testGroup "Test.Cardano.CLI.Voting.Signing"
-  [ testProperty "JSON roundtrip VoteVerificationKey" prop_voteVerificationKey_json_roundtrip
+  [ testProperty "JSON roundtrip StakeVerificationKey" prop_stakeVerificationKey_json_roundtrip
   ]
 
-prop_voteVerificationKey_json_roundtrip :: Property
-prop_voteVerificationKey_json_roundtrip = property $ do
-  stakePub <- forAllT Gen.voteVerificationKey
+prop_stakeVerificationKey_json_roundtrip :: Property
+prop_stakeVerificationKey_json_roundtrip = property $ do
+  stakePub <- forAllT Gen.stakeVerificationKey
   tripping stakePub Aeson.encode Aeson.eitherDecode'

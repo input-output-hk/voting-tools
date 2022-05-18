@@ -34,7 +34,7 @@ votingPowerFromRegistrationInfo scale (RegistrationInfo rego amt) =
 
 data VotingPower
   = VotingPower { _powerVotingPublicKey :: VotingKeyPublic
-                , _powerStakePublicKey :: VoteVerificationKey
+                , _powerStakePublicKey :: StakeVerificationKey
                 , _powerRewardAddress :: RewardsAddress
                 , _powerVotingPower:: Integer
                 }

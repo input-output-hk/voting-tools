@@ -65,8 +65,8 @@ import qualified Data.Text.Encoding as T
 import           Data.Word (Word64)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
-import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKey), VoteVerificationKey,
-                   getStakeHash, verify)
+import           Cardano.CLI.Voting.Signing (AsType (AsStakeVerificationKey), StakeVerificationKey,
+                   stakeVerificationKeyHash, verify)
 
 newtype RewardsAddress = RewardsAddress Api.StakeAddress
   deriving (Eq, Ord, Show)
@@ -96,7 +96,7 @@ instance FromJSON RewardsAddress where
 -- key).
 data VotePayload
   = VotePayload { _votePayloadVoteKey         :: VotingKeyPublic
-                , _votePayloadVerificationKey :: VoteVerificationKey
+                , _votePayloadVerificationKey :: StakeVerificationKey
                 , _votePayloadRewardsAddr     :: RewardsAddress
                 , _votePayloadSlot            :: Integer
                 }
@@ -120,7 +120,7 @@ instance Ord Vote where
 voteRegistrationPublicKey :: Vote -> VotingKeyPublic
 voteRegistrationPublicKey = _votePayloadVoteKey . _voteMeta
 
-voteRegistrationVerificationKey :: Vote -> VoteVerificationKey
+voteRegistrationVerificationKey :: Vote -> StakeVerificationKey
 voteRegistrationVerificationKey = _votePayloadVerificationKey . _voteMeta
 
 voteRegistrationRewardsAddress :: Vote -> RewardsAddress
@@ -130,7 +130,7 @@ voteRegistrationSlot :: Vote -> Integer
 voteRegistrationSlot = _votePayloadSlot . _voteMeta
 
 voteRegistrationStakeHash :: Vote -> Api.Hash Api.StakeKey
-voteRegistrationStakeHash = getStakeHash . voteRegistrationVerificationKey
+voteRegistrationStakeHash = stakeVerificationKeyHash . voteRegistrationVerificationKey
 
 voteRegistrationStakeAddress :: Api.NetworkId -> Vote -> Api.StakeAddress
 voteRegistrationStakeAddress nw =
@@ -211,7 +211,7 @@ instance SerialiseAsCBOR VotePayload where
 mkVotePayload
   :: VotingKeyPublic
   -- ^ Voting public key
-  -> VoteVerificationKey
+  -> StakeVerificationKey
   -- ^ Vote verification key
   -> RewardsAddress
   -- ^ Address used to pay for the vote registration
@@ -270,7 +270,7 @@ votePayloadFromTxMetadata meta = do
 
   -- DECISION #10A:
   --   deserialise the stake verification key
-  stkVerify <- case Api.deserialiseFromRawBytes AsVoteVerificationKey stkVerifyRaw of
+  stkVerify <- case Api.deserialiseFromRawBytes AsStakeVerificationKey stkVerifyRaw of
     Nothing  -> throwError (_MetadataParseFailure # (RegoStakeVerificationKey, "Failed to deserialise."))
     Just x   -> pure x
   -- DECISION #10A:

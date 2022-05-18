@@ -17,9 +17,9 @@ import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), Lovelace,
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Voting
 import           Cardano.CLI.Voting.Metadata (RewardsAddress (..), Vote, VotePayload, mkVotePayload)
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, VoteVerificationKey,
-                   getVoteVerificationKey, toStakeAddr, voteSigningKeyFromStakeExtendedSigningKey,
-                   voteSigningKeyFromStakeSigningKey)
+import           Cardano.CLI.Voting.Signing (StakeSigningKey, StakeVerificationKey,
+                   getStakeVerificationKey, signingKeyFromStakeExtendedSigningKey,
+                   signingKeyFromStakeSigningKey, stakeAddressFromKeyHash)
 import           Cardano.Catalyst.Presentation (VotingPower (..))
 
 -- votingFunds :: Gen VotingFunds
@@ -76,7 +76,7 @@ votingPower :: (MonadGen m, MonadIO m) => m VotingPower
 votingPower =
   VotingPower
   <$> votingKeyPublic
-  <*> voteVerificationKey
+  <*> stakeVerificationKey
   <*> rewardsAddress
   <*> (fromIntegral <$> Gen.word64 Range.constantBounded)
 
@@ -89,17 +89,17 @@ votingKeyPublic =
   -- 64 bytes
   -- (https://github.com/input-output-hk/cardano-node/blob/5cffbcc6b3e2861ed20452f3f6291ee3fe2bf628/cardano-api/src/Cardano/Api/TxMetadata.hs#L190)
 
-voteSigningKey :: (MonadGen m, MonadIO m) => m VoteSigningKey
+voteSigningKey :: (MonadGen m, MonadIO m) => m StakeSigningKey
 voteSigningKey = do
-  a <- liftIO $ voteSigningKeyFromStakeSigningKey <$> generateSigningKey AsStakeKey
-  b <- liftIO $ voteSigningKeyFromStakeExtendedSigningKey <$> generateSigningKey AsStakeExtendedKey
+  a <- liftIO $ signingKeyFromStakeSigningKey <$> generateSigningKey AsStakeKey
+  b <- liftIO $ signingKeyFromStakeExtendedSigningKey <$> generateSigningKey AsStakeExtendedKey
   Gen.choice [ pure a
              , pure b
              ]
 
-voteVerificationKey :: (MonadGen m, MonadIO m) => m VoteVerificationKey
-voteVerificationKey =
-  getVoteVerificationKey <$> voteSigningKey
+stakeVerificationKey :: (MonadGen m, MonadIO m) => m StakeVerificationKey
+stakeVerificationKey =
+  getStakeVerificationKey <$> voteSigningKey
 
 rewardsAddress :: (MonadGen m, MonadIO m) => m RewardsAddress
 rewardsAddress = do
@@ -108,14 +108,14 @@ rewardsAddress = do
 
   network <- Gen.choice [ Testnet . NetworkMagic <$> Gen.word32 (Range.linear minBound maxBound), pure Mainnet ]
 
-  RewardsAddress <$> (toStakeAddr network <$> pure hashStakeKey)
+  RewardsAddress <$> (stakeAddressFromKeyHash network <$> pure hashStakeKey)
 
 slotNo :: MonadGen m => m Integer
 slotNo = fromIntegral <$> Gen.word32 Range.constantBounded
 
 votePayload :: (MonadGen m, MonadIO m) => m VotePayload
 votePayload =
-  mkVotePayload <$> votingKeyPublic <*> voteVerificationKey <*> rewardsAddress <*> slotNo
+  mkVotePayload <$> votingKeyPublic <*> stakeVerificationKey <*> rewardsAddress <*> slotNo
 
 vote :: (MonadGen m, MonadIO m) => m Vote
 vote =
