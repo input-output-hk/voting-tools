@@ -17,28 +17,26 @@
 -- verification key. The payload must be signed before it is
 -- considered a valid vote.
 module Cardano.CLI.Voting.Metadata ( VotePayload(..)
-                                   , Vote(..)
-                                   , RewardsAddress(..)
                                    , mkVotePayload
                                    , signVotePayload
-                                   , voteToTxMetadata
+                                   , votePayloadFromTxMetadata
                                    , votePayloadToTxMetadata
-                                   , voteSignature
-                                   , MetadataParsingError(..)
-                                   , AsMetadataParsingError(..)
-                                   , voteFromTxMetadata
-                                   , withMetaKey
-                                   , metadataMetaKey
-                                   , signatureMetaKey
+                                   , Vote
                                    , voteRegistrationPublicKey
                                    , voteRegistrationVerificationKey
                                    , voteRegistrationRewardsAddress
                                    , voteRegistrationStakeAddress
                                    , voteRegistrationSlot
                                    , voteRegistrationStakeHash
-                                   , metadataToJson
-                                   , parseMetadataFromJson
+                                   , voteSignature
+                                   , voteFromTxMetadata
+                                   , voteToTxMetadata
+                                   , RewardsAddress(..)
+                                   , metadataMetaKey
+                                   , signatureMetaKey
                                    , componentPath
+                                   , MetadataParsingError(..)
+                                   , AsMetadataParsingError(..)
                                    , prettyPrintMetadataParsingError
                                    , prettyPrintMetadataPath
                                    , prettyPrintComponent
@@ -59,7 +57,6 @@ import           Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import           Data.Bifunctor (first)
 import           Data.ByteString (ByteString)
-import qualified Data.HashMap.Strict as HM
 import           Data.List (find)
 import qualified Data.Map.Strict as M
 import           Data.Text (Text)
@@ -196,22 +193,6 @@ prettyPrintMetadataParsingError MetadataInvalidSignature =
 
 makeClassyPrisms ''MetadataParsingError
 
--- instance ToCBOR TxMetadata where
---   toCBOR (TxMetadata m) = CBOR.toCBOR m
-
--- instance ToCBOR TxMetadataValue where
---   toCBOR (TxMetaNumber num) = CBOR.toCBOR num
---   toCBOR (TxMetaBytes bs)   = CBOR.toCBOR bs
---   toCBOR (TxMetaText txt)   = CBOR.toCBOR txt
---   toCBOR (TxMetaList xs)    = CBOR.toCBOR xs
---   -- Bit of a subtlety here. TxMetaMap is represented as a list of
---   -- tuples, if we want to match the CBOR encoding of a traditional
---   -- Map, we need to convert this list of tuples to a Map and then
---   -- CBOR encode it. This means we may lose map entries if there are
---   -- duplicate keys. I've decided this is OK as the promised interface
---   -- is clearly a "Map".
---   toCBOR (TxMetaMap m)      = CBOR.toCBOR (M.fromList m)
-
 instance HasTypeProxy VotePayload where
   data AsType VotePayload = AsVotePayload
   proxyToAsType _ = AsVotePayload
@@ -238,7 +219,8 @@ mkVotePayload
   -- ^ Slot registration created at
   -> VotePayload
   -- ^ Payload of the vote
-mkVotePayload votepub vkey rewardsAddr slot = VotePayload votepub vkey rewardsAddr slot
+mkVotePayload votepub vkey rewardsAddr slot =
+  VotePayload votepub vkey rewardsAddr slot
 
 signVotePayload
   :: VotePayload
@@ -314,12 +296,6 @@ voteToTxMetadata (Vote payload sig) =
   in
     payloadMeta <> sigMeta
 
-parseMetadataFromJson :: Aeson.Value -> Either Api.TxMetadataJsonError Api.TxMetadata
-parseMetadataFromJson = Api.metadataFromJson Api.TxMetadataJsonNoSchema
-
-metadataToJson :: TxMetadata -> Aeson.Value
-metadataToJson = Api.metadataToJson Api.TxMetadataJsonNoSchema
-
 voteFromTxMetadata :: TxMetadata -> Either MetadataParsingError Vote
 voteFromTxMetadata meta = do
   payload <- votePayloadFromTxMetadata meta
@@ -381,8 +357,3 @@ metadataMetaKey = 61284
 
 signatureMetaKey :: Word64
 signatureMetaKey = 61285
-
--- | The database JSON has the meta key stored separately to the meta
---   value, use this function to combine them.
-withMetaKey :: Word64 -> Aeson.Value -> Aeson.Object
-withMetaKey metaKey val = HM.fromList [(T.pack . show $ metaKey, val)]
