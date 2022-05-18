@@ -14,7 +14,8 @@ import           Database.Persist.Postgresql (IsolationLevel (Serializable), Sql
                    runSqlConnWithIsolation, withPostgresqlConn)
 import qualified Options.Applicative as Opt
 
-import           Cardano.CLI.Fetching (RegistrationInfo (..), votingPowerFromRegistrationInfo)
+import           Cardano.Catalyst.Presentation (RegistrationInfo (..),
+                   votingPowerFromRegistrationInfo)
 import qualified Cardano.Catalyst.Query.Sql as Sql
 import           Config.Common (DatabaseConfig (..), pgConnectionString)
 import qualified Config.Snapshot as Snapshot

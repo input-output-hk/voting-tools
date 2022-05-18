@@ -14,12 +14,12 @@ import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), Lovelace,
                    verificationKeyHash)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
-import           Cardano.CLI.Fetching (VotingPower (..))
 import           Cardano.CLI.Voting
 import           Cardano.CLI.Voting.Metadata (RewardsAddress (..), Vote, VotePayload, mkVotePayload)
 import           Cardano.CLI.Voting.Signing (VoteSigningKey, VoteVerificationKey,
                    getVoteVerificationKey, toStakeAddr, voteSigningKeyFromStakeExtendedSigningKey,
                    voteSigningKeyFromStakeSigningKey)
+import           Cardano.Catalyst.Presentation (VotingPower (..))
 
 -- votingFunds :: Gen VotingFunds
 -- votingFunds = VotingFunds <$> Gen.map (Range.linear 0 16) ((,) <$> jaddr <*> lovelace)

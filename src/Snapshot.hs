@@ -17,7 +17,6 @@ import qualified Data.Vector as Vector
 import           Cardano.API.Extended
 import           Cardano.API.Jormungandr
 import           Cardano.Api
-import           Cardano.CLI.Fetching (Fund)
 
 getBlockZeroDate :: IO UTCTime
 getBlockZeroDate = do
@@ -26,9 +25,6 @@ getBlockZeroDate = do
     (TimeOfDay hr _ _ ) = timeToTimeOfDay dayTime
     blockZeroDate       = UTCTime day (timeOfDayToTime $ TimeOfDay hr 0 0)
   pure blockZeroDate
-
-setInitialFunds :: [Fund] -> Aeson.Value -> Aeson.Value
-setInitialFunds funds = _Object %~ HM.insert "initial" (Aeson.toJSON funds)
 
 setBlockZeroDate :: UTCTime -> Aeson.Value -> Aeson.Value
 setBlockZeroDate time =

@@ -3,7 +3,6 @@ module Test.Cardano.CLI.Voting.Signing
   )
 where
 
-import           Cardano.CLI.Fetching ()
 import qualified Data.Aeson as Aeson
 import           Hedgehog (Property, property, tripping)
 import           Hedgehog.Internal.Property (forAllT)

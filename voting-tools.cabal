@@ -32,7 +32,7 @@ library
   exposed-modules:     Cardano.API.Extended
                      , Cardano.API.Extended.Raw
                      , Cardano.API.Jormungandr
-                     , Cardano.CLI.Fetching
+                     , Cardano.Catalyst.Presentation
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Metadata
@@ -125,7 +125,7 @@ executable voting-tools
                  , Cardano.Catalyst.Query.Types
                  , Cardano.Catalyst.Registration
                  , Cardano.Catalyst.VotePower
-                 , Cardano.CLI.Fetching
+                 , Cardano.Catalyst.Presentation
                  , Cardano.CLI.Voting
                  , Cardano.Db.Extended
                  , Cardano.CLI.Voting.Error
@@ -165,7 +165,7 @@ test-suite unit-tests
                         Test.Cardano.CLI.Voting.Metadata
                         Test.Cardano.API.Extended
                         Test.Cardano.API.Jormungandr
-                        Test.Cardano.CLI.Fetching
+                        Test.Cardano.Catalyst.Presentation
                         Test.Cardano.CLI.Voting.Signing
                         Test.Snapshot
 
@@ -231,7 +231,7 @@ test-suite integration-tests
                         Cardano.API.Extended
                         Cardano.API.Extended.Raw
                         Cardano.API.Jormungandr
-                        Cardano.CLI.Fetching
+                        Cardano.Catalyst.Presentation
                         Cardano.CLI.Voting
                         Cardano.CLI.Voting.Metadata
                         Cardano.CLI.Voting.Signing
