@@ -145,8 +145,7 @@ test-suite unit-tests
                 , voting-tools
                 , cardano-crypto-class
 
-  other-modules:        Test.Generators
-                        Test.Cardano.CLI.Voting.Metadata
+  other-modules:        Test.Cardano.CLI.Voting.Metadata
                         Test.Cardano.API.Extended
                         Test.Cardano.API.Jormungandr
                         Test.Cardano.Catalyst.Presentation
