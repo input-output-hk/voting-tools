@@ -31,7 +31,6 @@ library
 
   exposed-modules:     Cardano.API.Extended
                      , Cardano.API.Extended.Raw
-                     , Cardano.API.Jormungandr
                      , Cardano.Catalyst.Presentation
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Metadata
@@ -110,7 +109,6 @@ executable voting-tools
   default-language:    Haskell2010
   other-modules:   Cardano.API.Extended
                  , Cardano.API.Extended.Raw
-                 , Cardano.API.Jormungandr
                  , Cardano.Catalyst.Query.Sql
                  , Cardano.Catalyst.Query.Types
                  , Cardano.Catalyst.Registration
@@ -147,7 +145,6 @@ test-suite unit-tests
 
   other-modules:        Test.Cardano.CLI.Voting.Metadata
                         Test.Cardano.API.Extended
-                        Test.Cardano.API.Jormungandr
                         Test.Cardano.Catalyst.Presentation
                         Test.Cardano.Catalyst.Crypto
 
@@ -211,7 +208,6 @@ test-suite integration-tests
                         Cardano.Catalyst.VotePower
                         Cardano.API.Extended
                         Cardano.API.Extended.Raw
-                        Cardano.API.Jormungandr
                         Cardano.Catalyst.Presentation
                         Cardano.CLI.Voting
                         Cardano.CLI.Voting.Metadata
