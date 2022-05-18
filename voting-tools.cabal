@@ -34,7 +34,6 @@ library
                      , Cardano.API.Jormungandr
                      , Cardano.Catalyst.Presentation
                      , Cardano.CLI.Voting
-                     , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Metadata
                      , Cardano.CLI.Voting.Signing
                      , Cardano.Catalyst.Test.DSL
@@ -128,7 +127,6 @@ executable voting-tools
                  , Cardano.Catalyst.Presentation
                  , Cardano.CLI.Voting
                  , Cardano.Db.Extended
-                 , Cardano.CLI.Voting.Error
                  , Cardano.CLI.Voting.Metadata
                  , Cardano.CLI.Voting.Signing
                  , Config.Common

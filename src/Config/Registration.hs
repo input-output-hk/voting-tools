@@ -21,7 +21,7 @@ import qualified Data.Text.IO as TIO
 
 import           Options.Applicative
 
-import           Cardano.Api (Bech32DecodeError, StakeAddress, TextEnvelopeError)
+import           Cardano.Api (Bech32DecodeError, StakeAddress)
 import qualified Cardano.Api as Api
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..))
@@ -31,7 +31,6 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),
                    AsType (AsVotingKeyPublic), VotingKeyPublic, deserialiseFromBech32',
                    parseStakeAddress, readerFromAttoParser)
-import           Cardano.CLI.Voting.Error (AsTextEnvelopeError (_TextEnvelopeError))
 
 data Config = Config
     { cfgRewardsAddress      :: StakeAddress
@@ -47,16 +46,12 @@ data MetadataOutFormat = MetadataOutFormatJSON
     deriving (Eq, Show)
 
 data FileErrors = FileErrorInputDecode InputDecodeError
-    | FileErrorTextEnvelope TextEnvelopeError
     deriving (Show)
 
 makePrisms ''FileErrors
 
 instance AsInputDecodeError FileErrors where
   _InputDecodeError = _FileErrorInputDecode
-
-instance AsTextEnvelopeError FileErrors where
-  _TextEnvelopeError = _FileErrorTextEnvelope
 
 data ConfigError = ConfigFailedToReadFile (Api.FileError FileErrors)
     | ConfigFailedToDecodeBech32 Bech32DecodeError
