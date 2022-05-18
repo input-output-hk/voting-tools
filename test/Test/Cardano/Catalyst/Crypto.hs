@@ -1,4 +1,4 @@
-module Test.Cardano.CLI.Voting.Signing
+module Test.Cardano.Catalyst.Crypto
   ( tests
   )
 where
@@ -12,7 +12,7 @@ import           Test.Tasty.Hedgehog (testProperty)
 import qualified Test.Generators as Gen
 
 tests :: TestTree
-tests = testGroup "Test.Cardano.CLI.Voting.Signing"
+tests = testGroup "Test.Cardano.Catalyst.Crypto"
   [ testProperty "JSON roundtrip StakeVerificationKey" prop_stakeVerificationKey_json_roundtrip
   ]
 

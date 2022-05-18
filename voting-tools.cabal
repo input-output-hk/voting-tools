@@ -35,7 +35,7 @@ library
                      , Cardano.Catalyst.Presentation
                      , Cardano.CLI.Voting
                      , Cardano.CLI.Voting.Metadata
-                     , Cardano.CLI.Voting.Signing
+                     , Cardano.Catalyst.Crypto
                      , Cardano.Catalyst.Test.DSL
                      , Cardano.Catalyst.Test.DSL.Gen
                      , Cardano.Catalyst.Test.DSL.Internal.Db
@@ -119,7 +119,7 @@ executable voting-tools
                  , Cardano.CLI.Voting
                  , Cardano.Db.Extended
                  , Cardano.CLI.Voting.Metadata
-                 , Cardano.CLI.Voting.Signing
+                 , Cardano.Catalyst.Crypto
                  , Config.Common
                  , Config.Snapshot
                  , Config.Registration
@@ -149,7 +149,7 @@ test-suite unit-tests
                         Test.Cardano.API.Extended
                         Test.Cardano.API.Jormungandr
                         Test.Cardano.Catalyst.Presentation
-                        Test.Cardano.CLI.Voting.Signing
+                        Test.Cardano.Catalyst.Crypto
 
 test-suite integration-tests
   import:               project-config
@@ -215,7 +215,7 @@ test-suite integration-tests
                         Cardano.Catalyst.Presentation
                         Cardano.CLI.Voting
                         Cardano.CLI.Voting.Metadata
-                        Cardano.CLI.Voting.Signing
+                        Cardano.Catalyst.Crypto
                         Cardano.Catalyst.Test.DSL
                         Cardano.Catalyst.Test.DSL.Gen
                         Cardano.Catalyst.Test.DSL.Internal.Db

@@ -6,7 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.CLI.Voting.Signing
+module Cardano.Catalyst.Crypto
   ( -- * SigningKey (private key)
    StakeSigningKey
   -- ** Creation

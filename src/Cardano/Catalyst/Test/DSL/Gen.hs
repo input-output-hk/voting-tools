@@ -64,7 +64,7 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genInt64
   ) where
 
-import           Cardano.CLI.Voting.Signing (StakeSigningKey, StakeVerificationKey,
+import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    getStakeVerificationKey, serialiseStakeVerificationKeyToBech32,
                    stakeVerificationKeyHash)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),

@@ -17,7 +17,7 @@ import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), Lovelace,
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Voting
 import           Cardano.CLI.Voting.Metadata (RewardsAddress (..), Vote, VotePayload, mkVotePayload)
-import           Cardano.CLI.Voting.Signing (StakeSigningKey, StakeVerificationKey,
+import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    getStakeVerificationKey, signingKeyFromStakeExtendedSigningKey,
                    signingKeyFromStakeSigningKey, stakeAddressFromKeyHash)
 import           Cardano.Catalyst.Presentation (VotingPower (..))

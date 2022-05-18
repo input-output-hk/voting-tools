@@ -19,7 +19,7 @@ import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
 
 import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.CLI.Voting.Metadata (RewardsAddress, Vote, mkVotePayload, signVotePayload)
-import           Cardano.CLI.Voting.Signing (StakeSigningKey, getStakeVerificationKey, sign)
+import           Cardano.Catalyst.Crypto (StakeSigningKey, getStakeVerificationKey, sign)
 
 -- | Create a vote registration payload.
 createVoteRegistration

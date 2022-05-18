@@ -25,7 +25,7 @@ import           Cardano.Api (Bech32DecodeError, StakeAddress)
 import qualified Cardano.Api as Api
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..))
-import           Cardano.CLI.Voting.Signing (StakeSigningKey, readStakeSigningKeyFile)
+import           Cardano.Catalyst.Crypto (StakeSigningKey, readStakeSigningKeyFile)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),

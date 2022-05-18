@@ -100,7 +100,7 @@ import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.CLI.Voting (createVoteRegistration)
 import           Cardano.CLI.Voting.Metadata (RewardsAddress, Vote, VotePayload (..),
                    voteRegistrationSlot)
-import           Cardano.CLI.Voting.Signing (StakeSigningKey, getStakeVerificationKey,
+import           Cardano.Catalyst.Crypto (StakeSigningKey, getStakeVerificationKey,
                    stakeAddressFromVerificationKey)
 import           Cardano.Db.Extended ()
 import           Data.Kind (Type)

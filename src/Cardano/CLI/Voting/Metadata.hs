@@ -65,7 +65,7 @@ import qualified Data.Text.Encoding as T
 import           Data.Word (Word64)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
-import           Cardano.CLI.Voting.Signing (AsType (AsStakeVerificationKey), StakeVerificationKey,
+import           Cardano.Catalyst.Crypto (AsType (AsStakeVerificationKey), StakeVerificationKey,
                    stakeVerificationKeyHash, verify)
 
 newtype RewardsAddress = RewardsAddress Api.StakeAddress

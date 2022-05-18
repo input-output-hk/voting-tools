@@ -4,7 +4,7 @@
 module Cardano.Catalyst.Presentation where
 
 import           Cardano.CLI.Voting.Metadata
-import           Cardano.CLI.Voting.Signing
+import           Cardano.Catalyst.Crypto
 import           Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
 import qualified Data.Aeson as Aeson
 import           Data.Char (toLower)
