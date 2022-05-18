@@ -9,7 +9,6 @@
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , VoteVerificationKey
                                   , VoteVerificationKeyHash
-                                  , VotePaymentKey
                                   , AsType(AsVoteVerificationKey, AsVoteVerificationKeyHash)
                                   , getVoteVerificationKeyHash
                                   , getVoteVerificationKey
@@ -27,9 +26,7 @@ module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , verify
                                   , readVoteSigningKeyFile
                                   , verificationKeyRawBytes
-                                  , withWitnessPaymentKey
                                   , toStakeAddr
-                                  , readVotePaymentKeyFile
                                   , voteVerificationKeyToStakeAddress
                                   ) where
 
@@ -121,11 +118,6 @@ data VoteVerificationKeyHash
   | AStakeExtendedVerificationKeyHash (Hash StakeExtendedKey)
   deriving (Ord, Eq, Show)
 
-data VotePaymentKey
-  = APaymentSigningKey (SigningKey PaymentKey)
-  | APaymentExtendedSigningKey (SigningKey PaymentExtendedKey)
-  deriving (Show)
-
 instance HasTypeProxy VoteVerificationKeyHash where
   data AsType VoteVerificationKeyHash = AsVoteVerificationKeyHash
   proxyToAsType _ = AsVoteVerificationKeyHash
@@ -165,38 +157,6 @@ toStakeAddr nw = makeStakeAddress nw . StakeCredentialByKey
 verificationKeyRawBytes :: VoteSigningKey -> ByteString
 verificationKeyRawBytes (AStakeSigningKey k)         = serialiseToRawBytes $ getVerificationKey k
 verificationKeyRawBytes (AStakeExtendedSigningKey k) = serialiseToRawBytes $ getVerificationKey k
-
-withWitnessPaymentKey :: VotePaymentKey -> (ShelleyWitnessSigningKey -> a) -> a
-withWitnessPaymentKey vsk f =
-  case vsk of
-    APaymentSigningKey k         -> f $ WitnessPaymentKey k
-    APaymentExtendedSigningKey k -> f $ WitnessPaymentExtendedKey k
-
-readVotePaymentKeyFile
-  :: ( MonadIO m
-     , MonadError e m
-     , AsFileError e fileErr
-     , AsInputDecodeError fileErr
-     )
-  => SigningKeyFile
-  -> m VotePaymentKey
-readVotePaymentKeyFile skFile =
-  readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
-
-  where
-    textEnvFileTypes =
-      [ FromSomeType (AsSigningKey AsPaymentKey)
-                      APaymentSigningKey
-      , FromSomeType (AsSigningKey AsPaymentExtendedKey)
-                      APaymentExtendedSigningKey
-      ]
-
-    bech32FileTypes =
-      [ FromSomeType (AsSigningKey AsPaymentKey)
-                      APaymentSigningKey
-      , FromSomeType (AsSigningKey AsPaymentExtendedKey)
-                      APaymentExtendedSigningKey
-      ]
 
 hashVotePayload :: ByteString -> ByteString
 hashVotePayload payload = Crypto.hashToBytes . Crypto.hashRaw $ LBS.fromStrict payload
