@@ -15,7 +15,6 @@ point in time.
 
 module Cardano.Catalyst.VotePower where
 
-import           Cardano.CLI.Voting.Metadata (Vote, voteRegistrationStakeAddress)
 import           Cardano.Catalyst.Query.Types (Query (..))
 import           Cardano.Catalyst.Registration
 

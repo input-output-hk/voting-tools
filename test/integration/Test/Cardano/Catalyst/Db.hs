@@ -7,10 +7,10 @@
 
 module Test.Cardano.Catalyst.Db where
 
-import           Cardano.CLI.Voting.Metadata (mkVotePayload, signatureMetaKey,
-                   votePayloadToTxMetadata)
 import           Cardano.Catalyst.Crypto (getStakeVerificationKey)
 import           Cardano.Catalyst.Query.Types
+import           Cardano.Catalyst.Registration (mkVotePayload, signatureMetaKey,
+                   votePayloadToTxMetadata)
 import           Cardano.Catalyst.Test.DSL (apiToDbMetadata, contributionAmount, genGraph,
                    genStakeAddressRegistration, genTransaction, genUInteger, genUTxO,
                    genVoteRegistration, getGraphVote, getRegistrationVote, getStakeRegoKey,
@@ -34,13 +34,13 @@ import           Test.Tasty.Hedgehog (testProperty)
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Api
+import qualified Cardano.Catalyst.Test.DSL.Gen as Gen
 import qualified Control.Monad.State.Strict as State
 import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import qualified Database.Persist.Class as Sql
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import qualified Test.Generators as Gen
 
 tests :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> TestTree
 tests intf getConnPool =
@@ -333,10 +333,10 @@ prop_signatureMalformed intf getConnPool =
         -- Gen good registration data
         votePayload <-
           mkVotePayload
-          <$> Gen.votingKeyPublic
+          <$> Gen.genVotingKeyPublic
           <*> pure (getStakeVerificationKey stakeKey)
-          <*> Gen.rewardsAddress
-          <*> Gen.slotNo
+          <*> Gen.genRewardsAddress
+          <*> Gen.genSlotNo
         let
           metaRego = votePayloadToTxMetadata votePayload
 

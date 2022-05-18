@@ -9,7 +9,7 @@ import           Hedgehog.Internal.Property (forAllT)
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog (testProperty)
 
-import qualified Test.Generators as Gen
+import qualified Cardano.Catalyst.Test.DSL.Gen as Gen
 
 tests :: TestTree
 tests = testGroup "Test.Cardano.Catalyst.Crypto"
@@ -18,5 +18,5 @@ tests = testGroup "Test.Cardano.Catalyst.Crypto"
 
 prop_stakeVerificationKey_json_roundtrip :: Property
 prop_stakeVerificationKey_json_roundtrip = property $ do
-  stakePub <- forAllT Gen.stakeVerificationKey
+  stakePub <- forAllT Gen.genStakeVerificationKey
   tripping stakePub Aeson.encode Aeson.eitherDecode'

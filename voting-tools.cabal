@@ -32,22 +32,21 @@ library
   exposed-modules:     Cardano.API.Extended
                      , Cardano.API.Extended.Raw
                      , Cardano.Catalyst.Presentation
-                     , Cardano.CLI.Voting
-                     , Cardano.CLI.Voting.Metadata
                      , Cardano.Catalyst.Crypto
                      , Cardano.Catalyst.Test.DSL
                      , Cardano.Catalyst.Test.DSL.Gen
+                     , Cardano.Catalyst.Test.Presentation.Gen
                      , Cardano.Catalyst.Test.DSL.Internal.Db
                      , Cardano.Catalyst.Test.DSL.Internal.Types
                      , Cardano.Catalyst.Query.Types
                      , Cardano.Catalyst.Query.Sql
                      , Cardano.Catalyst.Registration
+                     , Cardano.Catalyst.Registration.Types
                      , Cardano.Catalyst.VotePower
                      , Cardano.Db.Extended
                      , Config.Snapshot
                      , Config.Registration
                      , Config.Common
-                     , Test.Generators
 
   build-depends:       base
                      , aeson
@@ -112,11 +111,10 @@ executable voting-tools
                  , Cardano.Catalyst.Query.Sql
                  , Cardano.Catalyst.Query.Types
                  , Cardano.Catalyst.Registration
+                 , Cardano.Catalyst.Registration.Types
                  , Cardano.Catalyst.VotePower
                  , Cardano.Catalyst.Presentation
-                 , Cardano.CLI.Voting
                  , Cardano.Db.Extended
-                 , Cardano.CLI.Voting.Metadata
                  , Cardano.Catalyst.Crypto
                  , Config.Common
                  , Config.Snapshot
@@ -143,7 +141,7 @@ test-suite unit-tests
                 , voting-tools
                 , cardano-crypto-class
 
-  other-modules:        Test.Cardano.CLI.Voting.Metadata
+  other-modules:        Test.Cardano.Catalyst.Registration
                         Test.Cardano.API.Extended
                         Test.Cardano.Catalyst.Presentation
                         Test.Cardano.Catalyst.Crypto
@@ -205,17 +203,16 @@ test-suite integration-tests
                         Cardano.Catalyst.Query.Esqueleto
                         Cardano.Catalyst.Query.Types
                         Cardano.Catalyst.Registration
+                        Cardano.Catalyst.Registration.Types
                         Cardano.Catalyst.VotePower
                         Cardano.API.Extended
                         Cardano.API.Extended.Raw
                         Cardano.Catalyst.Presentation
-                        Cardano.CLI.Voting
-                        Cardano.CLI.Voting.Metadata
                         Cardano.Catalyst.Crypto
                         Cardano.Catalyst.Test.DSL
                         Cardano.Catalyst.Test.DSL.Gen
                         Cardano.Catalyst.Test.DSL.Internal.Db
                         Cardano.Catalyst.Test.DSL.Internal.Types
+                        Cardano.Catalyst.Test.Presentation.Gen
                         Config.Common
-                        Test.Generators
                         Cardano.Db.Extended

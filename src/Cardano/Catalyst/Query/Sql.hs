@@ -25,9 +25,9 @@ import           Ouroboros.Network.Block (unSlotNo)
 
 import           Cardano.Api (SlotNo)
 import qualified Cardano.Api as Api
-import           Cardano.CLI.Voting.Metadata (MetadataParsingError, metadataMetaKey,
-                   signatureMetaKey)
 import qualified Cardano.Catalyst.Query.Types as Query
+import           Cardano.Catalyst.Registration (MetadataParsingError, metadataMetaKey,
+                   signatureMetaKey)
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import qualified Data.Aeson as Aeson

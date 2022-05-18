@@ -97,11 +97,10 @@ module Cardano.Catalyst.Test.DSL.Internal.Types
   ) where
 
 import           Cardano.API.Extended (VotingKeyPublic)
-import           Cardano.CLI.Voting (createVoteRegistration)
-import           Cardano.CLI.Voting.Metadata (RewardsAddress, Vote, VotePayload (..),
-                   voteRegistrationSlot)
 import           Cardano.Catalyst.Crypto (StakeSigningKey, getStakeVerificationKey,
                    stakeAddressFromVerificationKey)
+import           Cardano.Catalyst.Registration (RewardsAddress, Vote, VotePayload (..),
+                   createVoteRegistration, voteRegistrationSlot)
 import           Cardano.Db.Extended ()
 import           Data.Kind (Type)
 import           Data.Maybe (catMaybes)

@@ -64,18 +64,26 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genInt64
   ) where
 
+import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
+import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), NetworkId (Mainnet, Testnet),
+                   NetworkMagic (..), deserialiseFromRawBytes, generateSigningKey,
+                   getVerificationKey, verificationKeyHash)
 import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    getStakeVerificationKey, serialiseStakeVerificationKeyToBech32,
-                   stakeVerificationKeyHash)
+                   signingKeyFromStakeExtendedSigningKey, signingKeyFromStakeSigningKey,
+                   stakeAddressFromKeyHash, stakeVerificationKeyHash)
+import           Cardano.Catalyst.Registration (RewardsAddress (..), Vote, VotePayload,
+                   createVoteRegistration, mkVotePayload)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),
                    Registration (..), StakeRegistration (..), Transaction (..), UTxO (..),
                    stakeRegoKey)
 import           Control.Monad (replicateM_)
-import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.State.Class (MonadState)
 import           Data.ByteString (ByteString)
 import           Data.Functor.Identity (Identity)
 import           Data.Int (Int16, Int64)
+import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word16, Word32, Word64)
@@ -94,7 +102,6 @@ import qualified Data.Time.Clock.POSIX as Time
 import qualified Database.Persist.Sql as Persist
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import qualified Test.Generators as Gen
 
 genSlotLeader :: (MonadGen m, MonadState [Word32] m) => m Db.SlotLeader
 genSlotLeader = Db.SlotLeader
@@ -385,8 +392,8 @@ genVoteRegistration
   -> m (Registration 'Ephemeral)
 genVoteRegistration skey = do
   Registration
-    <$> Gen.votingKeyPublic
-    <*> Gen.rewardsAddress
+    <$> genVotingKeyPublic
+    <*> genRewardsAddress
     <*> genUInteger -- slotNo
     <*> pure skey
     <*> Gen.bool
@@ -404,7 +411,7 @@ genStakeAddressRegistration
      )
   => m (StakeRegistration 'Ephemeral)
 genStakeAddressRegistration = do
-  stakingKey           <- Gen.voteSigningKey
+  stakingKey           <- genVoteSigningKey
   stakeRegoTransaction <- genTransaction
   stakeAddress         <- genStakeAddress
 
@@ -505,3 +512,44 @@ genGraph = do
   Graph stakeRego
     <$> Gen.list (Range.linear 0 3) (genVoteRegistration (stakeRegoKey stakeRego))
     <*> Gen.list (Range.linear 0 3) genUTxO
+
+genVotingKeyPublic :: MonadGen m => m VotingKeyPublic
+genVotingKeyPublic =
+  fromMaybe (error "Deserialising VotingKeyPublic from bytes failed!")
+  <$> deserialiseFromRawBytes AsVotingKeyPublic
+  <$> Gen.bytes (Range.linear 0 64)
+  -- ^ cardano-node enforces that the maximum bytestring length of any metadata
+  -- is 64 bytes
+  -- (https://github.com/input-output-hk/cardano-node/blob/5cffbcc6b3e2861ed20452f3f6291ee3fe2bf628/cardano-api/src/Cardano/Api/TxMetadata.hs#L190)
+
+genVoteSigningKey :: (MonadGen m, MonadIO m) => m StakeSigningKey
+genVoteSigningKey = do
+  a <- liftIO $ signingKeyFromStakeSigningKey <$> generateSigningKey AsStakeKey
+  b <- liftIO $ signingKeyFromStakeExtendedSigningKey <$> generateSigningKey AsStakeExtendedKey
+  Gen.choice [ pure a
+             , pure b
+             ]
+
+genStakeVerificationKey :: (MonadGen m, MonadIO m) => m StakeVerificationKey
+genStakeVerificationKey =
+  getStakeVerificationKey <$> genVoteSigningKey
+
+genRewardsAddress :: (MonadGen m, MonadIO m) => m RewardsAddress
+genRewardsAddress = do
+  signingKey <- liftIO $ generateSigningKey AsStakeKey
+  let hashStakeKey = verificationKeyHash . getVerificationKey $ signingKey
+
+  network <- Gen.choice [ Testnet . NetworkMagic <$> Gen.word32 (Range.linear minBound maxBound), pure Mainnet ]
+
+  RewardsAddress <$> (stakeAddressFromKeyHash network <$> pure hashStakeKey)
+
+genSlotNo :: MonadGen m => m Integer
+genSlotNo = fromIntegral <$> Gen.word32 Range.constantBounded
+
+genVotePayload :: (MonadGen m, MonadIO m) => m VotePayload
+genVotePayload =
+  mkVotePayload <$> genVotingKeyPublic <*> genStakeVerificationKey <*> genRewardsAddress <*> genSlotNo
+
+genVote :: (MonadGen m, MonadIO m) => m Vote
+genVote =
+  createVoteRegistration <$> genVoteSigningKey <*> genVotingKeyPublic <*> genRewardsAddress <*> genSlotNo

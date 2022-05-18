@@ -10,7 +10,7 @@ import           Hedgehog.Internal.Property (forAllT)
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.Hedgehog (testProperty)
 
-import qualified Test.Generators as Gen
+import qualified Cardano.Catalyst.Test.Presentation.Gen as Gen
 
 tests :: TestTree
 tests = testGroup "Test.Cardano.Catalyst.Presentation"

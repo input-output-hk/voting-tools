@@ -11,36 +11,36 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
--- | A vote in Voltaire is encoded as transaction metadata. We
--- distinguish two parts of the vote here: the payload, and the signed
--- vote. The payload consists of the vote public key, and the stake
--- verification key. The payload must be signed before it is
--- considered a valid vote.
-module Cardano.CLI.Voting.Metadata ( VotePayload(..)
-                                   , mkVotePayload
-                                   , signVotePayload
-                                   , votePayloadFromTxMetadata
-                                   , votePayloadToTxMetadata
-                                   , Vote
-                                   , voteRegistrationPublicKey
-                                   , voteRegistrationVerificationKey
-                                   , voteRegistrationRewardsAddress
-                                   , voteRegistrationStakeAddress
-                                   , voteRegistrationSlot
-                                   , voteRegistrationStakeHash
-                                   , voteSignature
-                                   , voteFromTxMetadata
-                                   , voteToTxMetadata
-                                   , RewardsAddress(..)
-                                   , metadataMetaKey
-                                   , signatureMetaKey
-                                   , componentPath
-                                   , MetadataParsingError(..)
-                                   , AsMetadataParsingError(..)
-                                   , prettyPrintMetadataParsingError
-                                   , prettyPrintMetadataPath
-                                   , prettyPrintComponent
-                                   ) where
+module Cardano.Catalyst.Registration.Types
+  ( createVoteRegistration
+  , VotePayload(..)
+  , mkVotePayload
+  , signVotePayload
+  , votePayloadFromTxMetadata
+  , votePayloadToTxMetadata
+  , Vote
+  , voteRegistrationPublicKey
+  , voteRegistrationVerificationKey
+  , voteRegistrationRewardsAddress
+  , voteRegistrationStakeAddress
+  , voteRegistrationSlot
+  , voteRegistrationStakeHash
+  , voteSignature
+  , voteFromTxMetadata
+  , voteToTxMetadata
+  , RewardsAddress(..)
+  , metadataMetaKey
+  , signatureMetaKey
+  , componentPath
+  , MetadataParsingError(..)
+  , AsMetadataParsingError(..)
+  , prettyPrintMetadataParsingError
+  , prettyPrintMetadataPath
+  , prettyPrintComponent
+  , ParseRegistrationError(..)
+  , AsParseRegistrationError(..)
+  , parseRegistration
+  ) where
 
 import           Cardano.Api (AsType (AsTxMetadata), HasTypeProxy (..), SerialiseAsCBOR (..),
                    TxMetadata (TxMetadata), TxMetadataValue (..), makeTransactionMetadata,
@@ -59,14 +59,16 @@ import           Data.Bifunctor (first)
 import           Data.ByteString (ByteString)
 import           Data.List (find)
 import qualified Data.Map.Strict as M
+import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Word (Word64)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
-import           Cardano.Catalyst.Crypto (AsType (AsStakeVerificationKey), StakeVerificationKey,
-                   stakeVerificationKeyHash, verify)
+import           Cardano.Catalyst.Crypto (AsType (AsStakeVerificationKey), StakeSigningKey,
+                   StakeVerificationKey, getStakeVerificationKey, sign, stakeVerificationKeyHash,
+                   verify)
 
 newtype RewardsAddress = RewardsAddress Api.StakeAddress
   deriving (Eq, Ord, Show)
@@ -357,3 +359,46 @@ metadataMetaKey = 61284
 
 signatureMetaKey :: Word64
 signatureMetaKey = 61285
+
+-- | Create a vote registration payload.
+createVoteRegistration
+  :: StakeSigningKey
+  -> VotingKeyPublic
+  -> RewardsAddress
+  -> Integer
+  -> Vote
+createVoteRegistration skey votepub rewardsAddr slot =
+    let
+      payload     = mkVotePayload votepub (getStakeVerificationKey skey) rewardsAddr slot
+      payloadCBOR = serialiseToCBOR payload
+
+      payloadSig  :: Crypto.SigDSIGN (DSIGN StandardCrypto)
+      payloadSig  = payloadCBOR `sign` skey
+  in
+    fromMaybe (error "Failed to sign vote payload") $
+      signVotePayload payload payloadSig
+
+data ParseRegistrationError
+  = ParseFailedToDecodeTxMetadata !Api.TxMetadataJsonError
+  | ParseFailedToDecodeVoteRegistration !MetadataParsingError
+  deriving (Eq, Show)
+
+makeClassyPrisms ''ParseRegistrationError
+
+parseRegistration
+  :: Aeson.Value
+  -> Either ParseRegistrationError Vote
+parseRegistration rego = do
+  voteRegoTxMetadata <-
+    handleEither
+    (\e -> _ParseFailedToDecodeTxMetadata # e)
+    $ Api.metadataFromJson Api.TxMetadataJsonNoSchema rego
+
+  voteRego <-
+    handleEither (\e -> _ParseFailedToDecodeVoteRegistration # e)
+    $ voteFromTxMetadata voteRegoTxMetadata
+
+  pure voteRego
+
+handleEither :: (e -> e') -> Either e x -> Either e' x
+handleEither f = either (throwError . f) pure

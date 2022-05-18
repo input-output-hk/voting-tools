@@ -7,9 +7,9 @@
 
 module Cardano.Catalyst.Query.Esqueleto where
 
-import           Cardano.CLI.Voting.Metadata (MetadataParsingError, metadataMetaKey,
-                   signatureMetaKey)
 import           Cardano.Catalyst.Query.Types (Query)
+import           Cardano.Catalyst.Registration (MetadataParsingError, metadataMetaKey,
+                   signatureMetaKey)
 import           Cardano.Db (Block, DbLovelace (..), DbWord64 (..), EntityField (..), Key,
                    StakeAddress, Tx, TxId, TxIn, TxMetadata, TxOut, txMetadataJson)
 import           Control.Lens.TH (makeClassyPrisms)

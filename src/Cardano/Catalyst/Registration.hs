@@ -1,40 +1,20 @@
-{-# LANGUAGE TemplateHaskell #-}
+module Cardano.Catalyst.Registration
+  ( -- * Logic
+    isNewer
+  , chooseNewer
+  , filterLatestRegistrations
+  , accumulateRegistrations
+  -- * Types
+  , module Cardano.Catalyst.Registration.Types
+  ) where
 
-module Cardano.Catalyst.Registration where
-
-import           Cardano.CLI.Voting.Metadata (MetadataParsingError, Vote, voteFromTxMetadata,
-                   voteRegistrationSlot, voteRegistrationStakeHash)
-import           Control.Lens ((#))
-import           Control.Lens.TH (makeClassyPrisms)
-import           Control.Monad.Except (throwError)
 import           Data.Foldable (foldl')
 import           Data.Map.Strict (Map)
 
 import qualified Cardano.Api as Api
-import qualified Data.Aeson as Aeson
 import qualified Data.Map.Strict as M
 
-data ParseRegistrationError
-  = ParseFailedToDecodeTxMetadata !Api.TxMetadataJsonError
-  | ParseFailedToDecodeVoteRegistration !MetadataParsingError
-  deriving (Eq, Show)
-
-makeClassyPrisms ''ParseRegistrationError
-
-parseRegistration
-  :: Aeson.Value
-  -> Either ParseRegistrationError Vote
-parseRegistration rego = do
-  voteRegoTxMetadata <-
-    handleEither
-    (\e -> _ParseFailedToDecodeTxMetadata # e)
-    $ Api.metadataFromJson Api.TxMetadataJsonNoSchema rego
-
-  voteRego <-
-    handleEither (\e -> _ParseFailedToDecodeVoteRegistration # e)
-    $ voteFromTxMetadata voteRegoTxMetadata
-
-  pure voteRego
+import           Cardano.Catalyst.Registration.Types
 
 filterLatestRegistrations :: Ord a => [(a, Vote)] -> [Vote]
 filterLatestRegistrations regos =
@@ -72,6 +52,3 @@ isNewer a@(tA, _regoA) b@(tB, _regoB) =
     slotOld = voteRegistrationSlot $ snd old
   in
     a == (if slotNew > slotOld then new else old)
-
-handleEither :: (e -> e') -> Either e x -> Either e' x
-handleEither f = either (throwError . f) pure

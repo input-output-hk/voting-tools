@@ -41,7 +41,7 @@ persistStakeRegistration backend stakeRego =
 
 module Cardano.Catalyst.Test.DSL.Internal.Db where
 
-import           Cardano.CLI.Voting.Metadata (votePayloadToTxMetadata, voteToTxMetadata)
+import           Cardano.Catalyst.Registration (votePayloadToTxMetadata, voteToTxMetadata)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),
                    Registration (..), StakeRegistration (..), Transaction (..), UTxO (..),
                    getRegistrationVote, getRegistrationVotePayload, getStakeRegoKey, getTxKey,

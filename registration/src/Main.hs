@@ -13,8 +13,8 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Options.Applicative as Opt
 import           Ouroboros.Network.Block (unSlotNo)
 
-import           Cardano.CLI.Voting (createVoteRegistration)
-import           Cardano.CLI.Voting.Metadata (RewardsAddress (..), voteToTxMetadata)
+import           Cardano.Catalyst.Registration (RewardsAddress (..), createVoteRegistration,
+                   voteToTxMetadata)
 import qualified Config.Registration as Register
 
 main :: IO ()
