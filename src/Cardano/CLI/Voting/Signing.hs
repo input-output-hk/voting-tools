@@ -8,9 +8,7 @@
 
 module Cardano.CLI.Voting.Signing ( VoteSigningKey
                                   , VoteVerificationKey
-                                  , VoteVerificationKeyHash
-                                  , AsType(AsVoteVerificationKey, AsVoteVerificationKeyHash)
-                                  , getVoteVerificationKeyHash
+                                  , AsType(AsVoteVerificationKey)
                                   , getVoteVerificationKey
                                   , withVoteVerificationKey
                                   , serialiseVoteVerificationKeyToBech32
@@ -41,13 +39,12 @@ import qualified Data.Text.Encoding as T
 
 import           Cardano.API.Extended (AsFileError, AsInputDecodeError, readSigningKeyFileAnyOf)
 import           Cardano.Api
-                   (AsType (AsHash, AsPaymentExtendedKey, AsPaymentKey, AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
-                   FromSomeType (..), HasTypeProxy, Hash, Key, NetworkId, PaymentExtendedKey,
-                   PaymentKey, SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes),
-                   ShelleyWitnessSigningKey, SigningKey, StakeAddress, StakeExtendedKey, StakeKey,
-                   VerificationKey, castVerificationKey, deserialiseFromRawBytesHex,
-                   getVerificationKey, makeStakeAddress, proxyToAsType, serialiseToRawBytes,
-                   serialiseToRawBytesHex, verificationKeyHash)
+                   (AsType (AsSigningKey, AsStakeExtendedKey, AsStakeKey, AsVerificationKey),
+                   FromSomeType (..), HasTypeProxy, Hash, Key, NetworkId,
+                   SerialiseAsRawBytes (deserialiseFromRawBytes, serialiseToRawBytes), SigningKey,
+                   StakeAddress, StakeExtendedKey, StakeKey, VerificationKey, castVerificationKey,
+                   deserialiseFromRawBytesHex, getVerificationKey, makeStakeAddress, proxyToAsType,
+                   serialiseToRawBytes, serialiseToRawBytesHex, verificationKeyHash)
 import           Cardano.Api.Shelley (ShelleySigningKey, ShelleyWitnessSigningKey (..),
                    SigningKey (..), StakeCredential (..), VerificationKey (StakeVerificationKey),
                    makeShelleySignature, toShelleySigningKey)
@@ -112,28 +109,6 @@ instance FromJSON VoteVerificationKey where
       case deserialiseFromRawBytesHex AsVoteVerificationKey $ T.encodeUtf8 hex of
         Nothing -> fail "Failed to deserialise vote verification key."
         Just votePub -> pure votePub
-
-data VoteVerificationKeyHash
-  = AStakeVerificationKeyHash (Hash StakeKey)
-  | AStakeExtendedVerificationKeyHash (Hash StakeExtendedKey)
-  deriving (Ord, Eq, Show)
-
-instance HasTypeProxy VoteVerificationKeyHash where
-  data AsType VoteVerificationKeyHash = AsVoteVerificationKeyHash
-  proxyToAsType _ = AsVoteVerificationKeyHash
-
-instance SerialiseAsRawBytes VoteVerificationKeyHash where
-    serialiseToRawBytes (AStakeVerificationKeyHash h)         = serialiseToRawBytes h
-    serialiseToRawBytes (AStakeExtendedVerificationKeyHash h) = serialiseToRawBytes h
-
-    deserialiseFromRawBytes AsVoteVerificationKeyHash bs = do
-      case AStakeExtendedVerificationKeyHash <$> deserialiseFromRawBytes (AsHash AsStakeExtendedKey) bs of
-        Nothing -> AStakeVerificationKeyHash <$> deserialiseFromRawBytes (AsHash AsStakeKey) bs
-        Just h  -> pure h
-
-getVoteVerificationKeyHash :: VoteVerificationKey -> VoteVerificationKeyHash
-getVoteVerificationKeyHash (AStakeVerificationKey k)         = AStakeVerificationKeyHash $ verificationKeyHash k
-getVoteVerificationKeyHash (AStakeExtendedVerificationKey k) = AStakeExtendedVerificationKeyHash $ verificationKeyHash k
 
 getVoteVerificationKey :: VoteSigningKey -> VoteVerificationKey
 getVoteVerificationKey (AStakeSigningKey skey)         = AStakeVerificationKey         $ getVerificationKey skey
