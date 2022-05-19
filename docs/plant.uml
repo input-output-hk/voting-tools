@@ -1,0 +1,49 @@
+@startuml
+
+title High Level Architecture
+
+frame snapshot {
+  node Main as snapshotX
+  snapshotX --> lib
+  snapshotX --> backend
+}
+
+frame voter-registration {
+  node Main as voterRegistrationX
+  voterRegistrationX --> lib
+}
+
+frame catalyst-lib as lib {
+
+  frame UI {
+    node Presentation
+    node Config
+    UI --> Application
+  }
+
+  frame Application {
+    node VotePower
+    Application --> Domain
+  }
+
+  frame Domain {
+    node Registration
+    node "Query Interface" as intf
+    Domain --> Infrastructure
+  }
+
+  frame Infrastructure {
+    node Api.Extended
+    node Db.Extended
+    node Crypto
+  }
+}
+
+frame catalyst-backend as backend {
+  frame Domain as d {
+    node "Query Implementation" as impl
+  }
+}
+
+impl ..>> intf
+@enduml
