@@ -10,29 +10,32 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
-{- | WARNING: This is an internal module, it's interface is not safe. It is
-recommended to import "Cardano.Catalyst.Test.DSL" instead. If you must import
-this module, notify the maintainer of your use case so we can safely support it.
+{- |
 
-Module – Cardano.Catalyst.Test.DSL.Internal.Db
-Description – Functions for writing Test DSL types to the database.
-Maintainer – sevanspowell
-Stability – experimental
+Module      : Cardano.Catalyst.Test.DSL.Internal.Db
+Description : Functions for writing Test DSL types to the database.
+Maintainer  : sevanspowell
+Stability   : experimental
+
+
+__WARNING This is an internal module, it's interface is not safe. It is recommended to import "Cardano.Catalyst.Test.DSL" instead. If you must import this module, notify the maintainer of your use case so we can safely support it.__
 
 This module provides the code necessary to write the terms generated in
 "Cardano.Catalyst.Test.DSL.Internal.Types" to the database.
 
-In perticular it is capable of converting DSL terms from the 'Ephemeral' to
-'Persistent' state.
+In perticular it is capable of converting DSL terms from the
+'Cardano.Catalyst.Test.DSL.Internal.Types.Ephemeral' to state
+'Cardano.Catalyst.Test.DSL.Internal.Types.Persistent' state.
 
 For example:
 
 @
 persistStakeRegistration
-  :: 'StakeRegistration' \''Ephemeral'
+  :: SqlBackend
+  -> 'StakeRegistration' \''Ephemeral'
   -> ReaderT SqlBackend IO ('StakeRegistration' \''Persisted')
-persistStakeRegistration stakeRego =
-  'stakeRegoToQuery' stakeRego
+persistStakeRegistration backend stakeRego =
+  runSqlConn ('stakeRegoToQuery' stakeRego) backend
 @
 -}
 
@@ -60,12 +63,14 @@ import qualified Data.Map.Strict as M
 import qualified Data.Text.Encoding as T
 import qualified Database.Persist.Class as Sql
 
--- | Query to write the @Transaction@ to the database. Re-writes the foreign
--- keys so that:
---   - The block points to the slot leader.
---   - The tx points to the block.
+-- | Query to write the 'Transaction' to the database.
 --
--- Returns the persisted Transaction.
+-- Re-writes the foreign keys so that:
+--
+--   - The 'Cardano.Db.blockSlotLeaderId' points to the 'transactionSlotLeader'.
+--   - The 'Cardano.Db.txBlockId' points to the 'transactionBlock'.
+--
+-- Returns the persisted 'Transaction'.
 txToQuery
   :: MonadIO m
   => Transaction 'Ephemeral
@@ -86,10 +91,14 @@ txToQuery tx = do
     , transactionSlotLeaderP = Entity slotLeaderId slotLeader
     }
 
--- | Query to write a 'UTxO' to the database. Re-writes the foreign keys so
--- that:
---   - The TxOut comes from the transaction.
---   - The TxOut points to the given stake address.
+-- | Query to write a 'UTxO' to the database.
+--
+-- Re-writes the foreign keys so that:
+--
+--   - The 'utxoTx' foreign keys are valid (see 'txToQuery').
+--   - The 'Cardano.Db.txOutTxId' comes from the 'utxoTx'.
+--   - The 'Cardano.Db.txOutStakeAddressId' points to the given
+--     'Cardano.Db.StakeAddress'.
 --
 -- Returns the persisted 'UTxO'.
 utxoToQuery
@@ -110,10 +119,13 @@ utxoToQuery stakeAddressId utxo = do
     , utxoTxP = transaction'
     }
 
--- | Query to write a 'Registration' to the database. The 'Registration' is
--- re-written so that:
---   - The TxMetadata points to the Tx.
---   - Transaction foreign keys are valid.
+-- | Query to write a 'Registration' to the database.
+--
+-- The 'Registration' is re-written so that:
+--
+--   - The 'registrationTx' foreign keys are valid (see 'txToQuery').
+--   - The 'Registration's 'Cardano.TxMetadata' is associated with the
+--     'registrationTx'.
 --
 -- Returns the persisted 'Registration'.
 registrationToQuery
@@ -139,45 +151,12 @@ registrationToQuery rego = do
 
   pure $ rego { registrationTx = transaction' }
 
--- Convert 'Cardano.TxMetadata' to a list of 'Db.TxMetadata' entries.
-apiToDbMetadata
-  :: Cardano.TxMetadata
-  -- ^ Transaction metadata.
-  -> Key Db.Tx
-  -- ^ Database key of the transaction to which this transaction metadata should
-  -- belong.
-  -> [Db.TxMetadata]
-  -- ^ Ephemeral database entities (not yet written to database).
-apiToDbMetadata txMeta txId =
-  let
-    metaMap :: M.Map Word64 Cardano.TxMetadataValue
-    (Cardano.TxMetadata metaMap) = txMeta
-
-    metaMapJSON :: M.Map Word64 Aeson.Value
-    metaMapJSON =
-      fmap Cardano.metadataValueToJsonNoSchema metaMap
-
-    dbMeta :: [Db.TxMetadata]
-    dbMeta =
-      M.toList metaMapJSON
-      & fmap (\(k, json) ->
-                let
-                  jsonBytes = BSL.toStrict $ Aeson.encode json
-                  jsonText = T.decodeUtf8 jsonBytes
-                in
-                  Db.TxMetadata
-                    (Db.DbWord64 k)
-                    (Just jsonText)
-                    jsonBytes
-                    txId
-             )
-  in
-    dbMeta
-
--- | Query to write a 'StakeRegistration' to the database. Re-writes the foreign
--- keys so that:
---   - The StakeAddress was registered in the transaction.
---   - The TxOut points to the given stake address.
+-- | Query to write a 'StakeRegistration' to the database.
+--
+-- Re-writes the foreign keys so that:
+--
+--   - The 'stakeRegoTx's foreign keys are valid (see 'txToQuery').
+--   - The 'Db.stakeAddressRegisteredTxId' was registered in the 'stakeRegoTx'.
 --
 -- Returns the persisted 'StakeRegistration'.
 stakeRegoToQuery
@@ -204,15 +183,17 @@ stakeRegoToQuery stakeRego = do
       stakeRegoTx'
       (Entity stakeAddrId stakeAddr')
 
--- | Query to write a 'Graph' to the database. The 'Graph' is re-written so
--- that:
---   - The stake registration Transaction foreign keys are valid (see
---     'txToQuery').
---   - The stake address is registered in the correct transaction.
---   - The UTxOs foreign keys are valid (see 'utxoToQuery').
---   - The Registrations foreign keys are valid (see 'registrationToQuery').
+-- | Query to write a 'Graph' to the database.
 --
--- Returns the persisted Graph.
+-- The 'Graph' is re-written so that:
+--
+--   - The 'graphStakeAddressRegistration' foreign keys are valid (see
+--     'stakeRegoToQuery').
+--   - The 'graphRegistrations' foreign keys are valid (see
+--     'registrationToQuery').
+--   - The 'graphUTxOs' foreign keys are valid (see 'utxoToQuery').
+--
+-- Returns the persisted 'Graph'.
 graphToQuery
   :: (m ~ ReaderT SqlBackend IO)
   => Graph 'Ephemeral
@@ -229,3 +210,41 @@ graphToQuery (Graph stakeRego regos utxos) = do
 
   -- Return re-written Graph
   pure $ Graph stakeRego' regos' utxos'
+
+-- | Convert between cardano-api tx metadata and cardano-db-sync tx metadata.
+--
+-- Converts 'Cardano.TxMetadata' to a list of 'Db.TxMetadata' entries.
+apiToDbMetadata
+  :: Cardano.TxMetadata
+  -- ^ Cardano.Api.TxMetadata.
+  -> Key Db.Tx
+  -- ^ Database key of the transaction to which this transaction metadata should
+  -- belong.
+  -> [Db.TxMetadata]
+  -- ^ Cardano.Db.TxMetadata ephemeral database entities (not yet written to
+  -- database).
+apiToDbMetadata txMeta txId =
+  let
+    metaMap :: M.Map Word64 Cardano.TxMetadataValue
+    (Cardano.TxMetadata metaMap) = txMeta
+
+    metaMapJSON :: M.Map Word64 Aeson.Value
+    metaMapJSON =
+      fmap Cardano.metadataValueToJsonNoSchema metaMap
+
+    dbMeta :: [Db.TxMetadata]
+    dbMeta =
+      M.toList metaMapJSON
+      & fmap (\(k, json) ->
+                let
+                  jsonBytes = BSL.toStrict $ Aeson.encode json
+                  jsonText = T.decodeUtf8 jsonBytes
+                in
+                  Db.TxMetadata
+                    (Db.DbWord64 k)
+                    (Just jsonText)
+                    jsonBytes
+                    txId
+             )
+  in
+    dbMeta

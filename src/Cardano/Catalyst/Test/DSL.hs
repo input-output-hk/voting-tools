@@ -1,3 +1,18 @@
+{- |
+
+Module      : Cardano.Catalyst.Test.DSL
+Description : Testing DSL.
+Maintainer  : sevanspowell
+Stability   : experimental
+
+Collection of types and functions used to form the testing DSL for voting-tools.
+
+For further documentation and usage, see the documentation for:
+
+  - "Cardano.Catalyst.Test.DSL.Internal.Types"
+  - "Cardano.Catalyst.Test.DSL.Internal.Db"
+  - "Cardano.Catalyst.Test.DSL.Gen"
+-}
 
 module Cardano.Catalyst.Test.DSL
   ( -- * Types

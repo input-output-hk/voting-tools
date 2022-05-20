@@ -2,7 +2,67 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
-module Cardano.Catalyst.Test.DSL.Gen where
+{- |
+
+Module      : Cardano.Catalyst.Test.DSL.Gen
+Description : Generate terms for the testing DSL.
+Maintainer  : sevanspowell
+Stability   : experimental
+
+Generators and associated helpers for generating "Cardano.Catalyst.Test.DSL"
+terms.
+
+Values generated from this module are intended to be written to a database. The
+cardano-db-sync database in particular has constraints that must be satisfied by
+these generated types.
+
+Of particular significance are uniqueness constraints. Under normal
+circumstances, a list of values generated from a generator are not guaranteed to
+be unique. These non-unique values will fail to be written to a database.
+
+We use stateful generators in this module to generate unique values and overcome
+these uniqueness constraints. Any generator with a 'MonadState' constraint is a
+stateful generator. In particular, see 'genUniqueHash32'.
+
+These stateful generators must be run in the following manner (or similar):
+
+@
+    flip 'Control.Monad.State.Strict.evalStateT' [1..] $ 'Hedgehog.distributeT' $ 'Hedgehog.forAllT' $
+      'genStakeAddressRegistration'
+@
+-}
+
+module Cardano.Catalyst.Test.DSL.Gen
+  ( -- * Generators
+    -- ** DSL Types
+    -- | Generators for terms of the DSL.
+    genTransaction
+  , genUTxO
+  , genVoteRegistration
+  , genStakeAddressRegistration
+  , genGraph
+    -- ** Cardano.Db Generators
+    -- | Generators for "Cardano.Db"-specific types
+  , genSlotLeader
+  , genBlock
+  , genTx
+  , genLovelace
+  , genTxMetadata
+  , genStakeAddress
+  , genStakeAddressForVerificationKey
+  , genTxOut
+  , genTxIn
+  , genUInteger
+    -- ** Other
+  , genUniqueHash32
+  , genUniqueHash28
+  , genUTCTime
+  , genWord64
+  , genWord32
+  , genWord63
+  , genWord16
+  , genInt64
+  ) where
 
 import           Cardano.CLI.Voting.Signing (VoteSigningKey, VoteVerificationKey,
                    getVoteVerificationKey, serialiseVoteVerificationKeyToBech32,
@@ -35,6 +95,161 @@ import qualified Database.Persist.Sql as Persist
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import qualified Test.Generators as Gen
+
+genSlotLeader :: (MonadGen m, MonadState [Word32] m) => m Db.SlotLeader
+genSlotLeader = Db.SlotLeader
+  -- Addresses use a 28 byte hash (as do StakeholdIds).
+  <$> genUniqueHash28
+  <*> pure Nothing
+  <*> Gen.text (Range.linear 0 64) Gen.unicodeAll
+
+genBlock
+  :: ( MonadGen m
+     , MonadState [Word32] m
+     )
+  => m Db.Block
+genBlock = Db.Block
+  -- Hash
+  <$> genUniqueHash32
+  -- Epoch number
+  <*> Gen.maybe genUInteger
+  -- Slot number
+  <*> Gen.maybe genUInteger
+  -- Epoch slot no
+  <*> Gen.maybe genUInteger
+  -- Block no
+  <*> Gen.maybe genUInteger
+  -- Previous block id
+  <*> pure Nothing
+  -- Slot leader id
+  <*> (Persist.toSqlKey <$> genInt64)
+  -- Block size
+  <*> genUInteger
+  --- Block time
+  <*> genUTCTime
+  -- Tx count
+  <*> genWord64
+  -- Protocol major ver
+  <*> genWord16
+  -- Protocol major ver
+  <*> genWord16
+  -- vrf key
+  <*> Gen.maybe (Gen.text (Range.singleton 65) Gen.ascii)
+  -- op cert
+  <*> Gen.maybe genHash32
+  -- op cert counter
+  <*> Gen.maybe genWord63
+
+genTx
+  :: ( MonadGen m
+     , MonadState [Word32] m
+     )
+  => m Db.Tx
+genTx = Db.Tx
+  <$> genUniqueHash32
+  -- Block id
+  <*> (Persist.toSqlKey <$> genInt64)
+  -- Block index
+  <*> genUInteger
+  -- out_sum
+  <*> genLovelace
+  -- fee
+  <*> genLovelace
+  -- deposit
+  <*> genInt64
+  -- size
+  <*> genUInteger
+  -- invalid before (slot)
+  <*> Gen.maybe (Db.DbWord64 <$> genWord64)
+  -- invalid after (slot)
+  <*> Gen.maybe (Db.DbWord64 <$> genWord64)
+  -- script validity
+  <*> Gen.bool
+  -- script size
+  <*> genUInteger
+
+genLovelace :: MonadGen m => m Db.DbLovelace
+genLovelace =
+  Db.DbLovelace <$> Gen.integral (Range.linear 0 18446744073709551615)
+
+genTxMetadata
+  :: ( MonadGen m
+     , GenBase m ~ Identity
+     )
+  => m Db.TxMetadata
+genTxMetadata = do
+  mMetadata <- Gen.maybe $ fromGenT cardanoGenTxMetadata
+
+  let
+    (jsonText, jsonBytes) = case mMetadata of
+        Nothing ->
+          (Nothing, "")
+        Just meta ->
+          let
+            jsonValue =
+              Cardano.metadataToJson Cardano.TxMetadataJsonDetailedSchema meta
+            jsonBs = BSL.toStrict $ Aeson.encode jsonValue
+            jsonTxt = T.decodeUtf8 jsonBs
+          in
+            (Just jsonTxt, jsonBytes)
+
+  Db.TxMetadata
+    <$> (Db.DbWord64 <$> genWord64)
+    <*> pure jsonText
+    <*> pure jsonBytes
+    <*> (Persist.toSqlKey <$> genInt64)
+
+genStakeAddress :: (MonadGen m, MonadState [Word32] m) => m Db.StakeAddress
+genStakeAddress =
+  Db.StakeAddress
+  <$> genUniqueHash32
+  <*> Gen.text (Range.linear 0 256) Gen.unicodeAll
+  <*> pure Nothing
+  <*> (Persist.toSqlKey <$> genInt64)
+
+genStakeAddressForVerificationKey
+  :: MonadGen m
+  => VoteVerificationKey
+  -> m Db.StakeAddress
+genStakeAddressForVerificationKey verKey = do
+  let verKeyHashRaw = voteVerificationKeyStakeAddressHashRaw Cardano.Mainnet verKey
+      verKeyView = serialiseVoteVerificationKeyToBech32 verKey
+
+  Db.StakeAddress verKeyHashRaw verKeyView
+  <$> pure Nothing
+  <*> (Persist.toSqlKey <$> genInt64)
+
+genTxOut :: MonadGen m => m Db.TxOut
+genTxOut = Db.TxOut
+  -- tx id
+  <$> (Persist.toSqlKey <$> genInt64)
+  -- index (uses smallint >= 0)
+  <*> (fromIntegral <$> Gen.int16 (Range.linear 0 (maxBound :: Int16)))
+  -- address
+  <*> Gen.text (Range.linear 0 103) Gen.ascii
+  -- address raw
+  <*> genHash32
+  -- has script
+  <*> Gen.bool
+  -- Payment credential
+  <*> Gen.maybe genHash28
+  -- stake address id
+  <*> Gen.maybe (Persist.toSqlKey <$> genInt64)
+  -- Value
+  <*> genLovelace
+  -- Data hash
+  <*> Gen.maybe genHash32
+
+genTxIn :: MonadGen m => m Db.TxIn
+genTxIn = Db.TxIn
+  -- Tx in id
+  <$> (Persist.toSqlKey <$> genInt64)
+  -- Tx out id
+  <*> (Persist.toSqlKey <$> genInt64)
+  -- Tx out index
+  <*> genWord16
+  -- Redeemer id
+  <*> pure Nothing
 
 cardanoGenTxMetadata :: MonadGen m => m Cardano.TxMetadata
 cardanoGenTxMetadata =
@@ -74,28 +289,32 @@ cardanoGenTxMetadataValue =
             Gen.list (Range.linear 0 10) $
                 (,) <$> cardanoGenTxMetadataValue <*> cardanoGenTxMetadataValue
 
+-- | A stateful generator, generates a unique 32-byte long hash.
+--
+-- Makes use of a list of 'Data.Word.Word32's. On generation, it takes a
+-- 'Data.Word.Word32' from the state (removing it from future runs), and
+-- procedurally generates a hash from this 'Data.Word.Word32'.
+--
+-- The generator ensures that a unique hash is generated for each
+-- 'Data.Word.Word32'.
 genUniqueHash32
   :: ( MonadGen m
      , MonadState [Word32] m
      )
   => m ByteString
-genUniqueHash32 =
-  -- Discard shrink tree (i.e. don't shrink). If we shrink we risk duplicate
-  -- hashes.
-  -- Gen.prune $ do
-  do
-    -- Get a Word32 from our list
-    xs <- State.get
-    -- Make sure this Word32 is not used again
-    State.put $ tail xs
-    let
-      -- A Word32 is 4 bytes, but we need a 32-byte hash. So replicate the 4
-      -- bytes 8 times. This doesn't cover all possible 32-bytes, but it should
-      -- be enough.
-      bytes = Put.runPut $ do
-        let word32 = head xs
-        replicateM_ 8 $ Put.putWord32be $ word32
-    pure $ BSL.toStrict bytes
+genUniqueHash32 = do
+  -- Get a Word32 from our list
+  xs <- State.get
+  -- Make sure this Word32 is not used again
+  State.put $ tail xs
+  let
+    -- A Word32 is 4 bytes, but we need a 32-byte hash. So replicate the 4
+    -- bytes 8 times. This doesn't cover all possible 32-bytes, but it should
+    -- still provide decent coverage.
+    bytes = Put.runPut $ do
+      let word32 = head xs
+      replicateM_ 8 $ Put.putWord32be $ word32
+  pure $ BSL.toStrict bytes
 
 genUniqueHash28
   :: ( MonadGen m
@@ -119,44 +338,6 @@ genHash32 = Gen.bytes (Range.singleton 32)
 genHash28 :: MonadGen m => m ByteString
 genHash28 = Gen.bytes (Range.singleton 28)
 
-genLovelace :: MonadGen m => m Db.DbLovelace
-genLovelace =
-  Db.DbLovelace <$> Gen.integral (Range.linear 0 18446744073709551615)
-
-genSlotLeader :: (MonadGen m, MonadState [Word32] m) => m Db.SlotLeader
-genSlotLeader = Db.SlotLeader
-  <$> genUniqueHash28
-  -- ^ Addresses use a 28 byte hash (as do StakeholdIds).
-  <*> pure Nothing
-  <*> Gen.text (Range.linear 0 64) Gen.unicodeAll
-
-genTxMetadata
-  :: ( MonadGen m
-     , GenBase m ~ Identity
-     )
-  => m Db.TxMetadata
-genTxMetadata = do
-  mMetadata <- Gen.maybe $ fromGenT cardanoGenTxMetadata
-
-  let
-    (jsonText, jsonBytes) = case mMetadata of
-        Nothing ->
-          (Nothing, "")
-        Just meta ->
-          let
-            jsonValue =
-              Cardano.metadataToJson Cardano.TxMetadataJsonDetailedSchema meta
-            jsonBs = BSL.toStrict $ Aeson.encode jsonValue
-            jsonTxt = T.decodeUtf8 jsonBs
-          in
-            (Just jsonTxt, jsonBytes)
-
-  Db.TxMetadata
-    <$> (Db.DbWord64 <$> genWord64)
-    <*> pure jsonText
-    <*> pure jsonBytes
-    <*> (Persist.toSqlKey <$> genInt64)
-
 genWord64 :: MonadGen m => m Word64
 genWord64 = Gen.word64 Range.linearBounded
 
@@ -165,9 +346,7 @@ genWord32 = Gen.word32 Range.linearBounded
 
 -- | Positive integer in the range [0, 2147483647 ((2 ^ 31) - 1)].
 --
--- cardano-db-sync defines a "uinteger" type as an "integer" with a value >= 0.
--- The Postgres "integer" type has a range [-2147483648, +2147483647], so we're
--- restricting a 32-bit int to it's positive range.
+-- See documentation for 'Cardano.Catalyst.Test.DSL.Internal.Types.UInteger'.
 genUInteger :: (MonadGen m, Num int) => m int
 genUInteger = fromIntegral <$> Gen.int32 (Range.linear 0 maxBound)
 
@@ -180,72 +359,10 @@ genWord16 = Gen.word16 Range.linearBounded
 genInt64 :: MonadGen m => m Int64
 genInt64 = Gen.int64 Range.linearBounded
 
-genBlock
-  :: ( MonadGen m
-     , MonadState [Word32] m
-     )
-  => m Db.Block
-genBlock = Db.Block
-  <$> genUniqueHash32
-  -- ^ Hash
-  <*> Gen.maybe genUInteger
-  -- ^ epoch number
-  <*> Gen.maybe genUInteger
-  -- ^ slot number
-  <*> Gen.maybe genUInteger
-  -- ^ epoch slot no
-  <*> Gen.maybe genUInteger
-  -- ^ block no
-  <*> pure Nothing
-  -- ^ previous block id
-  <*> (Persist.toSqlKey <$> genInt64)
-  -- ^ slot leader id
-  <*> genUInteger
-  -- ^ block size
-  <*> genUTCTime
-  --- ^ block time
-  <*> genWord64
-  -- ^ Tx count
-  <*> genWord16
-  -- ^ Protocol major ver
-  <*> genWord16
-  -- ^ Protocol major ver
-  <*> Gen.maybe (Gen.text (Range.singleton 65) Gen.ascii)
-  -- ^ vrf key
-  <*> Gen.maybe genHash32
-  -- ^ op cert
-  <*> Gen.maybe genWord63
-  -- ^ op cert counter
-
-genTx
-  :: ( MonadGen m
-     , MonadState [Word32] m
-     )
-  => m Db.Tx
-genTx = Db.Tx
-  <$> genUniqueHash32
-  <*> (Persist.toSqlKey <$> genInt64)
-  -- ^ Block id
-  <*> genUInteger
-  -- ^ Block index
-  <*> genLovelace
-  -- ^ out_sum
-  <*> genLovelace
-  -- ^ fee
-  <*> genInt64
-  -- ^ deposit
-  <*> genUInteger
-  -- ^ size
-  <*> Gen.maybe (Db.DbWord64 <$> genWord64)
-  -- ^ invalid before (slot)
-  <*> Gen.maybe (Db.DbWord64 <$> genWord64)
-  -- ^ invalid after (slot)
-  <*> Gen.bool
-  -- ^ script validity
-  <*> genUInteger
-  -- ^ script size
-
-
+-- | Generate a DSL 'Transaction' term.
+--
+-- The generated "Cardano.Db" types won't have valid foreign keys until written
+-- to the database with 'Cardano.Catalyst.Test.DSL.Internal.Db.txToQuery'.
 genTransaction
   :: ( MonadGen m
      , MonadState [Word32] m
@@ -254,6 +371,11 @@ genTransaction
 genTransaction =
   TransactionE <$> genTx <*> genBlock <*> genSlotLeader
 
+-- | Generate a DSL 'Registration' term.
+--
+-- The generated "Cardano.Db" types won't have valid foreign keys until written
+-- to the database with
+-- 'Cardano.Catalyst.Test.DSL.Internal.Db.registrationToQuery'.
 genVoteRegistration
   :: ( MonadGen m
      , MonadState [Word32] m
@@ -270,6 +392,11 @@ genVoteRegistration skey = do
     <*> Gen.bool
     <*> genTransaction
 
+-- | Generate a DSL 'StakeRegistration' term.
+--
+-- The generated "Cardano.Db" types won't have valid foreign keys until written
+-- to the database with
+-- 'Cardano.Catalyst.Test.DSL.Internal.Db.stakeRegoToQuery'.
 genStakeAddressRegistration
   :: ( MonadGen m
      , MonadState [Word32] m
@@ -295,58 +422,11 @@ genStakeAddressRegistration = do
                     }
       )
 
-genStakeAddress :: (MonadGen m, MonadState [Word32] m) => m Db.StakeAddress
-genStakeAddress =
-  Db.StakeAddress
-  <$> genUniqueHash32
-  <*> Gen.text (Range.linear 0 256) Gen.unicodeAll
-  <*> pure Nothing
-  <*> (Persist.toSqlKey <$> genInt64)
-
-genStakeAddressForVerificationKey
-  :: MonadGen m
-  => VoteVerificationKey
-  -> m Db.StakeAddress
-genStakeAddressForVerificationKey verKey = do
-  let verKeyHashRaw = voteVerificationKeyStakeAddressHashRaw Cardano.Mainnet verKey
-      verKeyView = serialiseVoteVerificationKeyToBech32 verKey
-
-  Db.StakeAddress verKeyHashRaw verKeyView
-  <$> pure Nothing
-  <*> (Persist.toSqlKey <$> genInt64)
-
-genTxOut :: MonadGen m => m Db.TxOut
-genTxOut = Db.TxOut
-  <$> (Persist.toSqlKey <$> genInt64)
-  -- ^ tx id
-  <*> (fromIntegral <$> Gen.int16 (Range.linear 0 (maxBound :: Int16)))
-  -- ^ index (uses smallint >= 0)
-  <*> Gen.text (Range.linear 0 103) Gen.ascii
-  -- ^ address
-  <*> genHash32
-  -- ^ address raw
-  <*> Gen.bool
-  -- ^ has script
-  <*> Gen.maybe genHash28
-  -- ^ Payment credential
-  <*> Gen.maybe (Persist.toSqlKey <$> genInt64)
-  -- ^ stake address id
-  <*> genLovelace
-  -- ^ Value
-  <*> Gen.maybe genHash32
-  -- ^ Data hash
-
-genTxIn :: MonadGen m => m Db.TxIn
-genTxIn = Db.TxIn
-  <$> (Persist.toSqlKey <$> genInt64)
-  -- ^ Tx in id
-  <*> (Persist.toSqlKey <$> genInt64)
-  -- ^ Tx out id
-  <*> genWord16
-  -- ^ Tx out index
-  <*> pure Nothing
-  -- ^ Redeemer id
-
+-- | Generate a DSL 'UTxO' term.
+--
+-- The generated "Cardano.Db" types won't have valid foreign keys until written
+-- to the database with
+-- 'Cardano.Catalyst.Test.DSL.Internal.Db.utxoToQuery'.
 genUTxO
   :: ( MonadGen m
      , MonadState [Word32] m
@@ -356,6 +436,11 @@ genUTxO = UTxOE
   <$> genTxOut
   <*> genTransaction
 
+-- | Generate a DSL 'Graph' term.
+--
+-- The generated "Cardano.Db" types won't have valid foreign keys until written
+-- to the database with
+-- 'Cardano.Catalyst.Test.DSL.Internal.Db.graphToQuery'.
 genGraph
   :: ( MonadGen m
      , MonadState [Word32] m

@@ -85,8 +85,8 @@ votingKeyPublic =
   fromMaybe (error "Deserialising VotingKeyPublic from bytes failed!")
   <$> deserialiseFromRawBytes AsVotingKeyPublic
   <$> Gen.bytes (Range.linear 0 64)
-  -- ^ cardano-node enforces that the maximum bytestring length of any metadata
-  -- is 64 bytes
+  -- cardano-node enforces that the maximum bytestring length of any metadata is
+  -- 64 bytes
   -- (https://github.com/input-output-hk/cardano-node/blob/5cffbcc6b3e2861ed20452f3f6291ee3fe2bf628/cardano-api/src/Cardano/Api/TxMetadata.hs#L190)
 
 voteSigningKey :: (MonadGen m, MonadIO m) => m VoteSigningKey
