@@ -18,7 +18,7 @@ Maintainer  : sevanspowell
 Stability   : experimental
 
 
-__WARNING This is an internal module, it's interface is not safe. It is recommended to import "Cardano.Catalyst.Test.DSL" instead. If you must import this module, notify the maintainer of your use case so we can safely support it.__
+__WARNING This is an internal module. It is recommended to import "Cardano.Catalyst.Test.DSL" instead.__
 
 This module provides the code necessary to write the terms generated in
 "Cardano.Catalyst.Test.DSL.Internal.Types" to the database.
