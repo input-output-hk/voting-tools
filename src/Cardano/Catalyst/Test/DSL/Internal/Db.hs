@@ -35,7 +35,7 @@ persistStakeRegistration
   -> 'StakeRegistration' \''Ephemeral'
   -> ReaderT SqlBackend IO ('StakeRegistration' \''Persisted')
 persistStakeRegistration backend stakeRego =
-  runSqlConn ('stakeRegoToQuery' stakeRego) backend
+  runSqlConn ('writeStakeRego' stakeRego) backend
 @
 -}
 
@@ -71,11 +71,11 @@ import qualified Database.Persist.Class as Sql
 --   - The 'Cardano.Db.txBlockId' points to the 'transactionBlock'.
 --
 -- Returns the persisted 'Transaction'.
-txToQuery
+writeTx
   :: MonadIO m
   => Transaction 'Ephemeral
   -> ReaderT SqlBackend m (Transaction 'Persisted)
-txToQuery tx = do
+writeTx tx = do
   let slotLeader = transactionSlotLeader tx
   slotLeaderId <- Sql.insert slotLeader
 
@@ -95,19 +95,19 @@ txToQuery tx = do
 --
 -- Re-writes the foreign keys so that:
 --
---   - The 'utxoTx' foreign keys are valid (see 'txToQuery').
+--   - The 'utxoTx' foreign keys are valid (see 'writeTx').
 --   - The 'Cardano.Db.txOutTxId' comes from the 'utxoTx'.
 --   - The 'Cardano.Db.txOutStakeAddressId' points to the given
 --     'Cardano.Db.StakeAddress'.
 --
 -- Returns the persisted 'UTxO'.
-utxoToQuery
+writeUTxO
   :: (m ~ ReaderT SqlBackend IO)
   => Key Db.StakeAddress
   -> UTxO 'Ephemeral
   -> m (UTxO 'Persisted)
-utxoToQuery stakeAddressId utxo = do
-  transaction' <- txToQuery $ utxoTx utxo
+writeUTxO stakeAddressId utxo = do
+  transaction' <- writeTx $ utxoTx utxo
 
   let txOut' = (utxoTxOut utxo) { Db.txOutTxId = getTxKey transaction'
                                 , Db.txOutStakeAddressId = Just stakeAddressId
@@ -123,17 +123,17 @@ utxoToQuery stakeAddressId utxo = do
 --
 -- The 'Registration' is re-written so that:
 --
---   - The 'registrationTx' foreign keys are valid (see 'txToQuery').
+--   - The 'registrationTx' foreign keys are valid (see 'writeTx').
 --   - The 'Registration's 'Cardano.TxMetadata' is associated with the
 --     'registrationTx'.
 --
 -- Returns the persisted 'Registration'.
-registrationToQuery
+writeRegistration
   :: (m ~ ReaderT SqlBackend IO)
   => Registration 'Ephemeral
   -> m (Registration 'Persisted)
-registrationToQuery rego = do
-  transaction' <- txToQuery (registrationTx rego)
+writeRegistration rego = do
+  transaction' <- writeTx (registrationTx rego)
 
   let
     voteMeta :: Cardano.TxMetadata
@@ -155,17 +155,17 @@ registrationToQuery rego = do
 --
 -- Re-writes the foreign keys so that:
 --
---   - The 'stakeRegoTx's foreign keys are valid (see 'txToQuery').
+--   - The 'stakeRegoTx's foreign keys are valid (see 'writeTx').
 --   - The 'Db.stakeAddressRegisteredTxId' was registered in the 'stakeRegoTx'.
 --
 -- Returns the persisted 'StakeRegistration'.
-stakeRegoToQuery
+writeStakeRego
   :: (m ~ ReaderT SqlBackend IO)
   => StakeRegistration 'Ephemeral
   -> m (StakeRegistration 'Persisted)
-stakeRegoToQuery stakeRego = do
+writeStakeRego stakeRego = do
   -- Write transaction in which stake address was registered
-  stakeRegoTx' <- txToQuery (stakeRegoTx stakeRego)
+  stakeRegoTx' <- writeTx (stakeRegoTx stakeRego)
 
   let stakeRegoTxId = getTxKey stakeRegoTx'
 
@@ -188,25 +188,25 @@ stakeRegoToQuery stakeRego = do
 -- The 'Graph' is re-written so that:
 --
 --   - The 'graphStakeAddressRegistration' foreign keys are valid (see
---     'stakeRegoToQuery').
+--     'writeStakeRego').
 --   - The 'graphRegistrations' foreign keys are valid (see
---     'registrationToQuery').
---   - The 'graphUTxOs' foreign keys are valid (see 'utxoToQuery').
+--     'writeRegistration').
+--   - The 'graphUTxOs' foreign keys are valid (see 'writeUTxO').
 --
 -- Returns the persisted 'Graph'.
-graphToQuery
+writeGraph
   :: (m ~ ReaderT SqlBackend IO)
   => Graph 'Ephemeral
   -> m (Graph 'Persisted)
-graphToQuery (Graph stakeRego regos utxos) = do
+writeGraph (Graph stakeRego regos utxos) = do
   -- Write stake address registration
-  stakeRego' <- stakeRegoToQuery stakeRego
+  stakeRego' <- writeStakeRego stakeRego
 
   -- Write contributions against stake address
-  utxos' <- traverse (utxoToQuery $ getStakeRegoKey stakeRego') utxos
+  utxos' <- traverse (writeUTxO $ getStakeRegoKey stakeRego') utxos
 
   -- Write registrations
-  regos' <- traverse registrationToQuery regos
+  regos' <- traverse writeRegistration regos
 
   -- Return re-written Graph
   pure $ Graph stakeRego' regos' utxos'

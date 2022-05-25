@@ -60,11 +60,11 @@ module Cardano.Catalyst.Test.DSL
   , Types.getGraphVote
 
   -- * Database
-  , Db.txToQuery
-  , Db.utxoToQuery
-  , Db.registrationToQuery
-  , Db.stakeRegoToQuery
-  , Db.graphToQuery
+  , Db.writeTx
+  , Db.writeUTxO
+  , Db.writeRegistration
+  , Db.writeStakeRego
+  , Db.writeGraph
   , Db.apiToDbMetadata
 
   -- * Generators

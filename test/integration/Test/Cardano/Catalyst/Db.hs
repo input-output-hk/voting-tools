@@ -13,9 +13,9 @@ import           Cardano.CLI.Voting.Signing (getVoteVerificationKey)
 import           Cardano.Catalyst.Test.DSL (apiToDbMetadata, contributionAmount, genGraph,
                    genStakeAddressRegistration, genTransaction, genUInteger, genUTxO,
                    genVoteRegistration, getGraphVote, getRegistrationVote, getStakeRegoKey,
-                   getTxKey, graphToQuery, modifyRegistrations, registrationToQuery, setSlotNo,
-                   setStakeAddressRegistrationSlot, setUTxOSlot, signed, stakeRegoKey,
-                   stakeRegoToQuery, txToQuery, unsigned, utxoToQuery, utxoValue)
+                   getTxKey, modifyRegistrations, setSlotNo, setStakeAddressRegistrationSlot,
+                   setUTxOSlot, signed, stakeRegoKey, unsigned, utxoValue, writeGraph,
+                   writeRegistration, writeStakeRego, writeTx, writeUTxO)
 import           Control.Exception.Lifted (bracket_)
 import           Control.Monad.Base (liftBase)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
@@ -138,7 +138,7 @@ prop_insert getConnPool =
 
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
-        _ <- graphToQuery graph
+        _ <- writeGraph graph
         Cardano.CLI.Query.queryVotingFunds Cardano.Mainnet Nothing
 
       case mVote of
@@ -170,10 +170,10 @@ prop_nonceRespected getConnPool =
 
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
-        _ <- stakeRegoToQuery stakeRego
+        _ <- writeStakeRego stakeRego
         -- Write registrations to DB in correct order (1 then 2).
-        _ <- registrationToQuery rego1
-        _ <- registrationToQuery rego2
+        _ <- writeRegistration rego1
+        _ <- writeRegistration rego2
 
         Cardano.CLI.Query.queryVotingFunds Cardano.Mainnet Nothing
 
@@ -203,7 +203,7 @@ prop_unsigned getConnPool =
 
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
-        _ <- graphToQuery graph
+        _ <- writeGraph graph
         Cardano.CLI.Query.queryVotingFunds Cardano.Mainnet Nothing
 
       funds === []
@@ -229,12 +229,12 @@ prop_registerDuplicates getConnPool =
 
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
-        stakeRego' <- stakeRegoToQuery stakeRego
+        stakeRego' <- writeStakeRego stakeRego
         -- Write registrations to DB
-        _ <- registrationToQuery rego1
-        _ <- registrationToQuery rego2
+        _ <- writeRegistration rego1
+        _ <- writeRegistration rego2
         -- Write utxos to DB
-        traverse_ (utxoToQuery $ getStakeRegoKey stakeRego') utxos
+        traverse_ (writeUTxO $ getStakeRegoKey stakeRego') utxos
 
         Cardano.CLI.Query.queryVotingFunds Cardano.Mainnet Nothing
 
@@ -285,8 +285,8 @@ prop_restrictSlotNo getConnPool =
 
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
-        traverse_ stakeRegoToQuery stakeRegos
-        traverse_ registrationToQuery (regosBefore <> regosAfter)
+        traverse_ writeStakeRego stakeRegos
+        traverse_ writeRegistration (regosBefore <> regosAfter)
 
         Cardano.CLI.Query.queryVotingFunds
           Cardano.Mainnet
@@ -312,9 +312,9 @@ prop_noRego getConnPool =
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
         -- Write a stake address registration to the database
-        stakeRego' <- stakeRegoToQuery stakeRego
+        stakeRego' <- writeStakeRego stakeRego
         -- Write UTxOs to DB that contribute to that stake address
-        traverse_ (utxoToQuery $ getStakeRegoKey stakeRego') utxos
+        traverse_ (writeUTxO $ getStakeRegoKey stakeRego') utxos
 
         Cardano.CLI.Query.queryVotingFunds Cardano.Mainnet Nothing
 
@@ -359,11 +359,11 @@ prop_ignoreDateUTxOStakeRego getConnPool =
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
         -- Write a stake address registration to the database
-        stakeRego' <- stakeRegoToQuery stakeRego
+        stakeRego' <- writeStakeRego stakeRego
         -- Write UTxOs to DB that contribute to that stake address
-        traverse_ (utxoToQuery $ getStakeRegoKey stakeRego') utxos
+        traverse_ (writeUTxO $ getStakeRegoKey stakeRego') utxos
         -- Write our vote registration
-        _ <- registrationToQuery rego
+        _ <- writeRegistration rego
 
         Cardano.CLI.Query.queryVotingFunds
           Cardano.Mainnet
@@ -419,13 +419,13 @@ prop_signatureMalformed getConnPool =
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
         -- Write a stake address registration to the database
-        stakeRego' <- stakeRegoToQuery stakeRego
+        stakeRego' <- writeStakeRego stakeRego
 
         -- Write UTxOs to DB that contribute to that stake address
-        traverse_ (utxoToQuery $ getStakeRegoKey stakeRego') utxos
+        traverse_ (writeUTxO $ getStakeRegoKey stakeRego') utxos
 
         -- Write transaction to DB
-        tx' <- txToQuery regoTx
+        tx' <- writeTx regoTx
 
         let
           txId = getTxKey tx'

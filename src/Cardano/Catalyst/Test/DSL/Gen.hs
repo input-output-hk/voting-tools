@@ -362,7 +362,7 @@ genInt64 = Gen.int64 Range.linearBounded
 -- | Generate a DSL 'Transaction' term.
 --
 -- The generated "Cardano.Db" types won't have valid foreign keys until written
--- to the database with 'Cardano.Catalyst.Test.DSL.Internal.Db.txToQuery'.
+-- to the database with 'Cardano.Catalyst.Test.DSL.Internal.Db.writeTx'.
 genTransaction
   :: ( MonadGen m
      , MonadState [Word32] m
@@ -375,7 +375,7 @@ genTransaction =
 --
 -- The generated "Cardano.Db" types won't have valid foreign keys until written
 -- to the database with
--- 'Cardano.Catalyst.Test.DSL.Internal.Db.registrationToQuery'.
+-- 'Cardano.Catalyst.Test.DSL.Internal.Db.writeRegistration'.
 genVoteRegistration
   :: ( MonadGen m
      , MonadState [Word32] m
@@ -396,7 +396,7 @@ genVoteRegistration skey = do
 --
 -- The generated "Cardano.Db" types won't have valid foreign keys until written
 -- to the database with
--- 'Cardano.Catalyst.Test.DSL.Internal.Db.stakeRegoToQuery'.
+-- 'Cardano.Catalyst.Test.DSL.Internal.Db.writeStakeRego'.
 genStakeAddressRegistration
   :: ( MonadGen m
      , MonadState [Word32] m
@@ -426,7 +426,7 @@ genStakeAddressRegistration = do
 --
 -- The generated "Cardano.Db" types won't have valid foreign keys until written
 -- to the database with
--- 'Cardano.Catalyst.Test.DSL.Internal.Db.utxoToQuery'.
+-- 'Cardano.Catalyst.Test.DSL.Internal.Db.writeUTxO'.
 genUTxO
   :: ( MonadGen m
      , MonadState [Word32] m
@@ -440,7 +440,7 @@ genUTxO = UTxOE
 --
 -- The generated "Cardano.Db" types won't have valid foreign keys until written
 -- to the database with
--- 'Cardano.Catalyst.Test.DSL.Internal.Db.graphToQuery'.
+-- 'Cardano.Catalyst.Test.DSL.Internal.Db.writeGraph'.
 genGraph
   :: ( MonadGen m
      , MonadState [Word32] m
