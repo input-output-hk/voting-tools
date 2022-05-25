@@ -79,6 +79,7 @@ module Cardano.Catalyst.Test.DSL.Internal.Types
   , setStakeAddressId
   , getStakeAddressId
   , utxoValue
+  , getStakeAddress
   -- ** Stake Registration
   , StakeRegistrationState(..)
   , StakeRegistration(..)

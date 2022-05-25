@@ -71,7 +71,7 @@ queryVoteRegistrations mSlotNo =
     let
       sql = case mSlotNo of
         Just slot -> (sqlBase <> "INNER JOIN block ON block.id = tx.block_id WHERE block.slot_no <= " <> T.pack (show $ unSlotNo slot) <> " ORDER BY metadata -> '4' ASC;")
-        -- ^ TODO handle lower bound on slot no too
+        -- TODO handle lower bound on slot no too
         Nothing   -> (sqlBase <> " ORDER BY metadata -> '4' ASC;")
     r <- ask
     (results :: [(Single ByteString, Single TxId, Single (Maybe Text), Single (Maybe Text))]) <- (flip runReaderT) r $ rawSql sql []

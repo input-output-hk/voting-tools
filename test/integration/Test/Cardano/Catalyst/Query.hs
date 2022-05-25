@@ -9,7 +9,7 @@ module Test.Cardano.Catalyst.Query where
 
 import           Cardano.Catalyst.Query.Types
 import           Cardano.Catalyst.Test.DSL (genGraph, getStakeAddress,
-                   graphStakeAddressRegistration, graphToQuery)
+                   graphStakeAddressRegistration, writeGraph)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Reader (ReaderT)
 import           Data.Foldable (traverse_)
@@ -38,6 +38,9 @@ tests intf getConnPool =
     , testProperty "prop_stakeValues_stakeValue" (prop_stakeValues_stakeValue intf getConnPool)
     ]
 
+nw :: Cardano.NetworkId
+nw = Cardano.Mainnet
+
 -- | The length of the returned stake values should match the length of stake
 -- addresses requested.
 --
@@ -49,7 +52,7 @@ prop_stakeValuesLength intf getConnPool =
 
     graphs <-
       flip State.evalStateT [1..] $ distributeT $
-        forAllT (Gen.list (Range.linear 0 10) genGraph)
+        forAllT (Gen.list (Range.linear 0 10) $ genGraph nw)
 
     let
       stakeAddrs :: [Api.StakeAddress]
@@ -58,7 +61,7 @@ prop_stakeValuesLength intf getConnPool =
 
     withinTransaction pool $ \runQuery -> do
       stakeValues <- runQuery $ do
-        traverse_ graphToQuery graphs
+        traverse_ writeGraph graphs
         queryStakeValues intf Nothing stakeAddrs
 
       length stakeAddrs === length stakeValues
@@ -75,7 +78,7 @@ prop_stakeValues_stakeValue intf getConnPool =
 
     graphs <-
       flip State.evalStateT [1..] $ distributeT $
-        forAllT (Gen.list (Range.linear 0 10) genGraph)
+        forAllT (Gen.list (Range.linear 0 10) $ genGraph nw)
 
     let
       stakeAddrs :: [Api.StakeAddress]
@@ -84,7 +87,7 @@ prop_stakeValues_stakeValue intf getConnPool =
 
     withinTransaction pool $ \runQuery -> do
       (stakeValues, stakeValueList) <- runQuery $ do
-        traverse_ graphToQuery graphs
+        traverse_ writeGraph graphs
         stakeValues <- queryStakeValues intf Nothing stakeAddrs
         stakeValueList <- zip stakeAddrs <$> traverse (queryStakeValue intf Nothing) stakeAddrs
         pure (stakeValues, stakeValueList)

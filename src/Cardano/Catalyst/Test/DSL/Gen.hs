@@ -53,6 +53,12 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genTxOut
   , genTxIn
   , genUInteger
+  , genRewardsAddress
+  , genStakeVerificationKey
+  , genVotingKeyPublic
+  , genVote
+  , genVotePayload
+  , genSlotNo
     -- ** Other
   , genUniqueHash32
   , genUniqueHash28
@@ -71,7 +77,8 @@ import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), NetworkId
 import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    getStakeVerificationKey, serialiseStakeVerificationKeyToBech32,
                    signingKeyFromStakeExtendedSigningKey, signingKeyFromStakeSigningKey,
-                   stakeAddressFromKeyHash, stakeVerificationKeyHash)
+                   stakeAddressFromKeyHash, stakeAddressFromVerificationKey,
+                   stakeVerificationKeyHash)
 import           Cardano.Catalyst.Registration (RewardsAddress (..), Vote, VotePayload,
                    createVoteRegistration, mkVotePayload)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),
@@ -216,13 +223,16 @@ genStakeAddress =
 
 genStakeAddressForVerificationKey
   :: MonadGen m
-  => VoteVerificationKey
+  => NetworkId
+  -> StakeVerificationKey
   -> m Db.StakeAddress
-genStakeAddressForVerificationKey verKey = do
-  let verKeyHashRaw = voteVerificationKeyStakeAddressHashRaw Cardano.Mainnet verKey
-      verKeyView = serialiseVoteVerificationKeyToBech32 verKey
+genStakeAddressForVerificationKey nw verKey = do
+  let
+    stakeAddr = stakeAddressFromVerificationKey nw verKey
+    addrHashRaw = Cardano.serialiseToRawBytesHex stakeAddr
+    addrView = Cardano.serialiseToBech32 stakeAddr
 
-  Db.StakeAddress verKeyHashRaw verKeyView
+  Db.StakeAddress addrHashRaw addrView
   <$> pure Nothing
   <*> (Persist.toSqlKey <$> genInt64)
 
@@ -396,7 +406,7 @@ genVoteRegistration skey = do
     <*> genRewardsAddress
     <*> genUInteger -- slotNo
     <*> pure skey
-    <*> Gen.bool
+    <*> Gen.frequency [ (1, pure False), (4, pure True) ]
     <*> genTransaction
 
 -- | Generate a DSL 'StakeRegistration' term.
@@ -409,15 +419,19 @@ genStakeAddressRegistration
      , MonadState [Word32] m
      , MonadIO m
      )
-  => m (StakeRegistration 'Ephemeral)
-genStakeAddressRegistration = do
+  => NetworkId
+  -> m (StakeRegistration 'Ephemeral)
+genStakeAddressRegistration nw = do
   stakingKey           <- genVoteSigningKey
   stakeRegoTransaction <- genTransaction
   stakeAddress         <- genStakeAddress
 
   let
     verKey = getStakeVerificationKey stakingKey
-    verKeyHashRaw = Cardano.serialiseToRawBytesHex $ stakeVerificationKeyHash verKey
+    verKeyHashRaw =
+      Cardano.serialiseToRawBytes
+      $ stakeAddressFromKeyHash nw
+      $ stakeVerificationKeyHash verKey
     verKeyView = serialiseStakeVerificationKeyToBech32 verKey
 
   pure $
@@ -428,58 +442,6 @@ genStakeAddressRegistration = do
                     , Db.stakeAddressView = verKeyView
                     }
       )
-
-genStakeAddress :: (MonadGen m, MonadState [Word32] m) => m Db.StakeAddress
-genStakeAddress =
-  Db.StakeAddress
-  <$> genUniqueHash32
-  <*> Gen.text (Range.linear 0 256) Gen.unicodeAll
-  <*> pure Nothing
-  <*> (Persist.toSqlKey <$> genInt64)
-
-genStakeAddressForVerificationKey
-  :: MonadGen m
-  => StakeVerificationKey
-  -> m Db.StakeAddress
-genStakeAddressForVerificationKey verKey = do
-  let verKeyHashRaw = Cardano.serialiseToRawBytesHex $ stakeVerificationKeyHash verKey
-      verKeyView = serialiseStakeVerificationKeyToBech32 verKey
-
-  Db.StakeAddress verKeyHashRaw verKeyView
-  <$> pure Nothing
-  <*> (Persist.toSqlKey <$> genInt64)
-
-genTxOut :: MonadGen m => m Db.TxOut
-genTxOut = Db.TxOut
-  <$> (Persist.toSqlKey <$> genInt64)
-  -- ^ tx id
-  <*> (fromIntegral <$> Gen.int16 (Range.linear 0 (maxBound :: Int16)))
-  -- ^ index (uses smallint >= 0)
-  <*> Gen.text (Range.linear 0 103) Gen.ascii
-  -- ^ address
-  <*> genHash32
-  -- ^ address raw
-  <*> Gen.bool
-  -- ^ has script
-  <*> Gen.maybe genHash28
-  -- ^ Payment credential
-  <*> Gen.maybe (Persist.toSqlKey <$> genInt64)
-  -- ^ stake address id
-  <*> genLovelace
-  -- ^ Value
-  <*> Gen.maybe genHash32
-  -- ^ Data hash
-
-genTxIn :: MonadGen m => m Db.TxIn
-genTxIn = Db.TxIn
-  <$> (Persist.toSqlKey <$> genInt64)
-  -- ^ Tx in id
-  <*> (Persist.toSqlKey <$> genInt64)
-  -- ^ Tx out id
-  <*> genWord16
-  -- ^ Tx out index
-  <*> pure Nothing
-  -- ^ Redeemer id
 
 -- | Generate a DSL 'UTxO' term.
 --
@@ -505,9 +467,10 @@ genGraph
      , MonadState [Word32] m
      , MonadIO m
      )
-  => m (Graph 'Ephemeral)
-genGraph = do
-  stakeRego <- genStakeAddressRegistration
+  => NetworkId
+  -> m (Graph 'Ephemeral)
+genGraph nw = do
+  stakeRego <- genStakeAddressRegistration nw
 
   Graph stakeRego
     <$> Gen.list (Range.linear 0 3) (genVoteRegistration (stakeRegoKey stakeRego))
@@ -518,7 +481,7 @@ genVotingKeyPublic =
   fromMaybe (error "Deserialising VotingKeyPublic from bytes failed!")
   <$> deserialiseFromRawBytes AsVotingKeyPublic
   <$> Gen.bytes (Range.linear 0 64)
-  -- ^ cardano-node enforces that the maximum bytestring length of any metadata
+  -- cardano-node enforces that the maximum bytestring length of any metadata
   -- is 64 bytes
   -- (https://github.com/input-output-hk/cardano-node/blob/5cffbcc6b3e2861ed20452f3f6291ee3fe2bf628/cardano-api/src/Cardano/Api/TxMetadata.hs#L190)
 

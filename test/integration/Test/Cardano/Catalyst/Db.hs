@@ -55,6 +55,9 @@ tests intf getConnPool =
     , testProperty "prop_signatureMalformed" (prop_signatureMalformed intf getConnPool)
     ]
 
+nw :: Cardano.NetworkId
+nw = Cardano.Mainnet
+
 -- If we register a key, then make a set of contributions against that
 -- registration, the voting power reported should match the sum of the
 -- contributions.
@@ -65,7 +68,7 @@ prop_insert intf getConnPool =
 
     graph <-
       flip State.evalStateT [1..] $ distributeT $
-        forAllT genGraph
+        forAllT $ genGraph nw
 
     let
       amt = contributionAmount graph
@@ -99,7 +102,7 @@ prop_nonceRespected intf getConnPool =
       -- We expect registration 1 to be respected, because it was the first
       -- registration with the highest nonce.
       flip State.evalStateT [1..] $ distributeT $ forAllT $ do
-        stakeRego <- genStakeAddressRegistration
+        stakeRego <- genStakeAddressRegistration nw
         let stakeKey = stakeRegoKey stakeRego
         rego1 <- (signed . setSlotNo 1) <$> genVoteRegistration stakeKey
         rego2 <- (signed . setSlotNo 1) <$> genVoteRegistration stakeKey
@@ -136,7 +139,7 @@ prop_unsigned intf getConnPool =
     graph <-
       flip State.evalStateT [1..]
       $ distributeT
-      $ forAllT (modifyRegistrations (fmap unsigned) <$> genGraph)
+      $ forAllT (modifyRegistrations (fmap unsigned) <$> genGraph nw)
 
     withinTransaction pool $ \runQuery -> do
       funds <- runQuery $ do
@@ -157,7 +160,7 @@ prop_registerDuplicates intf getConnPool =
       -- We expect registration 1 to be respected, because it was the first
       -- registration with the highest nonce.
       flip State.evalStateT [1..] $ distributeT $ forAllT $ do
-        stakeRego <- genStakeAddressRegistration
+        stakeRego <- genStakeAddressRegistration nw
         let stakeKey = stakeRegoKey stakeRego
         rego1 <- (signed . setSlotNo 1) <$> genVoteRegistration stakeKey
         rego2 <- (signed . setSlotNo 2) <$> genVoteRegistration stakeKey
@@ -201,7 +204,7 @@ prop_restrictSlotNo intf getConnPool =
       -- It doesn't matter when the stake registration occurs (before or after
       -- slot), only the voting registration slot is important.
       stakeRegos <-
-        Set.toList <$> Gen.set (Range.linear 0 32) genStakeAddressRegistration
+        Set.toList <$> Gen.set (Range.linear 0 32) (genStakeAddressRegistration nw)
 
       let
         inSlotBound genVoteRego = do
@@ -243,7 +246,7 @@ prop_noRego intf getConnPool =
 
     (stakeRego, utxos) <-
       flip State.evalStateT [1..] $ distributeT $ forAllT $ do
-        stakeRego <- genStakeAddressRegistration
+        stakeRego <- genStakeAddressRegistration nw
         utxos <- Gen.list (Range.linear 0 5) genUTxO
         pure (stakeRego, utxos)
 
@@ -279,7 +282,7 @@ prop_ignoreDateUTxOStakeRego intf getConnPool =
         -- Generate a stake registration AFTER the slot number.
         stakeRego <-
           setStakeAddressRegistrationSlot afterSlot
-          <$> genStakeAddressRegistration
+          <$> genStakeAddressRegistration nw
 
         -- Generate some UTxO contributions AFTER the slot number.
         utxos <- fmap (setUTxOSlot afterSlot) <$> Gen.list (Range.linear 0 5) genUTxO
@@ -327,7 +330,7 @@ prop_signatureMalformed intf getConnPool =
 
     (stakeRego, metaRego, metaSig, regoTx, utxos) <-
       flip State.evalStateT [1..] $ distributeT $ forAllT $ do
-        stakeRego <- genStakeAddressRegistration
+        stakeRego <- genStakeAddressRegistration nw
         let stakeKey = stakeRegoKey stakeRego
 
         -- Gen good registration data
