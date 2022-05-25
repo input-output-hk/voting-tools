@@ -14,9 +14,9 @@ import           Cardano.Catalyst.Registration (mkVotePayload, signatureMetaKey,
 import           Cardano.Catalyst.Test.DSL (apiToDbMetadata, contributionAmount, genGraph,
                    genStakeAddressRegistration, genTransaction, genUInteger, genUTxO,
                    genVoteRegistration, getGraphVote, getRegistrationVote, getStakeRegoKey,
-                   getTxKey, writeGraph, modifyRegistrations, writeRegistration, setSlotNo,
-                   setStakeAddressRegistrationSlot, setUTxOSlot, signed, stakeRegoKey,
-                   writeStakeRego, writeTx, unsigned, writeUTxO, utxoValue)
+                   getTxKey, modifyRegistrations, setSlotNo, setStakeAddressRegistrationSlot,
+                   setUTxOSlot, signed, stakeRegoKey, unsigned, utxoValue, writeGraph,
+                   writeRegistration, writeStakeRego, writeTx, writeUTxO)
 import           Cardano.Catalyst.VotePower
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Reader (ReaderT)
