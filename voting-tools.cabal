@@ -83,7 +83,6 @@ executable voting-tools
                      , aeson-pretty
                      , attoparsec
                      , bech32
-                     , binary
                      , bytestring
                      , cardano-api
                      , cardano-binary
