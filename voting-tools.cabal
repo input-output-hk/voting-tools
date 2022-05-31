@@ -146,6 +146,7 @@ test-suite unit-tests
 
   other-modules:        Test.Cardano.Catalyst.Registration
                         Test.Cardano.API.Extended
+                        Test.Cardano.Catalyst.VotePower
                         Test.Cardano.Catalyst.Crypto
 
 test-suite integration-tests
