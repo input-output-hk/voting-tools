@@ -90,7 +90,6 @@ executable voting-tools
                      , cardano-crypto-class
                      , cardano-crypto-wrapper
                      , cardano-db
-                     , cardano-ledger-byron
                      , cardano-ledger-core
                      , containers
                      , lens
@@ -180,7 +179,6 @@ test-suite integration-tests
                 , cardano-crypto-class
                 , cardano-crypto-wrapper
                 , cardano-db
-                , cardano-ledger-byron
                 , cardano-ledger-core
                 , containers
                 , esqueleto

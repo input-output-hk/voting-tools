@@ -15,16 +15,13 @@ import           Data.Aeson.Encode.Pretty (Config (..), defConfig, encodePretty'
 import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as LBS
-import           Data.Foldable (asum)
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
-import           Data.Word (Word64)
 import qualified Options.Applicative as Opt
 
-import           Cardano.Api (AddressAny, AnyConsensusModeParams (..),
-                   AsType (AsAddressAny, AsStakeAddress), ConsensusModeParams (..), EpochSlots (..),
-                   HasTextEnvelope, NetworkId (Mainnet, Testnet), NetworkMagic (..), StakeAddress,
-                   TextEnvelopeDescr, deserialiseAddress, serialiseToTextEnvelope)
+import           Cardano.Api (AddressAny, AsType (AsAddressAny, AsStakeAddress), HasTextEnvelope,
+                   NetworkId (Mainnet, Testnet), NetworkMagic (..), StakeAddress, TextEnvelopeDescr,
+                   deserialiseAddress, serialiseToTextEnvelope)
 import           Cardano.Api.Shelley ()
 
 parseAddressAny :: Atto.Parser AddressAny
@@ -87,43 +84,3 @@ lexPlausibleAddressString =
       || (c >= 'A' && c <= 'Z')
       || (c >= '0' && c <= '9')
       || c == '_'
-
-defaultByronEpochSlots :: Word64
-defaultByronEpochSlots = 21600
-
-pConsensusModeParams :: Opt.Parser AnyConsensusModeParams
-pConsensusModeParams = asum
-  [ Opt.flag' (AnyConsensusModeParams ShelleyModeParams)
-      (  Opt.long "shelley-mode"
-      <> Opt.help "For talking to a node running in Shelley-only mode."
-      )
-  , Opt.flag' ()
-      (  Opt.long "byron-mode"
-      <> Opt.help "For talking to a node running in Byron-only mode."
-      )
-       *> pByronConsensusMode
-  , Opt.flag' ()
-      (  Opt.long "cardano-mode"
-      <> Opt.help "For talking to a node running in full Cardano mode (default)."
-      )
-       *> pCardanoConsensusMode
-  , -- Default to the Cardano consensus mode.
-    pure . AnyConsensusModeParams . CardanoModeParams $ EpochSlots defaultByronEpochSlots
-  ]
- where
-   pCardanoConsensusMode :: Opt.Parser AnyConsensusModeParams
-   pCardanoConsensusMode = AnyConsensusModeParams . CardanoModeParams <$> pEpochSlots
-   pByronConsensusMode :: Opt.Parser AnyConsensusModeParams
-   pByronConsensusMode = AnyConsensusModeParams . ByronModeParams <$> pEpochSlots
-
-pEpochSlots :: Opt.Parser EpochSlots
-pEpochSlots =
-  EpochSlots <$>
-    Opt.option Opt.auto
-      (  Opt.long "epoch-slots"
-      <> Opt.metavar "NATURAL"
-      <> Opt.help "The number of slots per epoch for the Byron era."
-      <> Opt.value defaultByronEpochSlots -- Default to the mainnet value.
-      <> Opt.showDefault
-      )
-

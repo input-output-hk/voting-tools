@@ -15,12 +15,9 @@
 module Cardano.API.Extended ( readSigningKeyFileAnyOf
                             , AsFileError(..)
                             , AsInputDecodeError(..)
-                            , AsEnvSocketError(..)
                             , Extended.readerFromAttoParser
-                            , Extended.parseAddressAny
                             , Extended.parseStakeAddress
                             , Extended.pNetworkId
-                            , Extended.textEnvelopeToJSON
                             , AsBech32DecodeError(..)
                             , AsBech32HumanReadablePartError(..)
                             , Bech32HumanReadablePartError(Bech32HumanReadablePartError)
@@ -29,8 +26,6 @@ module Cardano.API.Extended ( readSigningKeyFileAnyOf
                             , serialiseToBech32'
                             , SerialiseAsBech32'(bech32PrefixFor, bech32PrefixesPermitted)
                             , AsType(AsVotingKeyPublic)
-                            , Extended.pEpochSlots
-                            , Extended.pConsensusModeParams
                             ) where
 
 import           Control.Lens ((#))
@@ -48,7 +43,6 @@ import qualified Data.Text.Encoding as T
 import           Cardano.Api (AsType, Bech32DecodeError (..), FileError (..), FromSomeType,
                    HasTextEnvelope, HasTypeProxy (..), SerialiseAsBech32, SerialiseAsRawBytes (..),
                    deserialiseFromRawBytesHex, serialiseToRawBytesHex)
-import           Cardano.CLI.Environment (EnvSocketError (..))
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import qualified Cardano.CLI.Shelley.Key as Shelley
 import           Cardano.CLI.Types (SigningKeyFile (..))
@@ -59,8 +53,6 @@ import qualified Cardano.API.Extended.Raw as Extended
 
 makeClassyPrisms ''FileError
 makeClassyPrisms ''InputDecodeError
-makeClassyPrisms ''EnvSocketError
-
 makeClassyPrisms ''Bech32DecodeError
 
 data Bech32HumanReadablePartError = Bech32HumanReadablePartError !(Bech32.HumanReadablePartError)
