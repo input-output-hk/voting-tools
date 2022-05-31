@@ -86,7 +86,6 @@ module Cardano.Catalyst.Test.DSL
   , Gen.genTransaction
   , Gen.genVoteRegistration
   , Gen.genStakeAddressRegistration
-  , Gen.genStakeAddress
   , Gen.genStakeAddressForVerificationKey
   , Gen.genTxOut
   , Gen.genTxIn
