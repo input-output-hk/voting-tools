@@ -6,6 +6,7 @@ module Cardano.Catalyst.Registration
   , accumulateRegistrations
   -- * Types
   , module Cardano.Catalyst.Registration.Types
+  , module Cardano.Catalyst.Registration.Types.Purpose
   ) where
 
 import           Data.Foldable (foldl')
@@ -15,6 +16,7 @@ import qualified Cardano.Api as Api
 import qualified Data.Map.Strict as M
 
 import           Cardano.Catalyst.Registration.Types
+import           Cardano.Catalyst.Registration.Types.Purpose
 
 filterLatestRegistrations :: Ord a => [(a, Vote)] -> [Vote]
 filterLatestRegistrations regos =

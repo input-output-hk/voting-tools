@@ -21,6 +21,7 @@ import           Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import           Test.Tasty.Hedgehog
 
 import           Cardano.Catalyst.Registration
+import qualified Cardano.Catalyst.Registration.Types.Purpose as Purpose
 import qualified Cardano.Catalyst.Test.DSL.Gen as Gen
 
 tests :: TestTree
@@ -31,6 +32,14 @@ tests = testGroup "Vote Metadata type tests"
       , testProperty "Vote/toTxMetadata/fromTxMetadata/roundtrips" prop_vote_txMetadata_roundtrips
       , testProperty "JSON roundrip RewardsAddress" prop_rewardsAddress_json_roundtrips
       ]
+  , testGroup "Purpose"
+    [ testProperty "Purpose/txMetadata/roundtrip" prop_purpose_txMetadata_roundtrip
+    , testProperty "Purpose/json/roundtrip" prop_purpose_json_roundtrip
+    , testProperty "Purpose/purposeNumber/roundtrip" prop_purpose_number_roundtrip
+    , testCase "Purpose/purposeNumber/expected" test_purpose_number_format
+    , testCase "Purpose/metadataFormat/expected" test_purpose_metadata_format
+    , testCase "Purpose/jsonFormat/expected" test_purpose_json_format
+    ]
   ]
 
 prop_rewardsAddress_json_roundtrips :: H.Property
@@ -105,3 +114,35 @@ sortMetaMap x              = x
 
 sortMetaMaps :: Api.TxMetadata -> Api.TxMetadata
 sortMetaMaps (Api.TxMetadata m) = (Api.TxMetadata $ fmap sortMetaMap m)
+
+prop_purpose_txMetadata_roundtrip :: H.Property
+prop_purpose_txMetadata_roundtrip = property $ do
+  purpose <- forAllT Gen.genPurpose
+  tripping purpose Purpose.toTxMetadataValue Purpose.fromTxMetadataValue
+
+prop_purpose_json_roundtrip :: H.Property
+prop_purpose_json_roundtrip = property $ do
+  purpose <- forAllT Gen.genPurpose
+  tripping purpose Aeson.encode Aeson.eitherDecode'
+
+prop_purpose_number_roundtrip :: H.Property
+prop_purpose_number_roundtrip = property $ do
+  purpose <- forAllT Gen.genPurpose
+  tripping purpose purposeNumber mkPurpose
+
+test_purpose_number_format :: Assertion
+test_purpose_number_format = do
+  purposeNumber catalystPurpose @?= 0
+  purposeNumber <$> (mkPurpose 3) @?= Right 3
+  purposeNumber <$> (mkPurpose (-1))
+    @?= Left "expected a positive integer, got a negative integer"
+
+test_purpose_metadata_format :: Assertion
+test_purpose_metadata_format = do
+  Purpose.toTxMetadataValue catalystPurpose @?= Api.TxMetaNumber 0
+  Purpose.toTxMetadataValue <$> (mkPurpose 10) @?= Right (Api.TxMetaNumber 10)
+
+test_purpose_json_format :: Assertion
+test_purpose_json_format = do
+  Aeson.encode catalystPurpose @?= "0"
+  Aeson.encode <$> (mkPurpose 10) @?= Right "10"

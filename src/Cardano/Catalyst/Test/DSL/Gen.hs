@@ -59,6 +59,7 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genVote
   , genVotePayload
   , genSlotNo
+  , genPurpose
     -- ** Other
   , genUniqueHash32
   , genUniqueHash28
@@ -79,8 +80,8 @@ import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    signingKeyFromStakeExtendedSigningKey, signingKeyFromStakeSigningKey,
                    stakeAddressFromKeyHash, stakeAddressFromVerificationKey,
                    stakeVerificationKeyHash)
-import           Cardano.Catalyst.Registration (RewardsAddress (..), Vote, VotePayload,
-                   createVoteRegistration, mkVotePayload)
+import           Cardano.Catalyst.Registration (Purpose, RewardsAddress (..), Vote, VotePayload,
+                   catalystPurpose, createVoteRegistration, mkPurpose, mkVotePayload)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),
                    Registration (..), StakeRegistration (..), Transaction (..), UTxO (..),
                    stakeRegoKey)
@@ -104,6 +105,7 @@ import qualified Data.Binary.Put as Put
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Time.Clock.POSIX as Time
 import qualified Database.Persist.Sql as Persist
@@ -512,6 +514,17 @@ genSlotNo = fromIntegral <$> Gen.word32 Range.constantBounded
 genVotePayload :: (MonadGen m, MonadIO m) => m VotePayload
 genVotePayload =
   mkVotePayload <$> genVotingKeyPublic <*> genStakeVerificationKey <*> genRewardsAddress <*> genSlotNo
+genPurpose :: MonadGen m => m Purpose
+genPurpose =
+  Gen.frequency [ (9, pure catalystPurpose)
+                , (1, genOtherPurpose)
+                ]
+  where
+    genOtherPurpose = do
+      purposeNum <- fromIntegral <$> Gen.int64 (Range.linear 0 maxBound)
+      case mkPurpose purposeNum of
+        Left e  -> error . T.unpack $ e
+        Right p -> pure p
 
 genVote :: (MonadGen m, MonadIO m) => m Vote
 genVote =

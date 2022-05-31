@@ -42,6 +42,7 @@ library
                      , Cardano.Catalyst.Query.Sql
                      , Cardano.Catalyst.Registration
                      , Cardano.Catalyst.Registration.Types
+                     , Cardano.Catalyst.Registration.Types.Purpose
                      , Cardano.Catalyst.VotePower
                      , Cardano.Db.Extended
                      , Config.Snapshot
@@ -71,6 +72,7 @@ library
                      , persistent
                      , persistent-postgresql
                      , safe-exceptions
+                     , scientific
                      , text
                      , time
                      , unordered-containers
@@ -85,6 +87,7 @@ executable voting-tools
                      , bech32
                      , bytestring
                      , cardano-api
+                     , scientific
                      , cardano-binary
                      , cardano-cli
                      , cardano-crypto-class
@@ -111,12 +114,13 @@ executable voting-tools
                  , Cardano.Catalyst.Registration
                  , Cardano.Catalyst.Registration.Types
                  , Cardano.Catalyst.VotePower
-                 , Cardano.Catalyst.Presentation
                  , Cardano.Db.Extended
                  , Cardano.Catalyst.Crypto
                  , Config.Common
                  , Config.Snapshot
                  , Config.Registration
+                 , Cardano.Catalyst.Registration.Types.Purpose
+                 , Cardano.Catalyst.Presentation
 
 test-suite unit-tests
   import:               project-config
@@ -162,8 +166,10 @@ test-suite integration-tests
                 , persistent-postgresql
                 , resource-pool
                 , resourcet
-                , tasty
+                , scientific
                 , tasty-hedgehog
+                , esqueleto
+                , tasty
                 , text
                 , transformers-base
 
@@ -181,7 +187,6 @@ test-suite integration-tests
                 , cardano-db
                 , cardano-ledger-core
                 , containers
-                , esqueleto
                 , lens
                 , monad-logger
                 , mtl
@@ -201,6 +206,7 @@ test-suite integration-tests
                         Cardano.Catalyst.Query.Types
                         Cardano.Catalyst.Registration
                         Cardano.Catalyst.Registration.Types
+                        Cardano.Catalyst.Registration.Types.Purpose
                         Cardano.Catalyst.VotePower
                         Cardano.API.Extended
                         Cardano.API.Extended.Raw
