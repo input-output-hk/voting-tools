@@ -10,7 +10,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Cardano.API.Extended ( readSigningKeyFileAnyOf
                             , AsFileError(..)
@@ -21,20 +23,21 @@ module Cardano.API.Extended ( readSigningKeyFileAnyOf
                             , AsBech32DecodeError(..)
                             , AsBech32HumanReadablePartError(..)
                             , Bech32HumanReadablePartError(Bech32HumanReadablePartError)
-                            , VotingKeyPublic
+                            , VotingKeyPublic(..)
                             , deserialiseFromBech32'
                             , serialiseToBech32'
                             , SerialiseAsBech32'(bech32PrefixFor, bech32PrefixesPermitted)
                             , AsType(AsVotingKeyPublic)
                             ) where
 
+import qualified Cardano.Crypto.DSIGN as Crypto
+import qualified Cardano.Crypto.Hash.Blake2b as Crypto
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad (guard)
 import           Control.Monad.Except (MonadError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Data.Aeson (FromJSON, ToJSON)
-import           Data.ByteString (ByteString)
 import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -79,15 +82,15 @@ readSigningKeyFileAnyOf bech32Types textEnvTypes f = do
     Left (FileIOError fp e)           -> throwError (_FileIOError # (fp, e))
     Left (FileErrorTempFile fp tmp h) -> throwError (_FileErrorTempFile # (fp, tmp, h))
 
--- | Voting key types do not exist in the cardano-api yet. This
--- extension adds voting keys, but makes no guarantees that the
--- contents of the voting key are correct. It does however provide the
--- standard interfaces for serialising and deserialising voting keys.
+-- | Voting key types do not exist in the cardano-api yet.
+newtype VotingKeyPublic = VotingKeyPublic (Crypto.VerKeyDSIGN Crypto.Ed25519DSIGN)
+  deriving (Eq, Show)
 
-data VotingKeyPublic = VotingKeyPublic
-    { votingKeyPublicRawBytes :: ByteString
-    }
-    deriving (Eq, Ord, Show)
+instance Ord VotingKeyPublic where
+  compare (VotingKeyPublic a) (VotingKeyPublic b) =
+    compare
+    (Crypto.hashVerKeyDSIGN @Crypto.Ed25519DSIGN @Crypto.Blake2b_256 a)
+    (Crypto.hashVerKeyDSIGN @Crypto.Ed25519DSIGN @Crypto.Blake2b_256 b)
 
 instance ToJSON VotingKeyPublic where
   toJSON = Aeson.String . ("0x" <>) . T.decodeUtf8 . serialiseToRawBytesHex
@@ -105,11 +108,13 @@ instance HasTypeProxy VotingKeyPublic where
   proxyToAsType _ = AsVotingKeyPublic
 
 instance SerialiseAsRawBytes VotingKeyPublic where
-  serialiseToRawBytes (VotingKeyPublic raw) = raw
-  deserialiseFromRawBytes AsVotingKeyPublic = Just . VotingKeyPublic
+  serialiseToRawBytes (VotingKeyPublic vkey) =
+    Crypto.rawSerialiseVerKeyDSIGN vkey
+  deserialiseFromRawBytes AsVotingKeyPublic =
+    fmap VotingKeyPublic . Crypto.rawDeserialiseVerKeyDSIGN
 
 instance SerialiseAsBech32' VotingKeyPublic where
-    bech32PrefixFor (VotingKeyPublic _) = "ed25519_pk"
+    bech32PrefixFor _ = "ed25519_pk"
     bech32PrefixesPermitted AsVotingKeyPublic = ["ed25519_pk"]
 
 (?!.) :: Either e a -> (e -> e') -> Either e' a

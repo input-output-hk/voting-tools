@@ -65,7 +65,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Word (Word64)
 
-import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
+import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic (..))
 import           Cardano.Catalyst.Crypto (AsType (AsStakeVerificationKey), StakeSigningKey,
                    StakeVerificationKey, getStakeVerificationKey, sign, stakeVerificationKeyHash,
                    verify)

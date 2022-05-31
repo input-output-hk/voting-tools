@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 
 {- |
 
@@ -71,10 +72,9 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genInt64
   ) where
 
-import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
+import           Cardano.API.Extended (VotingKeyPublic (..))
 import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), NetworkId (Mainnet, Testnet),
-                   NetworkMagic (..), deserialiseFromRawBytes, generateSigningKey,
-                   getVerificationKey, verificationKeyHash)
+                   NetworkMagic (..), generateSigningKey, getVerificationKey, verificationKeyHash)
 import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    getStakeVerificationKey, serialiseStakeVerificationKeyToBech32,
                    signingKeyFromStakeExtendedSigningKey, signingKeyFromStakeSigningKey,
@@ -91,13 +91,15 @@ import           Control.Monad.State.Class (MonadState)
 import           Data.ByteString (ByteString)
 import           Data.Functor.Identity (Identity)
 import           Data.Int (Int16, Int64)
-import           Data.Maybe (fromMaybe)
+import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word16, Word32, Word64)
 import           Hedgehog (GenBase, MonadGen, fromGenT)
 
 import qualified Cardano.Api as Cardano
+import qualified Cardano.Crypto.DSIGN as Crypto
+import qualified Cardano.Crypto.Seed as Crypto
 import qualified Cardano.Db as Db
 import qualified Control.Monad.State.Class as State
 import qualified Data.Aeson as Aeson
@@ -479,13 +481,14 @@ genGraph nw = do
     <*> Gen.list (Range.linear 0 3) genUTxO
 
 genVotingKeyPublic :: MonadGen m => m VotingKeyPublic
-genVotingKeyPublic =
-  fromMaybe (error "Deserialising VotingKeyPublic from bytes failed!")
-  <$> deserialiseFromRawBytes AsVotingKeyPublic
-  <$> Gen.bytes (Range.linear 0 64)
-  -- cardano-node enforces that the maximum bytestring length of any metadata
-  -- is 64 bytes
-  -- (https://github.com/input-output-hk/cardano-node/blob/5cffbcc6b3e2861ed20452f3f6291ee3fe2bf628/cardano-api/src/Cardano/Api/TxMetadata.hs#L190)
+genVotingKeyPublic = do
+  let
+    seedSize = fromIntegral $ Crypto.seedSizeDSIGN $ Proxy @Crypto.Ed25519DSIGN
+  seedBytes <- Gen.bytes (Range.singleton seedSize)
+  let seed = Crypto.mkSeedFromBytes seedBytes
+  let skey = Crypto.genKeyDSIGN seed
+  let vkey = Crypto.deriveVerKeyDSIGN skey
+  pure (VotingKeyPublic vkey)
 
 genVoteSigningKey :: (MonadGen m, MonadIO m) => m StakeSigningKey
 genVoteSigningKey = do
