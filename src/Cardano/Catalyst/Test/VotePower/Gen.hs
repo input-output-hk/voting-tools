@@ -1,9 +1,9 @@
 
-module Cardano.Catalyst.Test.Presentation.Gen where
+module Cardano.Catalyst.Test.VotePower.Gen where
 
-import           Cardano.Catalyst.Presentation (VotingPower (..))
 import           Cardano.Catalyst.Test.DSL.Gen (genRewardsAddress, genStakeVerificationKey,
                    genVotingKeyPublic)
+import           Cardano.Catalyst.VotePower (VotingPower (..))
 import           Control.Monad.IO.Class (MonadIO)
 import           Hedgehog (MonadGen)
 

@@ -87,7 +87,7 @@ prop_insert intf getConnPool =
         Just vote -> do
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote, amt)
-          funds === [(vote, amt)]
+          funds === [votingPowerFromRegoValue vote amt]
 
 -- Nonce respected. A newer registration will apply over an older one iff the
 -- nonce of the new registration is greater than the old.
@@ -127,7 +127,7 @@ prop_nonceRespected intf getConnPool =
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote1, 0 :: Integer)
           -- Vote 1 is respected
-          funds === [(vote1, 0)]
+          funds === [votingPowerFromRegoValue vote1 0]
 
 
 -- Unsigned registrations are never considered valid.
@@ -189,7 +189,7 @@ prop_registerDuplicates intf getConnPool =
           let expectedValue = getSum $ foldMap (Sum . utxoValue) utxos
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote2, expectedValue)
-          funds === [(vote2, expectedValue)]
+          funds === [votingPowerFromRegoValue vote2 expectedValue]
 
 -- Only take registrations before the given slot number.
 prop_restrictSlotNo :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
@@ -236,7 +236,7 @@ prop_restrictSlotNo intf getConnPool =
       let
         validRegosBefore = catMaybes $ getRegistrationVote <$> regosBefore
 
-      sort funds === sort ((\rego -> (rego, 0)) <$> validRegosBefore)
+      sort funds === sort ((\rego -> votingPowerFromRegoValue rego 0) <$> validRegosBefore)
 
 -- Stake address with contributions but no registrations isn't considered.
 prop_noRego :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
@@ -320,7 +320,7 @@ prop_ignoreDateUTxOStakeRego intf getConnPool =
         Just vote -> do
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote, 0 :: Integer)
-          funds === [(vote, 0)]
+          funds === [votingPowerFromRegoValue vote 0]
 
 -- Malformed signatures are never considered valid.
 prop_signatureMalformed :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property

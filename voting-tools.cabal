@@ -31,11 +31,10 @@ library
 
   exposed-modules:     Cardano.API.Extended
                      , Cardano.API.Extended.Raw
-                     , Cardano.Catalyst.Presentation
                      , Cardano.Catalyst.Crypto
                      , Cardano.Catalyst.Test.DSL
                      , Cardano.Catalyst.Test.DSL.Gen
-                     , Cardano.Catalyst.Test.Presentation.Gen
+                     , Cardano.Catalyst.Test.VotePower.Gen
                      , Cardano.Catalyst.Test.DSL.Internal.Db
                      , Cardano.Catalyst.Test.DSL.Internal.Types
                      , Cardano.Catalyst.Query.Types
@@ -120,7 +119,6 @@ executable voting-tools
                  , Config.Snapshot
                  , Config.Registration
                  , Cardano.Catalyst.Registration.Types.Purpose
-                 , Cardano.Catalyst.Presentation
 
 test-suite unit-tests
   import:               project-config
@@ -145,7 +143,6 @@ test-suite unit-tests
 
   other-modules:        Test.Cardano.Catalyst.Registration
                         Test.Cardano.API.Extended
-                        Test.Cardano.Catalyst.Presentation
                         Test.Cardano.Catalyst.Crypto
 
 test-suite integration-tests
@@ -210,12 +207,11 @@ test-suite integration-tests
                         Cardano.Catalyst.VotePower
                         Cardano.API.Extended
                         Cardano.API.Extended.Raw
-                        Cardano.Catalyst.Presentation
                         Cardano.Catalyst.Crypto
                         Cardano.Catalyst.Test.DSL
                         Cardano.Catalyst.Test.DSL.Gen
                         Cardano.Catalyst.Test.DSL.Internal.Db
                         Cardano.Catalyst.Test.DSL.Internal.Types
-                        Cardano.Catalyst.Test.Presentation.Gen
+                        Cardano.Catalyst.Test.VotePower.Gen
                         Config.Common
                         Cardano.Db.Extended
