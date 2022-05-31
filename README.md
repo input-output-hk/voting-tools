@@ -84,6 +84,20 @@ voter-registration \
 ```
 Both CBOR (--cbor) and JSON (--json) formats exist.
 
+It is also possible to delegate your voting power between voting keys.
+
+For example to split your voting power 1/3 to `vote1.pub` and 2/3 to `vote2.pub`, you could use the following invocation:
+
+```
+voter-registration \
+    --rewards-address $(cat stake.addr) \
+    --delegate vote1.pub,1 \
+    --delegate vote2.pub,2 \
+    --stake-signing-key-file stake.skey \
+    --slot-no $SLOT_TIP \
+    --json > metadata.json
+```
+
 > :information_source: For details on registration metadata format refer to [CIP 15](https://cips.cardano.org/cips/cip15/).
 
 ### Submission of vote registration
