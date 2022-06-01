@@ -22,6 +22,7 @@ module Cardano.CLI.Voting.Metadata ( VotePayload(..)
                                    , mkVotePayload
                                    , signVotePayload
                                    , voteToTxMetadata
+                                   , votePayloadToTxMetadata
                                    , voteSignature
                                    , MetadataParsingError(..)
                                    , AsMetadataParsingError(..)
@@ -32,7 +33,9 @@ module Cardano.CLI.Voting.Metadata ( VotePayload(..)
                                    , voteRegistrationPublicKey
                                    , voteRegistrationVerificationKey
                                    , voteRegistrationRewardsAddress
+                                   , voteRegistrationStakeAddress
                                    , voteRegistrationSlot
+                                   , voteRegistrationStakeHash
                                    , metadataToJson
                                    , parseMetadataFromJson
                                    , componentPath
@@ -45,6 +48,7 @@ import           Cardano.Api (AsType (AsTxMetadata), HasTypeProxy (..), Serialis
                    TxMetadata (TxMetadata), TxMetadataValue (..), makeTransactionMetadata,
                    serialiseToRawBytes)
 import qualified Cardano.Api as Api
+import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Binary as CBOR
 import qualified Cardano.Crypto.DSIGN as Crypto
 import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
@@ -65,10 +69,10 @@ import           Data.Word (Word64)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
 import           Cardano.CLI.Voting.Signing (AsType (AsVoteVerificationKey), VoteVerificationKey,
-                   verify)
+                   getStakeHash, verify)
 
 newtype RewardsAddress = RewardsAddress Api.StakeAddress
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 instance Api.SerialiseAsRawBytes RewardsAddress where
   serialiseToRawBytes (RewardsAddress stakeAddr) =
@@ -99,7 +103,7 @@ data VotePayload
                 , _votePayloadRewardsAddr     :: RewardsAddress
                 , _votePayloadSlot            :: Integer
                 }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 -- | The signed vote payload.
 data Vote
@@ -107,6 +111,14 @@ data Vote
          , _voteSig  :: Crypto.SigDSIGN (DSIGN StandardCrypto)
          }
   deriving (Eq, Show)
+
+instance Ord Vote where
+  compare (Vote a1 a2) (Vote b1 b2) =
+    let
+      a' = (a1, CBOR.serialize' a2)
+      b' = (b1, CBOR.serialize' b2)
+    in
+      compare a' b'
 
 voteRegistrationPublicKey :: Vote -> VotingKeyPublic
 voteRegistrationPublicKey = _votePayloadVoteKey . _voteMeta
@@ -119,6 +131,13 @@ voteRegistrationRewardsAddress = _votePayloadRewardsAddr . _voteMeta
 
 voteRegistrationSlot :: Vote -> Integer
 voteRegistrationSlot = _votePayloadSlot . _voteMeta
+
+voteRegistrationStakeHash :: Vote -> Api.Hash Api.StakeKey
+voteRegistrationStakeHash = getStakeHash . voteRegistrationVerificationKey
+
+voteRegistrationStakeAddress :: Api.NetworkId -> Vote -> Api.StakeAddress
+voteRegistrationStakeAddress nw =
+  Api.makeStakeAddress nw . Api.StakeCredentialByKey . voteRegistrationStakeHash
 
 data VoteRegistrationComponent
   = RegoVotingKey
@@ -290,7 +309,7 @@ voteToTxMetadata (Vote payload sig) =
   let
     payloadMeta = votePayloadToTxMetadata payload
     sigMeta = makeTransactionMetadata $ M.fromList [
-        (61285, TxMetaMap [(TxMetaNumber 1, TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig)])
+        (signatureMetaKey, TxMetaMap [(TxMetaNumber 1, TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig)])
       ]
   in
     payloadMeta <> sigMeta

@@ -37,10 +37,16 @@ library
                      , Cardano.CLI.Voting.Error
                      , Cardano.CLI.Voting.Metadata
                      , Cardano.CLI.Voting.Signing
+                     , Cardano.Catalyst.Test.DSL
+                     , Cardano.Catalyst.Test.DSL.Gen
+                     , Cardano.Catalyst.Test.DSL.Internal.Db
+                     , Cardano.Catalyst.Test.DSL.Internal.Types
+                     , Cardano.Db.Extended
                      , Config.Snapshot
                      , Config.Registration
                      , Config.Common
                      , Snapshot
+                     , Test.Generators
 
   build-depends:       base
                      , aeson
@@ -49,6 +55,7 @@ library
                      , bech32
                      , binary
                      , bytestring
+                     , cardano-db
                      , cardano-api
                      , cardano-binary
                      , cardano-cli
@@ -56,11 +63,14 @@ library
                      , cardano-crypto-wrapper
                      , cardano-ledger-core
                      , containers
+                     , hedgehog
                      , lens
                      , lens-aeson
                      , monoidal-containers
                      , mtl
                      , optparse-applicative
+                     , persistent
+                     , persistent-postgresql
                      , safe-exceptions
                      , scientific
                      , text
@@ -110,6 +120,7 @@ executable voting-tools
                  , Cardano.API.Jormungandr
                  , Cardano.CLI.Fetching
                  , Cardano.CLI.Voting
+                 , Cardano.Db.Extended
                  , Cardano.CLI.Voting.Error
                  , Cardano.CLI.Voting.Metadata
                  , Cardano.CLI.Voting.Signing
@@ -150,3 +161,70 @@ test-suite unit-tests
                         Test.Cardano.CLI.Fetching
                         Test.Cardano.CLI.Voting.Signing
                         Test.Snapshot
+
+test-suite integration-tests
+  import:               project-config
+  hs-source-dirs:       test/integration
+                        test
+                        src
+  main-is:              Main.hs
+  type:                 exitcode-stdio-1.0
+
+  build-depends:  base >=4.12 && <5
+                , hedgehog
+                , lifted-base
+                , monad-control
+                , monad-logger
+                , mtl
+                , persistent
+                , persistent-postgresql
+                , resource-pool
+                , resourcet
+                , tasty
+                , tasty-hedgehog
+                , text
+                , transformers-base
+
+                , aeson
+                , aeson-pretty
+                , attoparsec
+                , bech32
+                , binary
+                , bytestring
+                , cardano-api
+                , cardano-binary
+                , cardano-cli
+                , cardano-crypto-class
+                , cardano-crypto-wrapper
+                , cardano-db
+                , cardano-ledger-byron
+                , cardano-ledger-core
+                , containers
+                , esqueleto
+                , lens
+                , monad-logger
+                , mtl
+                , optparse-applicative
+                , ouroboros-network
+                , persistent-postgresql
+                , scientific
+                , text
+                , time
+                , unordered-containers
+
+  other-modules:        Test.Cardano.Catalyst.Db
+                        Cardano.CLI.Query
+                        Cardano.API.Extended
+                        Cardano.API.Extended.Raw
+                        Cardano.API.Jormungandr
+                        Cardano.CLI.Fetching
+                        Cardano.CLI.Voting
+                        Cardano.CLI.Voting.Metadata
+                        Cardano.CLI.Voting.Signing
+                        Cardano.Catalyst.Test.DSL
+                        Cardano.Catalyst.Test.DSL.Gen
+                        Cardano.Catalyst.Test.DSL.Internal.Db
+                        Cardano.Catalyst.Test.DSL.Internal.Types
+                        Config.Common
+                        Test.Generators
+                        Cardano.Db.Extended
