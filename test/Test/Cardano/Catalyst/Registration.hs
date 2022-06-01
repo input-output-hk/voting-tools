@@ -96,12 +96,14 @@ prop_vote_serialized_format = H.property $ do
 
     expectedJSON = Aeson.Object $ HM.fromList
       [ ( "61285", Aeson.Object $ HM.fromList [ ("1", Aeson.String sig) ] )
-      , ( "61284", Aeson.Object $ HM.fromList
+      , ( "61284", Aeson.Object $ HM.fromList $
           [ ("1", Aeson.String votePub)
           , ("2", Aeson.String verKey)
           , ("3", Aeson.String rewardsAddr)
           , ("4", Aeson.Number slotNo)
-          ]
+          ] ++ case voteRegistrationPurpose vote of
+            Nothing -> []
+            Just p  -> [("5", Aeson.toJSON p)]
         )
       ]
 

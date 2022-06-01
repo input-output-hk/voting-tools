@@ -101,7 +101,7 @@ import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Catalyst.Crypto (StakeSigningKey, getStakeVerificationKey,
                    stakeAddressFromVerificationKey)
 import           Cardano.Catalyst.Registration (RewardsAddress, Vote, VotePayload (..),
-                   createVoteRegistration, voteRegistrationSlot)
+                   catalystPurpose, createVoteRegistration, voteRegistrationSlot)
 import           Cardano.Db.Extended ()
 import           Data.Kind (Type)
 import           Data.Maybe (catMaybes)
@@ -345,6 +345,7 @@ getRegistrationVotePayload rego =
     (getStakeVerificationKey $ registrationSigningKey rego)
     (registrationRewardsAddress rego)
     (fromIntegral $ registrationSlotNo rego)
+    (Just catalystPurpose)
 
 -- | Indicate that the 'Registration' should be signed.
 --

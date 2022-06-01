@@ -7,10 +7,10 @@
 
 module Test.Cardano.Catalyst.Db where
 
-import           Cardano.Catalyst.Crypto (getStakeVerificationKey)
+import           Cardano.Catalyst.Crypto (getStakeVerificationKey, sign)
 import           Cardano.Catalyst.Query.Types
-import           Cardano.Catalyst.Registration (mkVotePayload, signatureMetaKey,
-                   votePayloadToTxMetadata)
+import           Cardano.Catalyst.Registration (catalystPurpose, mkPurpose, mkVotePayload,
+                   signatureMetaKey, votePayloadToTxMetadata)
 import           Cardano.Catalyst.Test.DSL (apiToDbMetadata, contributionAmount, genGraph,
                    genStakeAddressRegistration, genTransaction, genUInteger, genUTxO,
                    genVoteRegistration, getGraphVote, getRegistrationVote, getStakeRegoKey,
@@ -35,6 +35,7 @@ import           Test.Tasty.Hedgehog (testProperty)
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Catalyst.Test.DSL.Gen as Gen
+import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Control.Monad.State.Strict as State
 import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
@@ -53,6 +54,7 @@ tests intf getConnPool =
     , testProperty "prop_noRego" (prop_noRego intf getConnPool)
     , testProperty "prop_ignoreDateUTxOStakeRego" (prop_ignoreDateUTxOStakeRego intf getConnPool)
     , testProperty "prop_signatureMalformed" (prop_signatureMalformed intf getConnPool)
+    , testProperty "prop_notCatalyst" (prop_notCatalyst intf getConnPool)
     ]
 
 nw :: Cardano.NetworkId
@@ -340,6 +342,7 @@ prop_signatureMalformed intf getConnPool =
           <*> pure (getStakeVerificationKey stakeKey)
           <*> Gen.genRewardsAddress
           <*> Gen.genSlotNo
+          <*> (pure $ Just catalystPurpose)
         let
           metaRego = votePayloadToTxMetadata votePayload
 
@@ -381,4 +384,74 @@ prop_signatureMalformed intf getConnPool =
         getVoteRegistrationADA intf Cardano.Mainnet Nothing
 
       -- Ensure that we get no funds for an invalid signature
+      funds === []
+-- Correctly ignores non-Catalyst vote registrations.
+prop_notCatalyst :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
+prop_notCatalyst intf getConnPool =
+  property $ do
+    pool <- liftIO getConnPool
+
+    (stakeRego, regoMeta, sigMeta, regoTx, utxos) <-
+      flip State.evalStateT [1..] $ distributeT $ forAllT $ do
+        stakeRego <- genStakeAddressRegistration nw
+        let stakeKey = stakeRegoKey stakeRego
+
+        -- Gen good registration data
+        votePayload <-
+          mkVotePayload
+          <$> Gen.genVotingKeyPublic
+          <*> pure (getStakeVerificationKey stakeKey)
+          <*> Gen.genRewardsAddress
+          <*> Gen.genSlotNo
+          -- Generate non-catalyst vote registration
+          <*> ( (either (error . show) Just . mkPurpose . fromIntegral)
+               <$> (Gen.int64 $ Range.linear 1 maxBound)
+              )
+        let
+          regoMeta = votePayloadToTxMetadata votePayload
+
+        -- Gen good signature
+        let
+          sig =
+            Api.serialiseToCBOR regoMeta `sign` stakeKey
+          sigMeta = Api.TxMetadata $ M.fromList
+            [ ( 61285, Api.TxMetaMap
+                [ ( Api.TxMetaNumber 1
+                  , Api.TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig
+                  )
+                ]
+              )
+            ]
+
+        -- Gen transaction to attach
+        regoTx <- genTransaction
+
+        -- Gen UTxOs to attach
+        utxos <- Gen.list (Range.linear 0 5) genUTxO
+
+        pure (stakeRego, regoMeta, sigMeta, regoTx, utxos)
+
+    withinTransaction pool $ \runQuery -> do
+      funds <- runQuery $ do
+        -- Write a stake address registration to the database
+        stakeRego' <- writeStakeRego stakeRego
+
+        -- Write UTxOs to DB that contribute to that stake address
+        traverse_ (writeUTxO $ getStakeRegoKey stakeRego') utxos
+
+        -- Write transaction to DB
+        tx' <- writeTx regoTx
+
+        let
+          txId = getTxKey tx'
+
+          dbMeta =
+            apiToDbMetadata (regoMeta <> sigMeta) txId
+
+        -- Associate TxMetadata payload to DB
+        traverse_ Sql.insert_ dbMeta
+
+        getVoteRegistrationADA intf nw Nothing
+
+      -- Ensure that we get no funds for a non-catalyst voting purpose
       funds === []

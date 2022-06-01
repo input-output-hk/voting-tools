@@ -516,7 +516,13 @@ genSlotNo = fromIntegral <$> Gen.word32 Range.constantBounded
 
 genVotePayload :: (MonadGen m, MonadIO m) => m VotePayload
 genVotePayload =
-  mkVotePayload <$> genVotingKeyPublic <*> genStakeVerificationKey <*> genRewardsAddress <*> genSlotNo
+  mkVotePayload
+    <$> genVotingKeyPublic
+    <*> genStakeVerificationKey
+    <*> genRewardsAddress
+    <*> genSlotNo
+    <*> Gen.maybe genPurpose
+
 genPurpose :: MonadGen m => m Purpose
 genPurpose =
   Gen.frequency [ (9, pure catalystPurpose)

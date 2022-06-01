@@ -24,6 +24,7 @@ module Cardano.Catalyst.Registration.Types
   , voteRegistrationRewardsAddress
   , voteRegistrationStakeAddress
   , voteRegistrationSlot
+  , voteRegistrationPurpose
   , voteRegistrationStakeHash
   , voteSignature
   , voteFromTxMetadata
@@ -45,25 +46,28 @@ module Cardano.Catalyst.Registration.Types
 import           Cardano.Api (AsType (AsTxMetadata), HasTypeProxy (..), SerialiseAsCBOR (..),
                    TxMetadata (TxMetadata), TxMetadataValue (..), makeTransactionMetadata,
                    serialiseToRawBytes)
-import qualified Cardano.Api as Api
-import qualified Cardano.Api.Shelley as Api
-import qualified Cardano.Binary as CBOR
-import qualified Cardano.Crypto.DSIGN as Crypto
+import           Cardano.Catalyst.Registration.Types.Purpose (Purpose, catalystPurpose)
 import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad.Except (throwError)
 import           Data.Aeson (FromJSON, ToJSON)
-import qualified Data.Aeson as Aeson
 import           Data.Bifunctor (first)
 import           Data.ByteString (ByteString)
 import           Data.List (find)
-import qualified Data.Map.Strict as M
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
+import           Data.Word (Word64)
+
+import qualified Cardano.Api as Api
+import qualified Cardano.Api.Shelley as Api
+import qualified Cardano.Binary as CBOR
+import qualified Cardano.Catalyst.Registration.Types.Purpose as Purpose
+import qualified Cardano.Crypto.DSIGN as Crypto
+import qualified Data.Aeson as Aeson
+import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import           Data.Word (Word64)
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic (..))
 import           Cardano.Catalyst.Crypto (AsType (AsStakeVerificationKey), StakeSigningKey,
@@ -75,6 +79,7 @@ data VoteRegistrationComponent
   | RegoStakeVerificationKey
   | RegoRewardsAddress
   | RegoSlotNum
+  | RegoVotingPurpose
   | RegoSignature
   deriving (Eq, Show)
 
@@ -87,6 +92,8 @@ prettyPrintComponent RegoRewardsAddress
     = "rewards address"
 prettyPrintComponent RegoSlotNum
     = "slot number"
+prettyPrintComponent RegoVotingPurpose
+    = "voting purpose"
 prettyPrintComponent RegoSignature
     = "signature"
 
@@ -97,6 +104,7 @@ componentPath RegoVotingKey          = (61284, 1)
 componentPath RegoStakeVerificationKey = (61284, 2)
 componentPath RegoRewardsAddress       = (61284, 3)
 componentPath RegoSlotNum              = (61284, 4)
+componentPath RegoVotingPurpose        = (61284, 5)
 componentPath RegoSignature            = (61285, 1)
 
 prettyPrintMetadataPath :: MetadataPath -> Text
@@ -155,10 +163,11 @@ instance FromJSON RewardsAddress where
 -- key).
 data VotePayload
   = VotePayload { _votePayloadVoteKey         :: VotingKeyPublic
-                , _votePayloadVerificationKey :: StakeVerificationKey
-                , _votePayloadRewardsAddr     :: RewardsAddress
-                , _votePayloadSlot            :: Integer
-                }
+  , _votePayloadVerificationKey :: StakeVerificationKey
+  , _votePayloadRewardsAddr     :: RewardsAddress
+  , _votePayloadSlot            :: Integer
+  , _votePayloadPurpose         :: Maybe Purpose
+  }
   deriving (Eq, Ord, Show)
 
 -- | The signed vote payload.
@@ -187,6 +196,9 @@ voteRegistrationRewardsAddress = _votePayloadRewardsAddr . _voteMeta
 
 voteRegistrationSlot :: Vote -> Integer
 voteRegistrationSlot = _votePayloadSlot . _voteMeta
+
+voteRegistrationPurpose :: Vote -> Maybe Purpose
+voteRegistrationPurpose = _votePayloadPurpose . _voteMeta
 
 voteRegistrationStakeHash :: Vote -> Api.Hash Api.StakeKey
 voteRegistrationStakeHash = stakeVerificationKeyHash . voteRegistrationVerificationKey
@@ -219,10 +231,12 @@ mkVotePayload
   -- ^ Address used to pay for the vote registration
   -> Integer
   -- ^ Slot registration created at
+  -> Maybe Purpose
+  -- ^ Voting purpose (0 for Catalyst)
   -> VotePayload
   -- ^ Payload of the vote
-mkVotePayload votepub vkey rewardsAddr slot =
-  VotePayload votepub vkey rewardsAddr slot
+mkVotePayload votepub vkey rewardsAddr slot purpose =
+  VotePayload votepub vkey rewardsAddr slot purpose
 
 signVotePayload
   :: VotePayload
@@ -240,13 +254,17 @@ signVotePayload payload@(VotePayload { _votePayloadVerificationKey = vkey }) sig
     else Just $ Vote payload sig
 
 votePayloadToTxMetadata :: VotePayload -> TxMetadata
-votePayloadToTxMetadata (VotePayload votepub stkVerify paymentAddr slot) =
-  makeTransactionMetadata $ M.fromList [ (61284, TxMetaMap
+votePayloadToTxMetadata (VotePayload votepub stkVerify paymentAddr slot mVotingPurpose) =
+  makeTransactionMetadata $ M.fromList [ (61284, TxMetaMap $
     [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
-    , (TxMetaNumber 2, TxMetaBytes $ serialiseToRawBytes stkVerify)
-    , (TxMetaNumber 3, TxMetaBytes $ serialiseToRawBytes paymentAddr)
-    , (TxMetaNumber 4, TxMetaNumber slot)
-    ])]
+      , (TxMetaNumber 2, TxMetaBytes $ serialiseToRawBytes stkVerify)
+      , (TxMetaNumber 3, TxMetaBytes $ serialiseToRawBytes paymentAddr)
+      , (TxMetaNumber 4, TxMetaNumber slot)
+      ] ++ (case mVotingPurpose of
+              Nothing -> []
+              Just v  -> [(TxMetaNumber 5, Purpose.toTxMetadataValue v)])
+    )
+  ]
 
 votePayloadFromTxMetadata :: TxMetadata -> Either MetadataParsingError VotePayload
 votePayloadFromTxMetadata meta = do
@@ -265,6 +283,20 @@ votePayloadFromTxMetadata meta = do
   -- DECISION #09D:
   --   the slot number under '61284' > '4'
   slot           <- metaValue RegoSlotNum meta >>= asInt RegoSlotNum
+  votingPurpose <-
+    case metaValue RegoVotingPurpose meta >>= asInt RegoVotingPurpose of
+      -- Ignore missing voting purpose (it's optional).
+      Left (MetadataMissing _) ->
+        pure Nothing
+      -- Throw error if it's present but fails to parse as integer.
+      Left e                   ->
+        throwError e
+      Right v | v > 0          ->
+        throwError $ _MetadataParseFailure # (RegoVotingPurpose, "non-catalyst vote purpose")
+      Right v | v == 0         ->
+        pure $ Just catalystPurpose
+      Right _                  ->
+        throwError $ _MetadataParseFailure # (RegoVotingPurpose, "negative voting purpose")
 
   -- DECISION #10:
   --   We found a vote registration with all the correct parts, but were unable
@@ -286,7 +318,7 @@ votePayloadFromTxMetadata meta = do
     Nothing -> throwError (_MetadataParseFailure # (RegoRewardsAddress, "Failed to deserialise."))
     Just x  -> pure x
 
-  pure $ mkVotePayload votePub stkVerify (RewardsAddress rewardsAddr) slot
+  pure $ mkVotePayload votePub stkVerify (RewardsAddress rewardsAddr) slot votingPurpose
 
 voteToTxMetadata :: Vote -> TxMetadata
 voteToTxMetadata (Vote payload sig) =
@@ -367,9 +399,16 @@ createVoteRegistration
   -> RewardsAddress
   -> Integer
   -> Vote
-createVoteRegistration skey votepub rewardsAddr slot =
+createVoteRegistration skey votePub rewardsAddr slot =
     let
-      payload     = mkVotePayload votepub (getStakeVerificationKey skey) rewardsAddr slot
+      payload     =
+        mkVotePayload
+          votePub
+          (getStakeVerificationKey skey)
+          rewardsAddr
+          slot
+          -- Catalyst voting purpose
+          (Just catalystPurpose)
       payloadCBOR = serialiseToCBOR payload
 
       payloadSig  :: Crypto.SigDSIGN (DSIGN StandardCrypto)
