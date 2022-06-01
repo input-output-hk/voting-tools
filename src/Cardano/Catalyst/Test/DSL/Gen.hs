@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 
 {- |
 
@@ -59,6 +61,9 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genVote
   , genVotePayload
   , genSlotNo
+  , genPurpose
+  , genDelegations
+  , genVoteSigningKey
     -- ** Other
   , genUniqueHash32
   , genUniqueHash28
@@ -70,17 +75,17 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genInt64
   ) where
 
-import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic)
+import           Cardano.API.Extended (VotingKeyPublic (..))
 import           Cardano.Api (AsType (AsStakeExtendedKey, AsStakeKey), NetworkId (Mainnet, Testnet),
-                   NetworkMagic (..), deserialiseFromRawBytes, generateSigningKey,
-                   getVerificationKey, verificationKeyHash)
+                   NetworkMagic (..), generateSigningKey, getVerificationKey, verificationKeyHash)
 import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    getStakeVerificationKey, serialiseStakeVerificationKeyToBech32,
                    signingKeyFromStakeExtendedSigningKey, signingKeyFromStakeSigningKey,
                    stakeAddressFromKeyHash, stakeAddressFromVerificationKey,
                    stakeVerificationKeyHash)
-import           Cardano.Catalyst.Registration (RewardsAddress (..), Vote, VotePayload,
-                   createVoteRegistration, mkVotePayload)
+import           Cardano.Catalyst.Registration (DelegationWeight, Delegations (..),
+                   RewardsAddress (..), Vote, VotePayload, createVoteRegistration, mkVotePayload)
+import           Cardano.Catalyst.Registration.Types.Purpose (Purpose, catalystPurpose, mkPurpose)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),
                    Registration (..), StakeRegistration (..), Transaction (..), UTxO (..),
                    stakeRegoKey)
@@ -90,13 +95,16 @@ import           Control.Monad.State.Class (MonadState)
 import           Data.ByteString (ByteString)
 import           Data.Functor.Identity (Identity)
 import           Data.Int (Int16, Int64)
-import           Data.Maybe (fromMaybe)
+import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word16, Word32, Word64)
 import           Hedgehog (GenBase, MonadGen, fromGenT)
 
 import qualified Cardano.Api as Cardano
+import qualified Cardano.Crypto.DSIGN.Class as Crypto
+import qualified Cardano.Crypto.DSIGN.Ed25519 as Crypto
+import qualified Cardano.Crypto.Seed as Crypto
 import qualified Cardano.Db as Db
 import qualified Control.Monad.State.Class as State
 import qualified Data.Aeson as Aeson
@@ -104,6 +112,7 @@ import qualified Data.Binary.Put as Put
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Time.Clock.POSIX as Time
 import qualified Database.Persist.Sql as Persist
@@ -402,7 +411,7 @@ genVoteRegistration
   -> m (Registration 'Ephemeral)
 genVoteRegistration skey = do
   Registration
-    <$> genVotingKeyPublic
+    <$> genDelegations
     <*> genRewardsAddress
     <*> genUInteger -- slotNo
     <*> pure skey
@@ -477,13 +486,14 @@ genGraph nw = do
     <*> Gen.list (Range.linear 0 3) genUTxO
 
 genVotingKeyPublic :: MonadGen m => m VotingKeyPublic
-genVotingKeyPublic =
-  fromMaybe (error "Deserialising VotingKeyPublic from bytes failed!")
-  <$> deserialiseFromRawBytes AsVotingKeyPublic
-  <$> Gen.bytes (Range.linear 0 64)
-  -- cardano-node enforces that the maximum bytestring length of any metadata
-  -- is 64 bytes
-  -- (https://github.com/input-output-hk/cardano-node/blob/5cffbcc6b3e2861ed20452f3f6291ee3fe2bf628/cardano-api/src/Cardano/Api/TxMetadata.hs#L190)
+genVotingKeyPublic = do
+  let
+    seedSize = fromIntegral $ Crypto.seedSizeDSIGN $ Proxy @Crypto.Ed25519DSIGN
+  seedBytes <- Gen.bytes (Range.singleton seedSize)
+  let seed = Crypto.mkSeedFromBytes seedBytes
+  let skey = Crypto.genKeyDSIGN seed
+  let vkey = Crypto.deriveVerKeyDSIGN skey
+  pure (VotingKeyPublic vkey)
 
 genVoteSigningKey :: (MonadGen m, MonadIO m) => m StakeSigningKey
 genVoteSigningKey = do
@@ -511,8 +521,41 @@ genSlotNo = fromIntegral <$> Gen.word32 Range.constantBounded
 
 genVotePayload :: (MonadGen m, MonadIO m) => m VotePayload
 genVotePayload =
-  mkVotePayload <$> genVotingKeyPublic <*> genStakeVerificationKey <*> genRewardsAddress <*> genSlotNo
+  mkVotePayload
+    <$> genDelegations
+    <*> genStakeVerificationKey
+    <*> genRewardsAddress
+    <*> genSlotNo
+    <*> Gen.maybe genPurpose
+
+genPurpose :: MonadGen m => m Purpose
+genPurpose =
+  Gen.frequency [ (9, pure catalystPurpose)
+                , (1, genOtherPurpose)
+                ]
+  where
+    genOtherPurpose = do
+      purposeNum <- fromIntegral <$> Gen.int64 (Range.linear 0 maxBound)
+      case mkPurpose purposeNum of
+        Left e  -> error . T.unpack $ e
+        Right p -> pure p
 
 genVote :: (MonadGen m, MonadIO m) => m Vote
 genVote =
-  createVoteRegistration <$> genVoteSigningKey <*> genVotingKeyPublic <*> genRewardsAddress <*> genSlotNo
+  createVoteRegistration <$> genVoteSigningKey <*> genDelegations <*> genRewardsAddress <*> genSlotNo
+
+genDelegationWeight :: MonadGen m => m DelegationWeight
+genDelegationWeight = Gen.word32 Range.linearBounded
+
+genDelegations :: MonadGen m => m (Delegations VotingKeyPublic)
+genDelegations =
+  Gen.frequency [ (1, LegacyDelegation <$> genVotingKeyPublic)
+                , (1, fmap Delegations
+                    $ Gen.nonEmpty (Range.linear 0 10)
+                    $ (,0) <$> genVotingKeyPublic
+                  )
+                , (2, fmap Delegations
+                    $ Gen.nonEmpty (Range.linear 0 10)
+                    $ (,) <$> genVotingKeyPublic <*> genDelegationWeight
+                  )
+             ]

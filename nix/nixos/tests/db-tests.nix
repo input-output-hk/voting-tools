@@ -51,6 +51,7 @@ in
       };
 
       virtualisation.diskSize = pkgs.lib.mkDefault 4096;
+      virtualisation.memorySize = pkgs.lib.mkDefault 4096;
 
     };
   };

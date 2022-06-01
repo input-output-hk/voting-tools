@@ -8,7 +8,14 @@
 -- | Handles configuration, which involves parsing command line
 -- arguments and reading key files.
 
-module Config.Snapshot (Config(Config), opts, mkConfig, Opts(Opts), parseOpts, ConfigError) where
+module Config.Snapshot
+  ( Config(Config)
+  , opts
+  , mkConfig
+  , Opts(Opts)
+  , parseOpts
+  , ConfigError
+  ) where
 
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad.Except (ExceptT)

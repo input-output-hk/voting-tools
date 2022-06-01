@@ -29,7 +29,7 @@ main =
 withPostgresPool :: ConnectionString -> (IO (Pool SqlBackend) -> TestTree) -> TestTree
 withPostgresPool connStr =
   Tasty.withResource
-   (runNoLoggingT $ createPostgresqlPool connStr numConnections)
+   (runStdoutLoggingT $ createPostgresqlPool connStr numConnections)
    Pool.destroyAllResources
   where
     numConnections = 1

@@ -31,17 +31,17 @@ library
 
   exposed-modules:     Cardano.API.Extended
                      , Cardano.API.Extended.Raw
-                     , Cardano.Catalyst.Presentation
                      , Cardano.Catalyst.Crypto
                      , Cardano.Catalyst.Test.DSL
                      , Cardano.Catalyst.Test.DSL.Gen
-                     , Cardano.Catalyst.Test.Presentation.Gen
+                     , Cardano.Catalyst.Test.VotePower.Gen
                      , Cardano.Catalyst.Test.DSL.Internal.Db
                      , Cardano.Catalyst.Test.DSL.Internal.Types
                      , Cardano.Catalyst.Query.Types
                      , Cardano.Catalyst.Query.Sql
                      , Cardano.Catalyst.Registration
                      , Cardano.Catalyst.Registration.Types
+                     , Cardano.Catalyst.Registration.Types.Purpose
                      , Cardano.Catalyst.VotePower
                      , Cardano.Db.Extended
                      , Config.Snapshot
@@ -71,9 +71,11 @@ library
                      , persistent
                      , persistent-postgresql
                      , safe-exceptions
+                     , scientific
                      , text
                      , time
                      , unordered-containers
+                     , vector
 
 executable voting-tools
   import:              project-config
@@ -85,12 +87,12 @@ executable voting-tools
                      , bech32
                      , bytestring
                      , cardano-api
+                     , scientific
                      , cardano-binary
                      , cardano-cli
                      , cardano-crypto-class
                      , cardano-crypto-wrapper
                      , cardano-db
-                     , cardano-ledger-byron
                      , cardano-ledger-core
                      , containers
                      , lens
@@ -102,6 +104,7 @@ executable voting-tools
                      , safe-exceptions
                      , text
                      , unordered-containers
+                     , vector
 
   hs-source-dirs:      src/
   default-language:    Haskell2010
@@ -112,12 +115,12 @@ executable voting-tools
                  , Cardano.Catalyst.Registration
                  , Cardano.Catalyst.Registration.Types
                  , Cardano.Catalyst.VotePower
-                 , Cardano.Catalyst.Presentation
                  , Cardano.Db.Extended
                  , Cardano.Catalyst.Crypto
                  , Config.Common
                  , Config.Snapshot
                  , Config.Registration
+                 , Cardano.Catalyst.Registration.Types.Purpose
 
 test-suite unit-tests
   import:               project-config
@@ -139,10 +142,11 @@ test-suite unit-tests
                 , unordered-containers
                 , voting-tools
                 , cardano-crypto-class
+                , vector
 
   other-modules:        Test.Cardano.Catalyst.Registration
                         Test.Cardano.API.Extended
-                        Test.Cardano.Catalyst.Presentation
+                        Test.Cardano.Catalyst.VotePower
                         Test.Cardano.Catalyst.Crypto
 
 test-suite integration-tests
@@ -162,11 +166,14 @@ test-suite integration-tests
                 , persistent
                 , persistent-postgresql
                 , resource-pool
+                , vector
                 , resourcet
-                , tasty
-                , tasty-hedgehog
+                , scientific
                 , text
                 , transformers-base
+                , esqueleto
+                , tasty
+                , tasty-hedgehog
 
                 , aeson
                 , aeson-pretty
@@ -180,10 +187,8 @@ test-suite integration-tests
                 , cardano-crypto-class
                 , cardano-crypto-wrapper
                 , cardano-db
-                , cardano-ledger-byron
                 , cardano-ledger-core
                 , containers
-                , esqueleto
                 , lens
                 , monad-logger
                 , mtl
@@ -203,15 +208,15 @@ test-suite integration-tests
                         Cardano.Catalyst.Query.Types
                         Cardano.Catalyst.Registration
                         Cardano.Catalyst.Registration.Types
+                        Cardano.Catalyst.Registration.Types.Purpose
                         Cardano.Catalyst.VotePower
                         Cardano.API.Extended
                         Cardano.API.Extended.Raw
-                        Cardano.Catalyst.Presentation
                         Cardano.Catalyst.Crypto
                         Cardano.Catalyst.Test.DSL
                         Cardano.Catalyst.Test.DSL.Gen
                         Cardano.Catalyst.Test.DSL.Internal.Db
                         Cardano.Catalyst.Test.DSL.Internal.Types
-                        Cardano.Catalyst.Test.Presentation.Gen
+                        Cardano.Catalyst.Test.VotePower.Gen
                         Config.Common
                         Cardano.Db.Extended

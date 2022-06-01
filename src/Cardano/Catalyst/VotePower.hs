@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {- |
@@ -15,11 +17,41 @@ point in time.
 
 module Cardano.Catalyst.VotePower where
 
+import           Cardano.API.Extended (VotingKeyPublic)
+import           Cardano.Catalyst.Crypto (StakeVerificationKey)
 import           Cardano.Catalyst.Query.Types (Query (..))
 import           Cardano.Catalyst.Registration
+import           Data.Aeson (FromJSON, ToJSON)
+import           Data.Char (toLower)
+import           Data.List (nub)
+import           Data.List.NonEmpty (NonEmpty)
+import           Data.Ratio (Ratio, (%))
+import           GHC.Generics (Generic)
 
 import qualified Cardano.Api as Api
 import qualified Data.Aeson as Aeson
+import qualified Data.List.NonEmpty as NE
+
+data VotingPower
+  = VotingPower { _powerVotingKey      :: VotingKeyPublic
+                , _powerStakePublicKey :: StakeVerificationKey
+                , _powerRewardsAddress :: RewardsAddress
+                , _powerVotingPower    :: Integer
+                }
+  deriving (Eq, Ord, Show, Generic)
+
+votingPowerJsonParserOptions :: Aeson.Options
+votingPowerJsonParserOptions = Aeson.defaultOptions
+    { Aeson.fieldLabelModifier = fmap toLower . Aeson.camelTo2 '_' . (drop 6) }
+
+instance ToJSON VotingPower where
+  toJSON = Aeson.genericToJSON votingPowerJsonParserOptions
+
+instance FromJSON VotingPower where
+  parseJSON = Aeson.genericParseJSON votingPowerJsonParserOptions
+
+jsonParserOptions :: Aeson.Options
+jsonParserOptions = Aeson.defaultOptions { Aeson.fieldLabelModifier = (fmap toLower) . (drop 2) }
 
 getVoteRegistrationADA
   :: ( Monad m
@@ -28,7 +60,7 @@ getVoteRegistrationADA
   => Query m t
   -> Api.NetworkId
   -> Maybe Api.SlotNo
-  -> m [(Vote, Integer)]
+  -> m [VotingPower]
 getVoteRegistrationADA q nw slotNo = do
   (regosRaw :: [(t, Aeson.Value)]) <- (queryVoteRegistrations q) slotNo
 
@@ -52,4 +84,68 @@ getVoteRegistrationADA q nw slotNo = do
     regoValues :: [(Vote, Integer)]
     regoValues = (zip latestRegos . fmap snd) regoStakes
 
-  pure regoValues
+  pure $ votingPowerFromRegoValues regoValues
+
+votingPowerFromRegoValues :: [(Vote, Integer)] -> [VotingPower]
+votingPowerFromRegoValues regoValues =
+  nub $ foldMap (NE.toList . uncurry votingPowerFromRegoValue) regoValues
+
+votingPowerFromRegoValue :: Vote -> Integer -> NonEmpty VotingPower
+votingPowerFromRegoValue rego power =
+  let
+    ds :: Delegations VotingKeyPublic
+    ds = voteRegistrationDelegations rego
+
+    stakeKey    = voteRegistrationVerificationKey rego
+    rewardsAddr = voteRegistrationRewardsAddress rego
+
+    toVotePower votePub votePower =
+      VotingPower votePub stakeKey rewardsAddr votePower
+  in
+    (uncurry toVotePower) <$> delegateVotingPower ds power
+
+delegateVotingPower
+  :: forall key
+   . Delegations key
+  -> Integer
+  -> NonEmpty (key, Integer)
+delegateVotingPower (LegacyDelegation key) power =
+  (key, max 0 power) NE.:| []
+delegateVotingPower (Delegations keyWeights)   power =
+  let
+    -- Get the total weight of all delegations.
+    weightTotal :: Integer
+    weightTotal = sum $ fmap (fromIntegral . snd) keyWeights
+
+    -- Clamp power to 0 in case its negative.
+    powerTotal = max power 0
+  in
+    let
+      -- Divide each weight by the total to get the percentage weight of
+      -- each delegation.
+      percentage :: NonEmpty (key, Ratio Integer)
+      percentage =
+        -- Prevent divide by zero
+        if weightTotal == 0
+        then fmap (fmap (const 0)) keyWeights
+        else fmap (fmap ((% weightTotal) . fromIntegral)) keyWeights
+
+      -- Multiply each percentage by the total vote power.
+      portion :: NonEmpty (key, Ratio Integer)
+      portion = fmap (fmap (* (powerTotal % 1))) percentage
+
+      -- Round the voting power down.
+      floored :: NonEmpty (key, Integer)
+      floored = fmap (fmap floor) portion
+
+      -- Assign remaining vote power to final key.
+      flooredVotePower :: Integer
+      flooredVotePower = sum $ fmap snd floored
+
+      remainingVotePower :: Integer
+      remainingVotePower = powerTotal - flooredVotePower
+    in
+      case (NE.init floored, NE.last floored) of
+        (initial, (lastVotePub, lastPower)) ->
+          NE.fromList $
+            initial <> [(lastVotePub, lastPower + remainingVotePower)]

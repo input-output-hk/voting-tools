@@ -14,8 +14,6 @@ import           Database.Persist.Postgresql (IsolationLevel (Serializable), Sql
                    runSqlConnWithIsolation, withPostgresqlConn)
 import qualified Options.Applicative as Opt
 
-import           Cardano.Catalyst.Presentation (RegistrationInfo (..),
-                   votingPowerFromRegistrationInfo)
 import qualified Cardano.Catalyst.Query.Sql as Sql
 import           Config.Common (DatabaseConfig (..), pgConnectionString)
 import qualified Config.Snapshot as Snapshot
@@ -28,15 +26,11 @@ main = do
   case eCfg of
     Left (err :: Snapshot.ConfigError) ->
       fail $ show err
-    Right (Snapshot.Config networkId scale db slotNo outfile) -> do
-      votingFunds <- runQuery db $ getVoteRegistrationADA (Sql.sqlQuery) networkId slotNo
+    Right (Snapshot.Config networkId _scale db slotNo outfile) -> do
+      votingPower <-
+        runQuery db $ getVoteRegistrationADA (Sql.sqlQuery) networkId slotNo
 
-      let
-        scaled =
-          (votingPowerFromRegistrationInfo scale . (uncurry RegistrationInfo))
-          <$> votingFunds
-
-      BLC.writeFile outfile . toJSON Aeson.Generic $ scaled
+      BLC.writeFile outfile . toJSON Aeson.Generic $ votingPower
 
 toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString
 toJSON numFormat = Aeson.encodePretty' (Aeson.defConfig { Aeson.confCompare = Aeson.compare, Aeson.confNumFormat = numFormat })
