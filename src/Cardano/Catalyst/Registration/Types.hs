@@ -70,6 +70,63 @@ import           Cardano.Catalyst.Crypto (AsType (AsStakeVerificationKey), Stake
                    StakeVerificationKey, getStakeVerificationKey, sign, stakeVerificationKeyHash,
                    verify)
 
+data VoteRegistrationComponent
+  = RegoVotingKey
+  | RegoStakeVerificationKey
+  | RegoRewardsAddress
+  | RegoSlotNum
+  | RegoSignature
+  deriving (Eq, Show)
+
+prettyPrintComponent :: VoteRegistrationComponent -> Text
+prettyPrintComponent RegoVotingKey
+    = "voting key"
+prettyPrintComponent RegoStakeVerificationKey
+    = "stake verification key"
+prettyPrintComponent RegoRewardsAddress
+    = "rewards address"
+prettyPrintComponent RegoSlotNum
+    = "slot number"
+prettyPrintComponent RegoSignature
+    = "signature"
+
+type MetadataPath = (Word64, Integer)
+
+componentPath :: VoteRegistrationComponent -> MetadataPath
+componentPath RegoVotingKey          = (61284, 1)
+componentPath RegoStakeVerificationKey = (61284, 2)
+componentPath RegoRewardsAddress       = (61284, 3)
+componentPath RegoSlotNum              = (61284, 4)
+componentPath RegoSignature            = (61285, 1)
+
+prettyPrintMetadataPath :: MetadataPath -> Text
+prettyPrintMetadataPath (k1, k2) = T.pack $ show k1 <> " > " <> show k2
+
+data MetadataParsingError
+  = MetadataMissing VoteRegistrationComponent
+  | MetadataParseFailure VoteRegistrationComponent Text
+  | MetadataUnexpectedType VoteRegistrationComponent Text
+  | MetadataInvalidSignature
+  deriving (Eq, Show)
+
+prettyPrintMetadataParsingError :: MetadataParsingError -> Text
+prettyPrintMetadataParsingError (MetadataMissing comp)
+    = "The " <> prettyPrintComponent comp
+    <> " could not be found at the metadata path: "
+    <> prettyPrintMetadataPath (componentPath comp)
+prettyPrintMetadataParsingError (MetadataParseFailure comp failure)
+    = "The " <> prettyPrintComponent comp
+    <> " at metadata path: " <> prettyPrintMetadataPath (componentPath comp)
+    <> " failed to parse. Error was: " <> failure
+prettyPrintMetadataParsingError (MetadataUnexpectedType comp expected)
+    = "The " <> prettyPrintComponent comp
+    <> " expected type '" <> expected <> "'"
+    <> " at path " <> prettyPrintMetadataPath (componentPath comp)
+prettyPrintMetadataParsingError MetadataInvalidSignature =
+    "Signature validation failed"
+
+makeClassyPrisms ''MetadataParsingError
+
 newtype RewardsAddress = RewardsAddress Api.StakeAddress
   deriving (Eq, Ord, Show)
 
@@ -137,63 +194,6 @@ voteRegistrationStakeHash = stakeVerificationKeyHash . voteRegistrationVerificat
 voteRegistrationStakeAddress :: Api.NetworkId -> Vote -> Api.StakeAddress
 voteRegistrationStakeAddress nw =
   Api.makeStakeAddress nw . Api.StakeCredentialByKey . voteRegistrationStakeHash
-
-data VoteRegistrationComponent
-  = RegoVotingKey
-  | RegoStakeVerificationKey
-  | RegoRewardsAddress
-  | RegoSlotNum
-  | RegoSignature
-  deriving (Eq, Show)
-
-prettyPrintComponent :: VoteRegistrationComponent -> Text
-prettyPrintComponent RegoVotingKey
-    = "voting key"
-prettyPrintComponent RegoStakeVerificationKey
-    = "stake verification key"
-prettyPrintComponent RegoRewardsAddress
-    = "rewards address"
-prettyPrintComponent RegoSlotNum
-    = "slot number"
-prettyPrintComponent RegoSignature
-    = "signature"
-
-type MetadataPath = (Word64, Integer)
-
-componentPath :: VoteRegistrationComponent -> MetadataPath
-componentPath RegoVotingKey            = (61284, 1)
-componentPath RegoStakeVerificationKey = (61284, 2)
-componentPath RegoRewardsAddress       = (61284, 3)
-componentPath RegoSlotNum              = (61284, 4)
-componentPath RegoSignature            = (61285, 1)
-
-prettyPrintMetadataPath :: MetadataPath -> Text
-prettyPrintMetadataPath (k1, k2) = T.pack $ show k1 <> " > " <> show k2
-
-data MetadataParsingError
-  = MetadataMissing VoteRegistrationComponent
-  | MetadataParseFailure VoteRegistrationComponent Text
-  | MetadataUnexpectedType VoteRegistrationComponent Text
-  | MetadataInvalidSignature
-  deriving (Eq, Show)
-
-prettyPrintMetadataParsingError :: MetadataParsingError -> Text
-prettyPrintMetadataParsingError (MetadataMissing comp)
-    = "The " <> prettyPrintComponent comp
-    <> " could not be found at the metadata path: "
-    <> prettyPrintMetadataPath (componentPath comp)
-prettyPrintMetadataParsingError (MetadataParseFailure comp failure)
-    = "The " <> prettyPrintComponent comp
-    <> " at metadata path: " <> prettyPrintMetadataPath (componentPath comp)
-    <> " failed to parse. Error was: " <> failure
-prettyPrintMetadataParsingError (MetadataUnexpectedType comp expected)
-    = "The " <> prettyPrintComponent comp
-    <> " expected type '" <> expected <> "'"
-    <> " at path " <> prettyPrintMetadataPath (componentPath comp)
-prettyPrintMetadataParsingError MetadataInvalidSignature =
-    "Signature validation failed"
-
-makeClassyPrisms ''MetadataParsingError
 
 instance HasTypeProxy VotePayload where
   data AsType VotePayload = AsVotePayload
