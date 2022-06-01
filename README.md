@@ -84,6 +84,8 @@ voter-registration \
 ```
 Both CBOR (--cbor) and JSON (--json) formats exist.
 
+> :information_source: For details on registration metadata format refer to [CIP 15](https://cips.cardano.org/cips/cip15/).
+
 It is also possible to delegate your voting power between voting keys.
 
 For example to split your voting power 1/3 to `vote1.pub` and 2/3 to `vote2.pub`, you could use the following invocation:
@@ -98,7 +100,7 @@ voter-registration \
     --json > metadata.json
 ```
 
-> :information_source: For details on registration metadata format refer to [CIP 15](https://cips.cardano.org/cips/cip15/).
+> :information_source: For details on delegation refer to [CIP 36](https://cips.cardano.org/cips/cip36/).
 
 ### Submission of vote registration
 
