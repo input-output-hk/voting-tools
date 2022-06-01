@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
 {- |
@@ -61,6 +62,8 @@ module Cardano.Catalyst.Test.DSL.Gen
   , genVotePayload
   , genSlotNo
   , genPurpose
+  , genDelegations
+  , genVoteSigningKey
     -- ** Other
   , genUniqueHash32
   , genUniqueHash28
@@ -80,8 +83,9 @@ import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    signingKeyFromStakeExtendedSigningKey, signingKeyFromStakeSigningKey,
                    stakeAddressFromKeyHash, stakeAddressFromVerificationKey,
                    stakeVerificationKeyHash)
-import           Cardano.Catalyst.Registration (Purpose, RewardsAddress (..), Vote, VotePayload,
-                   catalystPurpose, createVoteRegistration, mkPurpose, mkVotePayload)
+import           Cardano.Catalyst.Registration (DelegationWeight, Delegations (..),
+                   RewardsAddress (..), Vote, VotePayload, createVoteRegistration, mkVotePayload)
+import           Cardano.Catalyst.Registration.Types.Purpose (Purpose, catalystPurpose, mkPurpose)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),
                    Registration (..), StakeRegistration (..), Transaction (..), UTxO (..),
                    stakeRegoKey)
@@ -98,7 +102,8 @@ import           Data.Word (Word16, Word32, Word64)
 import           Hedgehog (GenBase, MonadGen, fromGenT)
 
 import qualified Cardano.Api as Cardano
-import qualified Cardano.Crypto.DSIGN as Crypto
+import qualified Cardano.Crypto.DSIGN.Class as Crypto
+import qualified Cardano.Crypto.DSIGN.Ed25519 as Crypto
 import qualified Cardano.Crypto.Seed as Crypto
 import qualified Cardano.Db as Db
 import qualified Control.Monad.State.Class as State
@@ -406,7 +411,7 @@ genVoteRegistration
   -> m (Registration 'Ephemeral)
 genVoteRegistration skey = do
   Registration
-    <$> genVotingKeyPublic
+    <$> genDelegations
     <*> genRewardsAddress
     <*> genUInteger -- slotNo
     <*> pure skey
@@ -517,7 +522,7 @@ genSlotNo = fromIntegral <$> Gen.word32 Range.constantBounded
 genVotePayload :: (MonadGen m, MonadIO m) => m VotePayload
 genVotePayload =
   mkVotePayload
-    <$> genVotingKeyPublic
+    <$> genDelegations
     <*> genStakeVerificationKey
     <*> genRewardsAddress
     <*> genSlotNo
@@ -537,4 +542,20 @@ genPurpose =
 
 genVote :: (MonadGen m, MonadIO m) => m Vote
 genVote =
-  createVoteRegistration <$> genVoteSigningKey <*> genVotingKeyPublic <*> genRewardsAddress <*> genSlotNo
+  createVoteRegistration <$> genVoteSigningKey <*> genDelegations <*> genRewardsAddress <*> genSlotNo
+
+genDelegationWeight :: MonadGen m => m DelegationWeight
+genDelegationWeight = Gen.word32 Range.linearBounded
+
+genDelegations :: MonadGen m => m (Delegations VotingKeyPublic)
+genDelegations =
+  Gen.frequency [ (1, LegacyDelegation <$> genVotingKeyPublic)
+                , (1, fmap Delegations
+                    $ Gen.nonEmpty (Range.linear 0 10)
+                    $ (,0) <$> genVotingKeyPublic
+                  )
+                , (2, fmap Delegations
+                    $ Gen.nonEmpty (Range.linear 0 10)
+                    $ (,) <$> genVotingKeyPublic <*> genDelegationWeight
+                  )
+             ]

@@ -24,10 +24,13 @@ import           Cardano.Catalyst.Registration
 import           Data.Aeson (FromJSON, ToJSON)
 import           Data.Char (toLower)
 import           Data.List (nub)
+import           Data.List.NonEmpty (NonEmpty)
+import           Data.Ratio (Ratio, (%))
 import           GHC.Generics (Generic)
 
 import qualified Cardano.Api as Api
 import qualified Data.Aeson as Aeson
+import qualified Data.List.NonEmpty as NE
 
 data VotingPower
   = VotingPower { _powerVotingKey      :: VotingKeyPublic
@@ -85,13 +88,64 @@ getVoteRegistrationADA q nw slotNo = do
 
 votingPowerFromRegoValues :: [(Vote, Integer)] -> [VotingPower]
 votingPowerFromRegoValues regoValues =
-  nub $ foldMap ((:[]) . uncurry votingPowerFromRegoValue) regoValues
+  nub $ foldMap (NE.toList . uncurry votingPowerFromRegoValue) regoValues
 
-votingPowerFromRegoValue :: Vote -> Integer -> VotingPower
+votingPowerFromRegoValue :: Vote -> Integer -> NonEmpty VotingPower
 votingPowerFromRegoValue rego power =
   let
-    votePub = voteRegistrationPublicKey rego
+    ds :: Delegations VotingKeyPublic
+    ds = voteRegistrationDelegations rego
+
     stakeKey    = voteRegistrationVerificationKey rego
     rewardsAddr = voteRegistrationRewardsAddress rego
+
+    toVotePower votePub votePower =
+      VotingPower votePub stakeKey rewardsAddr votePower
   in
-    VotingPower votePub stakeKey rewardsAddr power
+    (uncurry toVotePower) <$> delegateVotingPower ds power
+
+delegateVotingPower
+  :: forall key
+   . Delegations key
+  -> Integer
+  -> NonEmpty (key, Integer)
+delegateVotingPower (LegacyDelegation key) power =
+  (key, max 0 power) NE.:| []
+delegateVotingPower (Delegations keyWeights)   power =
+  let
+    -- Get the total weight of all delegations.
+    weightTotal :: Integer
+    weightTotal = sum $ fmap (fromIntegral . snd) keyWeights
+
+    -- Clamp power to 0 in case its negative.
+    powerTotal = max power 0
+  in
+    let
+      -- Divide each weight by the total to get the percentage weight of
+      -- each delegation.
+      percentage :: NonEmpty (key, Ratio Integer)
+      percentage =
+        -- Prevent divide by zero
+        if weightTotal == 0
+        then fmap (fmap (const 0)) keyWeights
+        else fmap (fmap ((% weightTotal) . fromIntegral)) keyWeights
+
+      -- Multiply each percentage by the total vote power.
+      portion :: NonEmpty (key, Ratio Integer)
+      portion = fmap (fmap (* (powerTotal % 1))) percentage
+
+      -- Round the voting power down.
+      floored :: NonEmpty (key, Integer)
+      floored = fmap (fmap floor) portion
+
+      -- Assign remaining vote power to final key.
+      flooredVotePower :: Integer
+      flooredVotePower = sum $ fmap snd floored
+
+      remainingVotePower :: Integer
+      remainingVotePower = powerTotal - flooredVotePower
+    in
+      case (NE.init floored, NE.last floored) of
+        (initial, (lastVotePub, lastPower)) ->
+          NE.fromList $
+            initial <> [(lastVotePub, lastPower + remainingVotePower)]

@@ -8,11 +8,13 @@ import qualified Cardano.Api as Api
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Base16 as Base16
-import           Data.Either
+import           Data.Either (fromRight)
 import qualified Data.HashMap.Strict as HM
 import           Data.List (sort)
-import qualified Data.Map.Strict as M
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Text.Encoding as T
+import qualified Data.Vector as Vector
+import           Data.Word (Word32)
 import           Hedgehog (property, tripping, (===))
 import qualified Hedgehog as H
 import           Hedgehog.Internal.Property (forAllT)
@@ -20,17 +22,24 @@ import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import           Test.Tasty.Hedgehog
 
+import           Cardano.Catalyst.Crypto
 import           Cardano.Catalyst.Registration
 import qualified Cardano.Catalyst.Registration.Types.Purpose as Purpose
 import qualified Cardano.Catalyst.Test.DSL.Gen as Gen
+import qualified Data.Map.Strict as M
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
 
 tests :: TestTree
 tests = testGroup "Vote Metadata type tests"
   [ testGroup "Parsers and printers"
-      [ testCase "TxMetadata/decode-eg" unit_txMetadata_can_decode_example
-      , testProperty "Vote/txMetadata/format" prop_vote_serialized_format
+      [ testProperty "Vote/txMetadata/format" prop_vote_serialized_format
       , testProperty "Vote/toTxMetadata/fromTxMetadata/roundtrips" prop_vote_txMetadata_roundtrips
       , testProperty "JSON roundrip RewardsAddress" prop_rewardsAddress_json_roundtrips
+      , testProperty "Vote/fromTxMetadata/handles empty lists" prop_vote_empty_delegations
+      , testProperty "Vote/fromTxMetadata/handles negative purpose" prop_vote_negative_purpose
+      , testProperty "Vote/fromTxMetadata/handles out-of-bounds weight" prop_vote_weight_exceeds_range
+      , testProperty "Vote/fromTxMetadata/rejects non-Catalyst purpose" prop_vote_non_catalyst_purpose
       ]
   , testGroup "Purpose"
     [ testProperty "Purpose/txMetadata/roundtrip" prop_purpose_txMetadata_roundtrip
@@ -79,6 +88,203 @@ unit_txMetadata_can_decode_example = do
           ]
         )
 
+prop_vote_non_catalyst_purpose :: H.Property
+prop_vote_non_catalyst_purpose = H.property $ do
+  ds <- forAllT $ Gen.genDelegations
+  skey <- forAllT $ Gen.genVoteSigningKey
+  let verKey = getStakeVerificationKey skey
+  rewardsAddress <- forAllT Gen.genRewardsAddress
+  slotNo <- forAllT Gen.genSlotNo
+  votePurpose <- forAllT $ Gen.int64 (Range.linear 1 maxBound)
+
+  let
+    regoMeta =
+      Api.TxMetadata $ M.fromList
+        [ ( 61284, Api.TxMetaMap $
+            [ ( Api.TxMetaNumber 1
+              , delegationsToTxMetadataValue ds
+              )
+            , ( Api.TxMetaNumber 2
+              , Api.TxMetaBytes $ Api.serialiseToRawBytes verKey
+              )
+            , ( Api.TxMetaNumber 3
+              , Api.TxMetaBytes $ Api.serialiseToRawBytes rewardsAddress
+              )
+            , ( Api.TxMetaNumber 4
+              , Api.TxMetaNumber slotNo
+              )
+            , ( Api.TxMetaNumber 5
+              , Api.TxMetaNumber $ fromIntegral votePurpose
+              )
+            ]
+          )
+        ]
+    sig = Api.serialiseToCBOR regoMeta `sign` skey
+    sigMeta = Api.TxMetadata $ M.fromList
+      [ ( 61285, Api.TxMetaMap
+          [ ( Api.TxMetaNumber 1
+            , Api.TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig
+            )
+          ]
+        )
+      ]
+
+  voteFromTxMetadata (regoMeta <> sigMeta)
+    ===
+    Left (MetadataParseFailure RegoVotingPurpose "non-catalyst vote purpose")
+
+prop_vote_weight_exceeds_range :: H.Property
+prop_vote_weight_exceeds_range = H.property $ do
+  skey <- forAllT $ Gen.genVoteSigningKey
+  let verKey = getStakeVerificationKey skey
+  rewardsAddress <- forAllT Gen.genRewardsAddress
+  slotNo <- forAllT Gen.genSlotNo
+  votePurpose <- forAllT Gen.genPurpose
+
+  badWeight <- forAllT $
+    Gen.choice [ Gen.int64 (Range.linear
+                             minBound
+                             (fromIntegral (minBound :: Word32) - 1)
+                           )
+               , Gen.int64 (Range.linear
+                             (fromIntegral (maxBound :: Word32) + 1)
+                             maxBound
+                           )
+               ]
+  votePub <- forAllT $ Gen.genVotingKeyPublic
+  let
+    ds = Api.TxMetaList
+      [ Api.TxMetaList
+        [ Api.TxMetaBytes $ Api.serialiseToRawBytes votePub
+        , Api.TxMetaNumber $ fromIntegral badWeight
+        ]
+      ]
+
+  let
+    regoMeta =
+      Api.TxMetadata $ M.fromList
+        [ ( 61284, Api.TxMetaMap $
+            [ ( Api.TxMetaNumber 1
+              , ds
+              )
+            , ( Api.TxMetaNumber 2
+              , Api.TxMetaBytes $ Api.serialiseToRawBytes verKey
+              )
+            , ( Api.TxMetaNumber 3
+              , Api.TxMetaBytes $ Api.serialiseToRawBytes rewardsAddress
+              )
+            , ( Api.TxMetaNumber 4
+              , Api.TxMetaNumber slotNo
+              )
+            , ( Api.TxMetaNumber 5
+              , Purpose.toTxMetadataValue votePurpose
+              )
+            ]
+          )
+        ]
+    sig = Api.serialiseToCBOR regoMeta `sign` skey
+    sigMeta = Api.TxMetadata $ M.fromList
+      [ ( 61285, Api.TxMetaMap
+          [ ( Api.TxMetaNumber 1
+            , Api.TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig
+            )
+          ]
+        )
+      ]
+
+  voteFromTxMetadata (regoMeta <> sigMeta)
+    ===
+    Left (MetadataParseFailure RegoDelegations "delegation weight exceeded range from 0 to 2^32-1")
+
+prop_vote_negative_purpose :: H.Property
+prop_vote_negative_purpose = H.property $ do
+  ds <- forAllT $ Gen.genDelegations
+  skey <- forAllT $ Gen.genVoteSigningKey
+  let verKey = getStakeVerificationKey skey
+  rewardsAddress <- forAllT Gen.genRewardsAddress
+  slotNo <- forAllT Gen.genSlotNo
+  votePurpose <- forAllT $ Gen.int64 (Range.linear minBound (-1))
+
+  let
+    regoMeta =
+      Api.TxMetadata $ M.fromList
+        [ ( 61284, Api.TxMetaMap $
+            [ ( Api.TxMetaNumber 1
+              , delegationsToTxMetadataValue ds
+              )
+            , ( Api.TxMetaNumber 2
+              , Api.TxMetaBytes $ Api.serialiseToRawBytes verKey
+              )
+            , ( Api.TxMetaNumber 3
+              , Api.TxMetaBytes $ Api.serialiseToRawBytes rewardsAddress
+              )
+            , ( Api.TxMetaNumber 4
+              , Api.TxMetaNumber slotNo
+              )
+            , ( Api.TxMetaNumber 5
+              , Api.TxMetaNumber $ fromIntegral votePurpose
+              )
+            ]
+          )
+        ]
+    sig = Api.serialiseToCBOR regoMeta `sign` skey
+    sigMeta = Api.TxMetadata $ M.fromList
+      [ ( 61285, Api.TxMetaMap
+          [ ( Api.TxMetaNumber 1
+            , Api.TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig
+            )
+          ]
+        )
+      ]
+
+  voteFromTxMetadata (regoMeta <> sigMeta)
+    ===
+    Left (MetadataParseFailure RegoVotingPurpose "negative voting purpose")
+
+prop_vote_empty_delegations :: H.Property
+prop_vote_empty_delegations = H.property $ do
+  skey <- forAllT $ Gen.genVoteSigningKey
+  let verKey = getStakeVerificationKey skey
+  rewardsAddress <- forAllT Gen.genRewardsAddress
+  slotNo <- forAllT Gen.genSlotNo
+  votePurpose <- forAllT $ Gen.int64 (Range.linear minBound (-1))
+
+  let
+    regoMeta =
+      Api.TxMetadata $ M.fromList
+        [ ( 61284, Api.TxMetaMap $
+            [ ( Api.TxMetaNumber 1
+              , Api.TxMetaList []
+              )
+            , ( Api.TxMetaNumber 2
+              , Api.TxMetaBytes $ Api.serialiseToRawBytes verKey
+              )
+            , ( Api.TxMetaNumber 3
+              , Api.TxMetaBytes $ Api.serialiseToRawBytes rewardsAddress
+              )
+            , ( Api.TxMetaNumber 4
+              , Api.TxMetaNumber slotNo
+              )
+            , ( Api.TxMetaNumber 5
+              , Api.TxMetaNumber $ fromIntegral votePurpose
+              )
+            ]
+          )
+        ]
+    sig = Api.serialiseToCBOR regoMeta `sign` skey
+    sigMeta = Api.TxMetadata $ M.fromList
+      [ ( 61285, Api.TxMetaMap
+          [ ( Api.TxMetaNumber 1
+            , Api.TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig
+            )
+          ]
+        )
+      ]
+
+  voteFromTxMetadata (regoMeta <> sigMeta)
+    ===
+    Left (MetadataParseFailure RegoDelegations "list of delegations was empty")
+
 -- | This test simply checks that the vote -> txMetadata -> json
 -- function results in a JSON format we expect. Via
 -- 'prop_vote_txMetadata_roundtrips' we have already proven that the
@@ -89,7 +295,19 @@ prop_vote_serialized_format = H.property $ do
 
   let
     sig         = ("0x" <>) . T.decodeUtf8 . Base16.encode . Crypto.rawSerialiseSigDSIGN . voteSignature $ vote
-    votePub     = ("0x" <>) . T.decodeUtf8 . Api.serialiseToRawBytesHex . voteRegistrationPublicKey $ vote
+    votePubJSON = Aeson.String . ("0x" <>) . T.decodeUtf8 . Api.serialiseToRawBytesHex
+    ds =
+      case voteRegistrationDelegations vote of
+        LegacyDelegation votePub -> votePubJSON votePub
+        Delegations weights ->
+          Aeson.Array
+          $ Vector.fromList $ NE.toList
+          $ fmap (\(votePub, weight) ->
+                    Aeson.Array
+                    $ Vector.fromList
+                    $ [votePubJSON votePub, Aeson.Number $ fromIntegral weight]
+                 )
+          $ weights
     verKey      = ("0x" <>) . T.decodeUtf8 . Api.serialiseToRawBytesHex . voteRegistrationVerificationKey $ vote
     rewardsAddr = ("0x" <>) . T.decodeUtf8 . Api.serialiseToRawBytesHex . voteRegistrationRewardsAddress $ vote
     slotNo      = fromIntegral . voteRegistrationSlot $ vote
@@ -97,7 +315,7 @@ prop_vote_serialized_format = H.property $ do
     expectedJSON = Aeson.Object $ HM.fromList
       [ ( "61285", Aeson.Object $ HM.fromList [ ("1", Aeson.String sig) ] )
       , ( "61284", Aeson.Object $ HM.fromList $
-          [ ("1", Aeson.String votePub)
+          [ ("1", ds)
           , ("2", Aeson.String verKey)
           , ("3", Aeson.String rewardsAddr)
           , ("4", Aeson.Number slotNo)

@@ -100,7 +100,7 @@ module Cardano.Catalyst.Test.DSL.Internal.Types
 import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Catalyst.Crypto (StakeSigningKey, getStakeVerificationKey,
                    stakeAddressFromVerificationKey)
-import           Cardano.Catalyst.Registration (RewardsAddress, Vote, VotePayload (..),
+import           Cardano.Catalyst.Registration (Delegations, RewardsAddress, Vote, VotePayload (..),
                    catalystPurpose, createVoteRegistration, voteRegistrationSlot)
 import           Cardano.Db.Extended ()
 import           Data.Kind (Type)
@@ -294,8 +294,8 @@ getStakeAddressId = Db.txOutStakeAddressId . utxoTxOut
 -- | A vote registration is a 'Transaction' containing some relevant transaction
 -- metadata (see 'Cardano.CLI.Voting.Metadata.voteToTxMetadata').
 data Registration (state :: PersistState) = Registration
-  { registrationVotePub        :: VotingKeyPublic
-  -- ^ The side-chain public key voting power should be delegated to.
+  { registrationDelegations    :: Delegations VotingKeyPublic
+  -- ^ Vote power delegations.
   , registrationRewardsAddress :: RewardsAddress
   -- ^ The main-chain address voter rewards should be sent to.
   , registrationSlotNo         :: SlotNo
@@ -329,7 +329,7 @@ getRegistrationVote rego =
     Just $
         createVoteRegistration
           (registrationSigningKey rego)
-          (registrationVotePub rego)
+          (registrationDelegations rego)
           (registrationRewardsAddress rego)
           (fromIntegral $ registrationSlotNo rego)
 
@@ -341,7 +341,7 @@ getRegistrationVotePayload
   -> VotePayload
 getRegistrationVotePayload rego =
   VotePayload
-    (registrationVotePub rego)
+    (registrationDelegations rego)
     (getStakeVerificationKey $ registrationSigningKey rego)
     (registrationRewardsAddress rego)
     (fromIntegral $ registrationSlotNo rego)

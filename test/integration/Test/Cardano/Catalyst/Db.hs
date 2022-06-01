@@ -9,8 +9,10 @@ module Test.Cardano.Catalyst.Db where
 
 import           Cardano.Catalyst.Crypto (getStakeVerificationKey, sign)
 import           Cardano.Catalyst.Query.Types
-import           Cardano.Catalyst.Registration (catalystPurpose, mkPurpose, mkVotePayload,
-                   signatureMetaKey, votePayloadToTxMetadata)
+import           Cardano.Catalyst.Registration (Vote, catalystPurpose, delegations, mkPurpose,
+                   mkVotePayload, signatureMetaKey, votePayloadToTxMetadata,
+                   voteRegistrationDelegations, voteRegistrationRewardsAddress,
+                   voteRegistrationVerificationKey)
 import           Cardano.Catalyst.Test.DSL (apiToDbMetadata, contributionAmount, genGraph,
                    genStakeAddressRegistration, genTransaction, genUInteger, genUTxO,
                    genVoteRegistration, getGraphVote, getRegistrationVote, getStakeRegoKey,
@@ -21,7 +23,7 @@ import           Cardano.Catalyst.VotePower
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Reader (ReaderT)
 import           Data.Foldable (traverse_)
-import           Data.List (sort)
+import           Data.List (nub, sort)
 import           Data.Maybe (catMaybes, isJust)
 import           Data.Monoid (Sum (..))
 import           Data.Pool (Pool)
@@ -37,6 +39,7 @@ import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Catalyst.Test.DSL.Gen as Gen
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Control.Monad.State.Strict as State
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import qualified Database.Persist.Class as Sql
@@ -59,6 +62,15 @@ tests intf getConnPool =
 
 nw :: Cardano.NetworkId
 nw = Cardano.Mainnet
+
+toVotePower :: Vote -> Integer -> VotingPower
+toVotePower rego power =
+  VotingPower {
+    _powerVotingKey = fst $ NE.head $ delegations $ voteRegistrationDelegations rego,
+    _powerStakePublicKey = voteRegistrationVerificationKey rego,
+    _powerRewardsAddress = voteRegistrationRewardsAddress rego,
+    _powerVotingPower = power
+  }
 
 -- If we register a key, then make a set of contributions against that
 -- registration, the voting power reported should match the sum of the
@@ -89,7 +101,7 @@ prop_insert intf getConnPool =
         Just vote -> do
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote, amt)
-          funds === [votingPowerFromRegoValue vote amt]
+          funds === nub (NE.toList (votingPowerFromRegoValue vote amt))
 
 -- Nonce respected. A newer registration will apply over an older one iff the
 -- nonce of the new registration is greater than the old.
@@ -117,7 +129,7 @@ prop_nonceRespected intf getConnPool =
         _ <- writeRegistration rego1
         _ <- writeRegistration rego2
 
-        getVoteRegistrationADA intf Cardano.Mainnet Nothing
+        getVoteRegistrationADA intf nw Nothing
 
       let mVote1 = getRegistrationVote rego1
       cover 25 "has valid vote" $ isJust mVote1
@@ -129,7 +141,7 @@ prop_nonceRespected intf getConnPool =
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote1, 0 :: Integer)
           -- Vote 1 is respected
-          funds === [votingPowerFromRegoValue vote1 0]
+          funds === nub (NE.toList (votingPowerFromRegoValue vote1 0))
 
 
 -- Unsigned registrations are never considered valid.
@@ -178,7 +190,7 @@ prop_registerDuplicates intf getConnPool =
         -- Write utxos to DB
         traverse_ (writeUTxO $ getStakeRegoKey stakeRego') utxos
 
-        getVoteRegistrationADA intf Cardano.Mainnet Nothing
+        getVoteRegistrationADA intf nw Nothing
 
       -- Vote 2 has a higher nonce and so should be respected.
       let mVote2 = getRegistrationVote rego2
@@ -191,7 +203,7 @@ prop_registerDuplicates intf getConnPool =
           let expectedValue = getSum $ foldMap (Sum . utxoValue) utxos
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote2, expectedValue)
-          funds === [votingPowerFromRegoValue vote2 expectedValue]
+          funds === nub (NE.toList (votingPowerFromRegoValue vote2 expectedValue))
 
 -- Only take registrations before the given slot number.
 prop_restrictSlotNo :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
@@ -232,13 +244,18 @@ prop_restrictSlotNo intf getConnPool =
 
         getVoteRegistrationADA
           intf
-          Cardano.Mainnet
+          nw
           (Just $ fromIntegral slotUpperBound)
 
       let
         validRegosBefore = catMaybes $ getRegistrationVote <$> regosBefore
 
-      sort funds === sort ((\rego -> votingPowerFromRegoValue rego 0) <$> validRegosBefore)
+      sort funds ===
+        sort (nub (
+          foldMap
+            (\rego -> NE.toList $ votingPowerFromRegoValue rego 0)
+            validRegosBefore
+          ))
 
 -- Stake address with contributions but no registrations isn't considered.
 prop_noRego :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
@@ -259,7 +276,7 @@ prop_noRego intf getConnPool =
         -- Write UTxOs to DB that contribute to that stake address
         traverse_ (writeUTxO $ getStakeRegoKey stakeRego') utxos
 
-        getVoteRegistrationADA intf Cardano.Mainnet Nothing
+        getVoteRegistrationADA intf nw Nothing
 
       -- Ensure funds is empty because no registrations were made.
       funds === []
@@ -310,7 +327,7 @@ prop_ignoreDateUTxOStakeRego intf getConnPool =
 
         getVoteRegistrationADA
           intf
-          Cardano.Mainnet
+          nw
           (Just $ fromIntegral slotUpperBound)
 
       let mVote = getRegistrationVote rego
@@ -322,7 +339,7 @@ prop_ignoreDateUTxOStakeRego intf getConnPool =
         Just vote -> do
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote, 0 :: Integer)
-          funds === [votingPowerFromRegoValue vote 0]
+          funds === nub (NE.toList (votingPowerFromRegoValue vote 0))
 
 -- Malformed signatures are never considered valid.
 prop_signatureMalformed :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
@@ -338,7 +355,7 @@ prop_signatureMalformed intf getConnPool =
         -- Gen good registration data
         votePayload <-
           mkVotePayload
-          <$> Gen.genVotingKeyPublic
+          <$> Gen.genDelegations
           <*> pure (getStakeVerificationKey stakeKey)
           <*> Gen.genRewardsAddress
           <*> Gen.genSlotNo
@@ -381,10 +398,11 @@ prop_signatureMalformed intf getConnPool =
         -- Associate TxMetadata payload to DB
         traverse_ Sql.insert_ dbMeta
 
-        getVoteRegistrationADA intf Cardano.Mainnet Nothing
+        getVoteRegistrationADA intf nw Nothing
 
       -- Ensure that we get no funds for an invalid signature
       funds === []
+
 -- Correctly ignores non-Catalyst vote registrations.
 prop_notCatalyst :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
 prop_notCatalyst intf getConnPool =
@@ -399,7 +417,7 @@ prop_notCatalyst intf getConnPool =
         -- Gen good registration data
         votePayload <-
           mkVotePayload
-          <$> Gen.genVotingKeyPublic
+          <$> Gen.genDelegations
           <*> pure (getStakeVerificationKey stakeKey)
           <*> Gen.genRewardsAddress
           <*> Gen.genSlotNo

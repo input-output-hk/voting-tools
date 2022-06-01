@@ -27,7 +27,8 @@ main = do
     Left (err :: Snapshot.ConfigError) ->
       fail $ show err
     Right (Snapshot.Config networkId _scale db slotNo outfile) -> do
-      votingPower <- runQuery db $ getVoteRegistrationADA (Sql.sqlQuery) networkId slotNo
+      votingPower <-
+        runQuery db $ getVoteRegistrationADA (Sql.sqlQuery) networkId slotNo
 
       BLC.writeFile outfile . toJSON Aeson.Generic $ votingPower
 

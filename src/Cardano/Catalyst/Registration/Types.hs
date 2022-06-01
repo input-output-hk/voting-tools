@@ -5,21 +5,28 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Catalyst.Registration.Types
-  ( createVoteRegistration
+  ( Delegations(..)
+  , DelegationWeight
+  , delegations
+  , delegationsToTxMetadataValue
+  , delegationsFromTxMetadataValue
+  , createVoteRegistration
   , VotePayload(..)
   , mkVotePayload
   , signVotePayload
   , votePayloadFromTxMetadata
   , votePayloadToTxMetadata
   , Vote
-  , voteRegistrationPublicKey
+  , voteRegistrationDelegations
   , voteRegistrationVerificationKey
   , voteRegistrationRewardsAddress
   , voteRegistrationStakeAddress
@@ -41,6 +48,8 @@ module Cardano.Catalyst.Registration.Types
   , ParseRegistrationError(..)
   , AsParseRegistrationError(..)
   , parseRegistration
+  , VoteRegistrationComponent(..)
+  , module Purpose
   ) where
 
 import           Cardano.Api (AsType (AsTxMetadata), HasTypeProxy (..), SerialiseAsCBOR (..),
@@ -48,6 +57,7 @@ import           Cardano.Api (AsType (AsTxMetadata), HasTypeProxy (..), Serialis
                    serialiseToRawBytes)
 import           Cardano.Catalyst.Registration.Types.Purpose (Purpose, catalystPurpose)
 import           Cardano.Ledger.Crypto (Crypto (..), StandardCrypto)
+import           Control.Applicative ((<|>))
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad.Except (throwError)
@@ -55,9 +65,11 @@ import           Data.Aeson (FromJSON, ToJSON)
 import           Data.Bifunctor (first)
 import           Data.ByteString (ByteString)
 import           Data.List (find)
+import           Data.List.NonEmpty (NonEmpty)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
-import           Data.Word (Word64)
+import           Data.Traversable (forM)
+import           Data.Word (Word32, Word64)
 
 import qualified Cardano.Api as Api
 import qualified Cardano.Api.Shelley as Api
@@ -65,9 +77,12 @@ import qualified Cardano.Binary as CBOR
 import qualified Cardano.Catalyst.Registration.Types.Purpose as Purpose
 import qualified Cardano.Crypto.DSIGN as Crypto
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Types as Aeson
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Vector as Vector
 
 import           Cardano.API.Extended (AsType (AsVotingKeyPublic), VotingKeyPublic (..))
 import           Cardano.Catalyst.Crypto (AsType (AsStakeVerificationKey), StakeSigningKey,
@@ -75,7 +90,7 @@ import           Cardano.Catalyst.Crypto (AsType (AsStakeVerificationKey), Stake
                    verify)
 
 data VoteRegistrationComponent
-  = RegoVotingKey
+  = RegoDelegations
   | RegoStakeVerificationKey
   | RegoRewardsAddress
   | RegoSlotNum
@@ -84,8 +99,8 @@ data VoteRegistrationComponent
   deriving (Eq, Show)
 
 prettyPrintComponent :: VoteRegistrationComponent -> Text
-prettyPrintComponent RegoVotingKey
-    = "voting key"
+prettyPrintComponent RegoDelegations
+    = "delegations"
 prettyPrintComponent RegoStakeVerificationKey
     = "stake verification key"
 prettyPrintComponent RegoRewardsAddress
@@ -100,7 +115,7 @@ prettyPrintComponent RegoSignature
 type MetadataPath = (Word64, Integer)
 
 componentPath :: VoteRegistrationComponent -> MetadataPath
-componentPath RegoVotingKey          = (61284, 1)
+componentPath RegoDelegations          = (61284, 1)
 componentPath RegoStakeVerificationKey = (61284, 2)
 componentPath RegoRewardsAddress       = (61284, 3)
 componentPath RegoSlotNum              = (61284, 4)
@@ -159,10 +174,117 @@ instance FromJSON RewardsAddress where
         Nothing -> fail "Failed to decode rewards address."
         Just votePub -> pure votePub
 
+-- | As of CIP-36, voting power can now be delegated between multiple voting
+-- keys. 'DelegationWeight' represents the proportion of the voting power an
+-- associated voting key should receive.
+--
+-- It is a 4-byte unsigned integer (CBOR major type 0). The value may range from
+-- 0 to 2^32-1.
+type DelegationWeight = Word32
+
+data Delegations key
+  = LegacyDelegation key
+  | Delegations (NonEmpty (key, DelegationWeight))
+  deriving (Eq, Ord, Show)
+
+
+instance ToJSON key => ToJSON (Delegations key) where
+  toJSON (LegacyDelegation key) = Aeson.toJSON key
+  toJSON (Delegations ds)       = Aeson.toJSON ds
+
+instance FromJSON key => FromJSON (Delegations key) where
+  parseJSON v = parseDelegations v <|> parseLegacyDelegation v
+    where
+      parseDelegations :: Aeson.Value -> Aeson.Parser (Delegations key)
+      parseDelegations = Aeson.withArray "Delegations" $ \ds ->
+        case Vector.toList ds of
+           [] -> fail "expected one or more delegations, got none"
+           vals -> fmap (Delegations . NE.fromList) $ forM vals $
+             Aeson.withArray "Delegation Elements" $ \keyWeight ->
+               case Vector.toList keyWeight of
+                 key:weight:[] ->
+                   (,) <$> Aeson.parseJSON key <*> Aeson.parseJSON weight
+                 _ ->
+                   fail "expected a tuple of exactly two elements: (voting key, weight)"
+
+      parseLegacyDelegation :: Aeson.Value -> Aeson.Parser (Delegations key)
+      parseLegacyDelegation = fmap LegacyDelegation . Aeson.parseJSON
+
+delegations :: Delegations key -> NonEmpty (key, DelegationWeight)
+delegations (LegacyDelegation key) = pure (key, 1)
+delegations (Delegations ds)       = ds
+
+delegationsToTxMetadataValue
+  :: Api.SerialiseAsRawBytes key
+  => Delegations key
+  -> Api.TxMetadataValue
+delegationsToTxMetadataValue (LegacyDelegation key) =
+  TxMetaBytes $ serialiseToRawBytes key
+delegationsToTxMetadataValue (Delegations keyWeights) =
+  TxMetaList
+    $ fmap (\(key, weight) ->
+              TxMetaList [ TxMetaBytes $ serialiseToRawBytes key
+                         , TxMetaNumber $ fromIntegral weight
+                         ]
+           )
+    $ NE.toList keyWeights
+
+delegationsFromTxMetadataValue ::
+  Api.TxMetadataValue
+  -> Either MetadataParsingError (Delegations VotingKeyPublic)
+delegationsFromTxMetadataValue (TxMetaBytes bytes) =
+  case Api.deserialiseFromRawBytes AsVotingKeyPublic bytes of
+    Nothing ->
+      throwError
+      $ _MetadataParseFailure
+      # ( RegoDelegations
+        , "unable to deserialise voting key from bytes"
+        )
+    Just votePub ->
+      pure $ LegacyDelegation votePub
+delegationsFromTxMetadataValue (TxMetaList [])   =
+  throwError
+  $ _MetadataParseFailure
+  # ( RegoDelegations
+    , "list of delegations was empty"
+    )
+delegationsFromTxMetadataValue (TxMetaList vals) =
+  fmap (Delegations . NE.fromList) . forM vals $ \val ->
+    case val of
+      TxMetaList ((TxMetaBytes votePubBytes):(TxMetaNumber weight):[]) ->
+        case Api.deserialiseFromRawBytes AsVotingKeyPublic votePubBytes of
+          Nothing ->
+            throwError
+            $ _MetadataParseFailure
+            # ( RegoDelegations
+              , "unable to deserialise voting key from bytes"
+              )
+          Just votePub ->
+            if weight > fromIntegral (maxBound :: Word32)
+               || weight < fromIntegral (minBound :: Word32)
+            then
+              throwError
+              $ _MetadataParseFailure
+              # ( RegoDelegations
+                , "delegation weight exceeded range from 0 to 2^32-1"
+                )
+            else
+              pure (votePub, fromIntegral weight)
+      _                              ->
+        throwError
+        $ _MetadataUnexpectedType
+        # ( RegoDelegations
+          , "list of exactly two elements [voting key, weight]"
+          )
+delegationsFromTxMetadataValue _ =
+  throwError
+  $ _MetadataUnexpectedType
+  # (RegoDelegations, "bytes or list of (bytes, weight)")
+
 -- | The payload of a vote (vote public key and stake verification
 -- key).
-data VotePayload
-  = VotePayload { _votePayloadVoteKey         :: VotingKeyPublic
+data VotePayload = VotePayload
+  { _votePayloadDelegations     :: Delegations VotingKeyPublic
   , _votePayloadVerificationKey :: StakeVerificationKey
   , _votePayloadRewardsAddr     :: RewardsAddress
   , _votePayloadSlot            :: Integer
@@ -180,13 +302,13 @@ data Vote
 instance Ord Vote where
   compare (Vote a1 a2) (Vote b1 b2) =
     let
-      a' = (a1, CBOR.serialize' a2)
-      b' = (b1, CBOR.serialize' b2)
+      a' = ( a1, CBOR.serialize' a2 )
+      b' = ( b1, CBOR.serialize' b2 )
     in
       compare a' b'
 
-voteRegistrationPublicKey :: Vote -> VotingKeyPublic
-voteRegistrationPublicKey = _votePayloadVoteKey . _voteMeta
+voteRegistrationDelegations :: Vote -> Delegations VotingKeyPublic
+voteRegistrationDelegations = _votePayloadDelegations . _voteMeta
 
 voteRegistrationVerificationKey :: Vote -> StakeVerificationKey
 voteRegistrationVerificationKey = _votePayloadVerificationKey . _voteMeta
@@ -223,8 +345,8 @@ instance SerialiseAsCBOR VotePayload where
       $ votePayloadFromTxMetadata meta
 
 mkVotePayload
-  :: VotingKeyPublic
-  -- ^ Voting public key
+  :: Delegations VotingKeyPublic
+  -- ^ Vote power delegations
   -> StakeVerificationKey
   -- ^ Vote verification key
   -> RewardsAddress
@@ -254,9 +376,10 @@ signVotePayload payload@(VotePayload { _votePayloadVerificationKey = vkey }) sig
     else Just $ Vote payload sig
 
 votePayloadToTxMetadata :: VotePayload -> TxMetadata
-votePayloadToTxMetadata (VotePayload votepub stkVerify paymentAddr slot mVotingPurpose) =
-  makeTransactionMetadata $ M.fromList [ (61284, TxMetaMap $
-    [ (TxMetaNumber 1, TxMetaBytes $ serialiseToRawBytes votepub)
+votePayloadToTxMetadata (VotePayload ds stkVerify paymentAddr slot mVotingPurpose) =
+  makeTransactionMetadata $ M.fromList [
+    ( 61284, TxMetaMap $
+      [ (TxMetaNumber 1, delegationsToTxMetadataValue ds)
       , (TxMetaNumber 2, TxMetaBytes $ serialiseToRawBytes stkVerify)
       , (TxMetaNumber 3, TxMetaBytes $ serialiseToRawBytes paymentAddr)
       , (TxMetaNumber 4, TxMetaNumber slot)
@@ -272,8 +395,9 @@ votePayloadFromTxMetadata meta = do
   --   We found some valid TxMetadata but we failed to find:
 
   -- DECISION #09A:
-  --   the voting public key under '61284' > '1'
-  votePubRaw     <- metaValue RegoVotingKey meta >>= asBytes RegoVotingKey
+  --   the delegations under '61284' > '1'
+  ds <-
+    metaValue RegoDelegations meta >>= delegationsFromTxMetadataValue
   -- DECISION #09B:
   --   the stake verifiaction key under '61284' > '2'
   stkVerifyRaw   <- metaValue RegoStakeVerificationKey meta >>= asBytes RegoStakeVerificationKey
@@ -308,17 +432,13 @@ votePayloadFromTxMetadata meta = do
     Nothing  -> throwError (_MetadataParseFailure # (RegoStakeVerificationKey, "Failed to deserialise."))
     Just x   -> pure x
   -- DECISION #10A:
-  --   deserialise the voting public key
-  votePub   <- case Api.deserialiseFromRawBytes AsVotingKeyPublic votePubRaw of
-    Nothing -> throwError (_MetadataParseFailure # (RegoVotingKey, "Failed to deserialise."))
-    Just x  -> pure x
-  -- DECISION #10A:
   --   deserialise the rewards address
   rewardsAddr <- case Api.deserialiseFromRawBytes Api.AsStakeAddress rewardsAddrRaw of
     Nothing -> throwError (_MetadataParseFailure # (RegoRewardsAddress, "Failed to deserialise."))
     Just x  -> pure x
 
-  pure $ mkVotePayload votePub stkVerify (RewardsAddress rewardsAddr) slot votingPurpose
+  pure
+    $ mkVotePayload ds stkVerify (RewardsAddress rewardsAddr) slot votingPurpose
 
 voteToTxMetadata :: Vote -> TxMetadata
 voteToTxMetadata (Vote payload sig) =
@@ -395,15 +515,15 @@ signatureMetaKey = 61285
 -- | Create a vote registration payload.
 createVoteRegistration
   :: StakeSigningKey
-  -> VotingKeyPublic
+  -> Delegations VotingKeyPublic
   -> RewardsAddress
   -> Integer
   -> Vote
-createVoteRegistration skey votePub rewardsAddr slot =
+createVoteRegistration skey ds rewardsAddr slot =
     let
       payload     =
         mkVotePayload
-          votePub
+          ds
           (getStakeVerificationKey skey)
           rewardsAddr
           slot
