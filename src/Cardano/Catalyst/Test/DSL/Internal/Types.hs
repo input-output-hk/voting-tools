@@ -79,6 +79,7 @@ module Cardano.Catalyst.Test.DSL.Internal.Types
   , setStakeAddressId
   , getStakeAddressId
   , utxoValue
+  , getStakeAddress
   -- ** Stake Registration
   , StakeRegistrationState(..)
   , StakeRegistration(..)
@@ -97,10 +98,10 @@ module Cardano.Catalyst.Test.DSL.Internal.Types
   ) where
 
 import           Cardano.API.Extended (VotingKeyPublic)
-import           Cardano.CLI.Voting (createVoteRegistration)
-import           Cardano.CLI.Voting.Metadata (RewardsAddress, Vote, VotePayload (..),
-                   voteRegistrationSlot)
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, getVoteVerificationKey)
+import           Cardano.Catalyst.Crypto (StakeSigningKey, getStakeVerificationKey,
+                   stakeAddressFromVerificationKey)
+import           Cardano.Catalyst.Registration (RewardsAddress, Vote, VotePayload (..),
+                   createVoteRegistration, voteRegistrationSlot)
 import           Cardano.Db.Extended ()
 import           Data.Kind (Type)
 import           Data.Maybe (catMaybes)
@@ -108,6 +109,7 @@ import           Data.Word (Word32)
 import           Database.Persist.Postgresql (Key)
 import           Database.Persist.Sql (Entity (..), entityKey, entityVal)
 
+import qualified Cardano.Api as Api
 import qualified Cardano.Db as Db
 
 -- | The backbone of this module, 'PersistState' indicates whether the object:
@@ -298,7 +300,7 @@ data Registration (state :: PersistState) = Registration
   -- ^ The main-chain address voter rewards should be sent to.
   , registrationSlotNo         :: SlotNo
   -- ^ The nonce used in the registration transaction (usually a slot number).
-  , registrationSigningKey     :: VoteSigningKey
+  , registrationSigningKey     :: StakeSigningKey
   -- ^ The stake signing key used to sign the transaction, and from which a
   -- stake address is derived.
   --
@@ -340,7 +342,7 @@ getRegistrationVotePayload
 getRegistrationVotePayload rego =
   VotePayload
     (registrationVotePub rego)
-    (getVoteVerificationKey $ registrationSigningKey rego)
+    (getStakeVerificationKey $ registrationSigningKey rego)
     (registrationRewardsAddress rego)
     (fromIntegral $ registrationSlotNo rego)
 
@@ -381,7 +383,7 @@ setSlotNo slotNo rego =
 class StakeRegistrationState (state :: PersistState) where
   data StakeRegistration state :: Type
   -- | The stake signing key from which the stake address is derived.
-  stakeRegoKey :: StakeRegistration state -> VoteSigningKey
+  stakeRegoKey :: StakeRegistration state -> StakeSigningKey
   -- | The transaction which registered the stake address.
   stakeRegoTx  :: StakeRegistration state -> Transaction state
   -- | The stake address.
@@ -389,7 +391,7 @@ class StakeRegistrationState (state :: PersistState) where
 
 instance StakeRegistrationState 'Ephemeral where
   data StakeRegistration 'Ephemeral =
-    StakeRegistrationE { stakeRegoKeyE  :: VoteSigningKey
+    StakeRegistrationE { stakeRegoKeyE  :: StakeSigningKey
                        , stakeRegoTxE   :: Transaction 'Ephemeral
                        , stakeRegoAddrE :: Db.StakeAddress
                        }
@@ -399,7 +401,7 @@ instance StakeRegistrationState 'Ephemeral where
 
 instance StakeRegistrationState 'Persisted where
   data StakeRegistration 'Persisted =
-    StakeRegistrationP { stakeRegoKeyP  :: VoteSigningKey
+    StakeRegistrationP { stakeRegoKeyP  :: StakeSigningKey
                        , stakeRegoTxP   :: Transaction 'Persisted
                        , stakeRegoAddrP :: Entity Db.StakeAddress
                        }
@@ -412,6 +414,16 @@ instance StakeRegistrationState 'Persisted where
 -- Available to 'StakeRegistration's in the 'Persisted' state.
 getStakeRegoKey :: StakeRegistration 'Persisted -> Key (Db.StakeAddress)
 getStakeRegoKey = entityKey . stakeRegoAddrP
+
+getStakeAddress
+  :: StakeRegistrationState state
+  => Api.NetworkId
+  -> StakeRegistration state
+  -> Api.StakeAddress
+getStakeAddress nw =
+  stakeAddressFromVerificationKey nw
+  . getStakeVerificationKey
+  . stakeRegoKey
 
 deriving instance Show (StakeRegistration 'Ephemeral)
 deriving instance Show (StakeRegistration 'Persisted)

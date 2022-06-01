@@ -18,7 +18,6 @@ import           Options.Applicative
 import           Cardano.Api (NetworkId, SlotNo)
 
 import           Cardano.API.Extended (pNetworkId)
-import           Cardano.CLI.Voting.Error ()
 
 import           Config.Common (DatabaseConfig (DatabaseConfig), pSlotNo)
 

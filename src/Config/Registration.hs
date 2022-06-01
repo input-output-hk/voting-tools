@@ -21,21 +21,20 @@ import qualified Data.Text.IO as TIO
 
 import           Options.Applicative
 
-import           Cardano.Api (Bech32DecodeError, StakeAddress, TextEnvelopeError)
+import           Cardano.Api (Bech32DecodeError, StakeAddress)
 import qualified Cardano.Api as Api
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..))
-import           Cardano.CLI.Voting.Signing (VoteSigningKey, readVoteSigningKeyFile)
+import           Cardano.Catalyst.Crypto (StakeSigningKey, readStakeSigningKeyFile)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),
                    AsType (AsVotingKeyPublic), VotingKeyPublic, deserialiseFromBech32',
                    parseStakeAddress, readerFromAttoParser)
-import           Cardano.CLI.Voting.Error (AsTextEnvelopeError (_TextEnvelopeError))
 
 data Config = Config
     { cfgRewardsAddress      :: StakeAddress
-    , cfgVoteSigningKey      :: VoteSigningKey
+    , cfgStakeSigningKey      :: StakeSigningKey
     , cfgVotePublicKey       :: VotingKeyPublic
     , cfgSlotNo              :: Api.SlotNo
     , cfgOutFormat           :: MetadataOutFormat
@@ -47,16 +46,12 @@ data MetadataOutFormat = MetadataOutFormatJSON
     deriving (Eq, Show)
 
 data FileErrors = FileErrorInputDecode InputDecodeError
-    | FileErrorTextEnvelope TextEnvelopeError
     deriving (Show)
 
 makePrisms ''FileErrors
 
 instance AsInputDecodeError FileErrors where
   _InputDecodeError = _FileErrorInputDecode
-
-instance AsTextEnvelopeError FileErrors where
-  _TextEnvelopeError = _FileErrorTextEnvelope
 
 data ConfigError = ConfigFailedToReadFile (Api.FileError FileErrors)
     | ConfigFailedToDecodeBech32 Bech32DecodeError
@@ -74,7 +69,7 @@ mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
 mkConfig (Opts rewardsAddr vpkf vskf slotNo outFormat) = do
-  stkSign <- readVoteSigningKeyFile (SigningKeyFile vskf)
+  stkSign <- readStakeSigningKeyFile (SigningKeyFile vskf)
   votepk  <- readVotePublicKey vpkf
 
   pure $ Config rewardsAddr stkSign votepk slotNo outFormat
@@ -82,7 +77,7 @@ mkConfig (Opts rewardsAddr vpkf vskf slotNo outFormat) = do
 data Opts = Opts
     { optRewardsAddress      :: StakeAddress
     , optVotePublicKeyFile   :: FilePath
-    , optVoteSigningKeyFile  :: FilePath
+    , optStakeSigningKeyFile  :: FilePath
     , optSlotNo              :: Api.SlotNo
     , optOutFormat           :: MetadataOutFormat
     }

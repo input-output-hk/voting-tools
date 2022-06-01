@@ -12,8 +12,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.API.Extended ( readSigningKeyFile
-                            , readSigningKeyFileAnyOf
+module Cardano.API.Extended ( readSigningKeyFileAnyOf
                             , AsFileError(..)
                             , AsInputDecodeError(..)
                             , AsEnvSocketError(..)
@@ -21,7 +20,6 @@ module Cardano.API.Extended ( readSigningKeyFile
                             , Extended.parseAddressAny
                             , Extended.parseStakeAddress
                             , Extended.pNetworkId
-                            , readEnvSocketPath
                             , Extended.textEnvelopeToJSON
                             , AsBech32DecodeError(..)
                             , AsBech32HumanReadablePartError(..)
@@ -29,8 +27,6 @@ module Cardano.API.Extended ( readSigningKeyFile
                             , VotingKeyPublic
                             , deserialiseFromBech32'
                             , serialiseToBech32'
-                            , liftShelleyBasedMetadata
-                            , liftShelleyBasedTxFee
                             , SerialiseAsBech32'(bech32PrefixFor, bech32PrefixesPermitted)
                             , AsType(AsVotingKeyPublic)
                             , Extended.pEpochSlots
@@ -40,7 +36,7 @@ module Cardano.API.Extended ( readSigningKeyFile
 import           Control.Lens ((#))
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad (guard)
-import           Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
+import           Control.Monad.Except (MonadError, throwError)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Data.Aeson (FromJSON, ToJSON)
 import           Data.ByteString (ByteString)
@@ -50,16 +46,12 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 import           Cardano.Api (AsType, Bech32DecodeError (..), FileError (..), FromSomeType,
-                   HasTextEnvelope, HasTypeProxy (..), Lovelace, SerialiseAsBech32,
-                   SerialiseAsRawBytes (..), ShelleyBasedEra (..), SigningKey,
-                   TxFee (TxFeeExplicit), TxFeesExplicitInEra (..), TxMetadata,
-                   TxMetadataInEra (TxMetadataInEra), TxMetadataSupportedInEra (..),
+                   HasTextEnvelope, HasTypeProxy (..), SerialiseAsBech32, SerialiseAsRawBytes (..),
                    deserialiseFromRawBytesHex, serialiseToRawBytesHex)
 import           Cardano.CLI.Environment (EnvSocketError (..))
-import qualified Cardano.CLI.Environment as Cardano (readEnvSocketPath)
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import qualified Cardano.CLI.Shelley.Key as Shelley
-import           Cardano.CLI.Types (SigningKeyFile (..), SocketPath)
+import           Cardano.CLI.Types (SigningKeyFile (..))
 import qualified Codec.Binary.Bech32 as Bech32
 import qualified Data.Aeson as Aeson
 
@@ -75,53 +67,6 @@ data Bech32HumanReadablePartError = Bech32HumanReadablePartError !(Bech32.HumanR
     deriving Show
 
 makeClassyPrisms ''Bech32HumanReadablePartError
-
-liftShelleyBasedTxFee
-  :: ShelleyBasedEra era
-  -> Lovelace
-  -> TxFee era
-liftShelleyBasedTxFee (ShelleyBasedEraShelley) = (TxFeeExplicit TxFeesExplicitInShelleyEra)
-liftShelleyBasedTxFee (ShelleyBasedEraAllegra) = (TxFeeExplicit TxFeesExplicitInAllegraEra)
-liftShelleyBasedTxFee (ShelleyBasedEraMary)    = (TxFeeExplicit TxFeesExplicitInMaryEra)
-liftShelleyBasedTxFee (ShelleyBasedEraAlonzo)  = (TxFeeExplicit TxFeesExplicitInAlonzoEra)
-
-liftShelleyBasedMetadata
-  :: ShelleyBasedEra era
-  -> TxMetadata
-  -> TxMetadataInEra era
-liftShelleyBasedMetadata (ShelleyBasedEraShelley) = (TxMetadataInEra TxMetadataInShelleyEra)
-liftShelleyBasedMetadata (ShelleyBasedEraAllegra) = (TxMetadataInEra TxMetadataInAllegraEra)
-liftShelleyBasedMetadata (ShelleyBasedEraMary)    = (TxMetadataInEra TxMetadataInMaryEra)
-liftShelleyBasedMetadata (ShelleyBasedEraAlonzo)  = (TxMetadataInEra TxMetadataInAlonzoEra)
-
-liftExceptTIO
-  :: ( MonadIO m
-     , MonadError e' m
-     )
-  => (e -> e') -> ExceptT e IO a -> m a
-liftExceptTIO f exc = do
-  x <- liftIO $ runExceptT exc
-  either (throwError . f) pure x
-
-readSigningKeyFile
-  :: forall e m fileErr keyrole .
-     ( MonadIO m
-     , MonadError e m
-     , AsFileError e fileErr
-     , AsInputDecodeError fileErr
-     , HasTextEnvelope (SigningKey keyrole)
-     , SerialiseAsBech32 (SigningKey keyrole)
-     )
-  => AsType keyrole
-  -> SigningKeyFile
-  -> m (SigningKey keyrole)
-readSigningKeyFile role f = do
-  result <- liftIO $ Shelley.readSigningKeyFile role f
-  case result of
-    Right x                           -> pure x
-    Left (FileError fp e)             -> throwError (_FileError # (fp , _InputDecodeError # e))
-    Left (FileIOError fp e)           -> throwError (_FileIOError # (fp, e))
-    Left (FileErrorTempFile fp tmp h) -> throwError (_FileErrorTempFile # (fp, tmp, h))
 
 readSigningKeyFileAnyOf
   :: forall e m fileErr b.
@@ -141,16 +86,6 @@ readSigningKeyFileAnyOf bech32Types textEnvTypes f = do
     Left (FileError fp e)             -> throwError (_FileError # (fp , _InputDecodeError # e))
     Left (FileIOError fp e)           -> throwError (_FileIOError # (fp, e))
     Left (FileErrorTempFile fp tmp h) -> throwError (_FileErrorTempFile # (fp, tmp, h))
-
-readEnvSocketPath
-  :: ( MonadIO m
-     , MonadError e m
-     , AsEnvSocketError e
-     )
-  => m SocketPath
-readEnvSocketPath =
-  liftExceptTIO (_EnvSocketError #)
-    Cardano.readEnvSocketPath
 
 -- | Voting key types do not exist in the cardano-api yet. This
 -- extension adds voting keys, but makes no guarantees that the
@@ -185,6 +120,14 @@ instance SerialiseAsBech32' VotingKeyPublic where
     bech32PrefixFor (VotingKeyPublic _) = "ed25519_pk"
     bech32PrefixesPermitted AsVotingKeyPublic = ["ed25519_pk"]
 
+(?!.) :: Either e a -> (e -> e') -> Either e' a
+Left  e ?!. f = Left (f e)
+Right x ?!. _ = Right x
+
+(?!) :: Maybe a -> e -> Either e a
+Nothing ?! e = Left e
+Just x  ?! _ = Right x
+
 -- TODO Ask for this class to be exposed in Cardano.Api...
 -- The SerialiseAsBech32 class need to be exposed from the CardanoAPI
 -- for me to be able to define serialization for new types.
@@ -193,14 +136,6 @@ instance SerialiseAsBech32' VotingKeyPublic where
 --   bech32PrefixFor (VotingKeyPublic) = "ed25519e_sk"
 
 --   bech32PrefixesPermitted AsVotingKeyPublic = ["ed25519e_sk"]
-
-(?!.) :: Either e a -> (e -> e') -> Either e' a
-Left  e ?!. f = Left (f e)
-Right x ?!. _ = Right x
-
-(?!) :: Maybe a -> e -> Either e a
-Nothing ?! e = Left e
-Just x  ?! _ = Right x
 
 class (HasTypeProxy a, SerialiseAsRawBytes a) => SerialiseAsBech32' a where
 

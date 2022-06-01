@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Test.Cardano.CLI.Voting.Metadata where
+module Test.Cardano.Catalyst.Registration where
 
 import qualified Cardano.Api as Api
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
@@ -20,8 +20,8 @@ import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import           Test.Tasty.Hedgehog
 
-import           Cardano.CLI.Voting.Metadata
-import qualified Test.Generators as Gen
+import           Cardano.Catalyst.Registration
+import qualified Cardano.Catalyst.Test.DSL.Gen as Gen
 
 tests :: TestTree
 tests = testGroup "Vote Metadata type tests"
@@ -35,12 +35,12 @@ tests = testGroup "Vote Metadata type tests"
 
 prop_rewardsAddress_json_roundtrips :: H.Property
 prop_rewardsAddress_json_roundtrips = property $ do
-  rewardsAddr <- forAllT Gen.rewardsAddress
+  rewardsAddr <- forAllT Gen.genRewardsAddress
   tripping rewardsAddr Aeson.encode Aeson.eitherDecode'
 
 prop_vote_txMetadata_roundtrips :: H.Property
 prop_vote_txMetadata_roundtrips = property $ do
-  a <- forAllT Gen.vote
+  a <- forAllT Gen.genVote
 
   tripping a voteToTxMetadata voteFromTxMetadata
 
@@ -58,7 +58,7 @@ unit_txMetadata_can_decode_example = do
           [ ("1", Aeson.String "0xfb01d767515ad75a959ef1b154bfb704c1a2a1af9e8c36ea38caade4931f9967780f08cfb2dfdac92e0b1efcca0cb148587b656007e87f1af0be3d4a93826706") ])
       ]
 
-  parseMetadataFromJson jsonMetadata
+  Api.metadataFromJson Api.TxMetadataJsonNoSchema jsonMetadata
     @?= (Right $ Api.makeTransactionMetadata $ M.fromList
           [ (61284, Api.TxMetaMap [ (Api.TxMetaNumber 1, Api.TxMetaBytes $ fromRight "" $ Base16.decode "49b8a147e4ffb1119d460feef2d13a9e882684f30f8cf74e6956246670b2652e")
                                   , (Api.TxMetaNumber 2, Api.TxMetaBytes $ fromRight "" $ Base16.decode "c14fad1da753e2701b9d3546ace0bffe97670598b0ed53f63484c7ded732a0a9")
@@ -76,7 +76,7 @@ unit_txMetadata_can_decode_example = do
 -- format parses.
 prop_vote_serialized_format :: H.Property
 prop_vote_serialized_format = H.property $ do
-  vote <- forAllT $ Gen.vote
+  vote <- forAllT $ Gen.genVote
 
   let
     sig         = ("0x" <>) . T.decodeUtf8 . Base16.encode . Crypto.rawSerialiseSigDSIGN . voteSignature $ vote
@@ -96,7 +96,8 @@ prop_vote_serialized_format = H.property $ do
         )
       ]
 
-  metadataToJson (voteToTxMetadata vote) === expectedJSON
+  Api.metadataToJson Api.TxMetadataJsonNoSchema (voteToTxMetadata vote)
+    === expectedJSON
 
 sortMetaMap :: Api.TxMetadataValue -> Api.TxMetadataValue
 sortMetaMap (Api.TxMetaMap xs) = (Api.TxMetaMap $ sort xs)
