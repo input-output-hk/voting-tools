@@ -1,5 +1,10 @@
 # Catalyst Voting Tools
 
+<p align="center">
+  <a href="https://buildkite.com/input-output-hk/voting-tools"><img src="https://img.shields.io/buildkite/7ea3dac7a16f066d8dfc8f426a9a9f7a2131e899cd96c444cf/master?label=BUILD&style=for-the-badge"/></a>
+  <a href="https://hydra.iohk.io/jobset/Cardano/voting-tools#tabs-jobs"><img src="https://img.shields.io/endpoint?style=for-the-badge&url=https%3A%2F%2Fhydra.iohk.io%2Fjob%2FCardano%2Fvoting-tools%2Frequired%2Fshield" /></a>
+</p>
+
 A library and series of executables to aid programmers and users to
 interact with the voting capabilities of Catalyst.
 
