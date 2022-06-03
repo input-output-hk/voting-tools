@@ -19,14 +19,14 @@ module Config.Snapshot
 
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad.Except (ExceptT)
-
-import           Options.Applicative
-
-import           Cardano.Api (NetworkId, SlotNo)
+import           Options.Applicative (Parser, ParserInfo, auto, fullDesc, header, help, helper,
+                   info, long, metavar, option, optional, progDesc, showDefault, strOption, value,
+                   (<**>))
 
 import           Cardano.API.Extended (pNetworkId)
+import           Cardano.Api (NetworkId, SlotNo)
 
-import           Config.Common (DatabaseConfig (DatabaseConfig), pSlotNo)
+import           Config.Common (DatabaseConfig (DatabaseConfig), pSlotNo, versionOption)
 
 data Config = Config
     { cfgNetworkId         :: NetworkId
@@ -79,7 +79,7 @@ parseOpts = Opts
 opts :: ParserInfo Opts
 opts =
   info
-    ( parseOpts <**> helper )
+    ( parseOpts <**> versionOption "0.3.0.0" <**> helper )
     ( fullDesc
     <> progDesc "Create a voting power snapshot"
     <> header "voting-tools snapshot - tool to grab snapshot of voting power"

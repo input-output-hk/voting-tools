@@ -24,6 +24,24 @@ common project-config
                         -Wpartial-fields
                         -Wredundant-constraints
                         -Wunused-packages
+library
+  exposed-modules: Config.Registration
+  build-depends:       base
+                     , aeson
+                     , bytestring
+                     , cardano-api
+                     , mtl
+                     , optparse-applicative
+                     , ouroboros-network
+                     , voting-tools
+                     , cardano-cli
+                     , cardano-api
+                     , lens
+                     , text
+                     , attoparsec
+                     , safe-exceptions
+  hs-source-dirs:      src/
+  default-language:    Haskell2010
 
 executable voter-registration
   import:              project-config
@@ -36,6 +54,8 @@ executable voter-registration
                      , optparse-applicative
                      , ouroboros-network
                      , voting-tools
+                     , cardano-api
+                     , voter-registration
 
-  hs-source-dirs:      src/
+  hs-source-dirs:      app/
   default-language:    Haskell2010
