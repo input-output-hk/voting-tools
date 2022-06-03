@@ -7,7 +7,7 @@ import           Cardano.Api (AnyCardanoEra (..), CardanoEra (..), SlotNo (..))
 import qualified Data.ByteString.Char8 as BSC
 import           Data.Foldable (asum)
 import           Database.Persist.Postgresql (ConnectionString)
-import           Options.Applicative (Parser, auto, flag', help, long, metavar, option)
+import           Options.Applicative (Parser, auto, flag', help, long, metavar, option, infoOption)
 
 data DatabaseConfig
   = DatabaseConfig { _dbName       :: String
@@ -59,3 +59,7 @@ pCardanoEra = asum
     -- Default for now:
   , pure (AnyCardanoEra MaryEra)
   ]
+
+versionOption :: String -> Parser (a -> a)
+versionOption v =
+  infoOption ("v" <> v) (long "version" <> help "Show version")
