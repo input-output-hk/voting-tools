@@ -36,6 +36,13 @@ executable voter-registration
                      , optparse-applicative
                      , ouroboros-network
                      , voting-tools
+                     , cardano-cli
+                     , cardano-api
+                     , lens
+                     , text
+                     , attoparsec
+                     , safe-exceptions
 
   hs-source-dirs:      src/
   default-language:    Haskell2010
+  other-modules: Config.Registration

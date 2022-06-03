@@ -45,7 +45,6 @@ library
                      , Cardano.Catalyst.VotePower
                      , Cardano.Db.Extended
                      , Config.Snapshot
-                     , Config.Registration
                      , Config.Common
 
   build-depends:       base
@@ -70,7 +69,6 @@ library
                      , ouroboros-network
                      , persistent
                      , persistent-postgresql
-                     , safe-exceptions
                      , scientific
                      , text
                      , time
@@ -101,7 +99,6 @@ executable voting-tools
                      , optparse-applicative
                      , ouroboros-network
                      , persistent-postgresql
-                     , safe-exceptions
                      , text
                      , unordered-containers
                      , vector
@@ -119,7 +116,6 @@ executable voting-tools
                  , Cardano.Catalyst.Crypto
                  , Config.Common
                  , Config.Snapshot
-                 , Config.Registration
                  , Cardano.Catalyst.Registration.Types.Purpose
 
 test-suite unit-tests
