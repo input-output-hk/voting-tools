@@ -26,8 +26,8 @@ nix build .#voterRegistrationTarball
 #### With Nix
 
 ```
-nix-build -A voter-registration -o voter-registration
-nix-build -A voting-tools -o voting-tools
+nix build .#voter-registration -o voter-registration
+nix build .#voting-tools -o voting-tools
 
 ./voting-tools/bin/voting-tools --mainnet --db-user cardano-node --out-file snapshot.json
 ```
