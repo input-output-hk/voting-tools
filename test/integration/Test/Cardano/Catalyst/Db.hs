@@ -58,6 +58,7 @@ tests intf getConnPool =
     , testProperty "prop_ignoreDateUTxOStakeRego" (prop_ignoreDateUTxOStakeRego intf getConnPool)
     , testProperty "prop_signatureMalformed" (prop_signatureMalformed intf getConnPool)
     , testProperty "prop_notCatalyst" (prop_notCatalyst intf getConnPool)
+    , testProperty "prop_delegated" (prop_delegated intf getConnPool)
     ]
 
 nw :: Cardano.NetworkId
@@ -473,3 +474,78 @@ prop_notCatalyst intf getConnPool =
 
       -- Ensure that we get no funds for a non-catalyst voting purpose
       funds === []
+
+-- Correctly parses delegated vote registrations.
+prop_delegated :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
+prop_delegated intf getConnPool =
+  property $ do
+    pool <- liftIO getConnPool
+
+    (stakeRego, regoMeta, sigMeta, regoTx, utxos, delegs) <-
+      flip State.evalStateT [1..] $ distributeT $ forAllT $ do
+        stakeRego <- genStakeAddressRegistration nw
+        let stakeKey = stakeRegoKey stakeRego
+
+        delegs <- Gen.genDelegations
+
+        -- Gen good registration data
+        votePayload <-
+          mkVotePayload delegs
+          <$> pure (getStakeVerificationKey stakeKey)
+          <*> Gen.genRewardsAddress
+          <*> Gen.genSlotNo
+          <*> pure (Just catalystPurpose)
+        let
+          regoMeta = votePayloadToTxMetadata votePayload
+
+        -- Gen good signature
+        let
+          sig =
+            Api.serialiseToCBOR regoMeta `sign` stakeKey
+          sigMeta = Api.TxMetadata $ M.fromList
+            [ ( 61285, Api.TxMetaMap
+                [ ( Api.TxMetaNumber 1
+                  , Api.TxMetaBytes $ Crypto.rawSerialiseSigDSIGN sig
+                  )
+                ]
+              )
+            ]
+
+        -- Gen transaction to attach
+        regoTx <- genTransaction
+
+        -- Gen UTxOs to attach
+        utxos <- Gen.list (Range.linear 0 5) genUTxO
+
+        pure (stakeRego, regoMeta, sigMeta, regoTx, utxos, delegs)
+
+    cover 30 "delegations == 1" $ length (delegations delegs) == 1
+    cover 30 "delegations > 1" $ length (delegations delegs) > 1
+
+    withinTransaction pool $ \runQuery -> do
+      funds <- runQuery $ do
+        -- Write a stake address registration to the database
+        stakeRego' <- writeStakeRego stakeRego
+
+        -- Write UTxOs to DB that contribute to that stake address
+        traverse_ (writeUTxO $ getStakeRegoKey stakeRego') utxos
+
+        -- Write transaction to DB
+        tx' <- writeTx regoTx
+
+        let
+          txId = getTxKey tx'
+
+          dbMeta =
+            apiToDbMetadata (regoMeta <> sigMeta) txId
+
+        -- Associate TxMetadata payload to DB
+        traverse_ Sql.insert_ dbMeta
+
+        getVoteRegistrationADA intf nw Nothing
+
+      -- Ensure sum of voting power == sum of UTxO value
+      sum (_powerVotingPower <$> funds) === sum (utxoValue <$> utxos)
+      -- Ensure each delegated voting key is present in the funds
+      let delegatedVotingKeys = NE.toList $ fmap fst $ delegations delegs
+      sort (_powerVotingKey <$> funds) === sort delegatedVotingKeys

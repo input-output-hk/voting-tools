@@ -42,6 +42,7 @@ import qualified Cardano.Api as Api
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..))
 import           Cardano.Catalyst.Crypto (StakeSigningKey, readStakeSigningKeyFile)
+import           Config.Common (versionOption)
 
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),
@@ -161,7 +162,7 @@ pDelegationsCLI =
 opts :: ParserInfo Opts
 opts =
   info
-    ( parseOpts <**> helper )
+    ( parseOpts <**> versionOption "0.3.0.0" <**> helper )
     ( fullDesc
     <> progDesc "Create vote registration metadata"
     <> header "voter-registration - a tool to create vote registration metadata suitable for attaching to a transaction"

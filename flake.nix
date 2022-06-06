@@ -72,6 +72,13 @@
                 tar -czvf $out/voter-registration.tar.gz voter-registration
                 echo "file binary-dist $out/voter-registration.tar.gz" > $out/nix-support/hydra-build-products
               '';
+
+              votingToolsTarball = pkgs.runCommandNoCC "voting-tools-tarball" { buildInputs = [ pkgs.gnutar pkgs.gzip ]; } ''
+                cp ${flake.packages."x86_64-unknown-linux-musl:voting-tools:exe:voting-tools"}/bin/voting-tools ./
+                mkdir -p $out/nix-support
+                tar -czvf $out/voting-tools.tar.gz voting-tools
+                echo "file binary-dist $out/voting-tools.tar.gz" > $out/nix-support/hydra-build-products
+              '';
             };
 
           in recursiveUpdate flake {
