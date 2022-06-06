@@ -31,7 +31,9 @@
 
 ## Manual ad-hoc verifications
 
-- Execute all *TODO* [manual scenarios]() on the binaries to be released.
+- Execute the following manual scenarios on the binaries to be released:
+  - https://github.com/input-output-hk/voting-tools#registering-to-vote
+  - https://github.com/input-output-hk/voting-tools#getting-snapshot-of-the-voting-power-of-registrations
 
 ## Publication
 
