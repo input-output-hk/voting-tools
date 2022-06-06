@@ -107,6 +107,10 @@ voter-registration \
 
 > :information_source: For details on delegation refer to [CIP 36](https://cips.cardano.org/cips/cip36/).
 
+### Registration of Stake Address
+
+To associate value with your registration, you'll need to follow [these]( https://developers.cardano.org/docs/stake-pool-course/handbook/register-stake-keys/) instructions to register your stake address.
+
 ### Submission of vote registration
 
 Next, we need to add this transaction metadata to a transaction and submit it to the chain.
