@@ -1,0 +1,259 @@
+* Register to Vote from Scratch
+
+** Preamble
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+#!/usr/bin/env bash
+
+set -euo pipefail
+#+END_SRC
+
+Run this example on testnet (Use "--mainnet" if you want to run this on mainnet):
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+export NETWORK_ID="--testnet-magic 1097911063"
+#+END_SRC
+
+Let ~cardano-cli~ know where the node socket is:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+export CARDANO_NODE_SOCKET_PATH="/run/cardano-node/node.socket"
+#+END_SRC
+
+** Generate Stake Address
+
+Generate a stake address from a stake key:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+cardano-cli stake-address key-gen \
+  --verification-key-file stake.vkey \
+  --signing-key-file stake.skey
+cardano-cli stake-address build \
+    --stake-verification-key-file stake.vkey \
+    $NETWORK_ID \
+    --out-file stake.addr
+#+END_SRC
+
+** Generate Base Address
+
+Generate a [[https://docs.cardano.org/core-concepts/cardano-addresses#baseaddresses][base address]] from a payment key and a stake key:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+cardano-cli address key-gen \
+  --verification-key-file payment.vkey \
+  --signing-key-file payment.skey
+cardano-cli address build \
+    $NETWORK_ID \
+    --payment-verification-key-file payment.vkey \
+    --stake-verification-key-file stake.vkey \
+    --out-file payment.addr
+
+export PAYMENT_ADDR=$(cat payment.addr)
+#+END_SRC
+
+We will use the base address to:
+  - Pay transaction fees
+  - Pay stake address registration fees
+  - Hold value for the associated stake key (that is later translated into voting power)
+
+** Get Funds
+
+We need to add funds to the base address in order to pay fees and hold value (i.e. voting power):
+
+  - On testnet, add funds using the [[https://testnets.cardano.org/en/testnets/cardano/tools/faucet/][faucet]], using the base address (~$(cat payment.addr)~) as the address.
+  - On mainnet, add funds using an exchange or transfer money from elsewhere.
+
+** Register Stake Address
+
+The stake address must be registered on-chain in order for the snapshot tool to find it.
+
+To do so, first generate a registration certificate:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+cardano-cli stake-address registration-certificate \
+    --stake-verification-key-file stake.vkey \
+    --out-file stake.cert
+#+END_SRC
+
+Then submit the registration certificate in a transaction:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+export ADA_LEFT=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $3;}')
+export UTXO=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $1;}')
+export UTXO_TXIX=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $2;}')
+
+export SLOT_TIP=$(cardano-cli query tip $NETWORK_ID | jq .slot)
+
+cardano-cli query protocol-parameters \
+            $NETWORK_ID \
+            --out-file protocol.json
+
+cardano-cli transaction build-raw \
+  --alonzo-era \
+  --fee 0 \
+  --tx-in $UTXO#$UTXO_TXIX \
+  --tx-out "$PAYMENT_ADDR+$ADA_LEFT" \
+  --certificate-file stake.cert \
+  --invalid-hereafter $(expr $SLOT_TIP + 1000) \
+  --out-file tx.raw
+
+export FEE=$(cardano-cli transaction calculate-min-fee \
+            $NETWORK_ID \
+            --tx-body-file tx.raw \
+            --tx-in-count 1 \
+            --tx-out-count 1 \
+            --witness-count 2 \
+            --protocol-params-file protocol.json | awk '{print $1;}')
+export DEPOSIT=$(cardano-cli query protocol-parameters $NETWORK_ID | jq .stakeAddressDeposit)
+export CHANGE=$(expr $ADA_LEFT - $FEE - $DEPOSIT)
+
+cardano-cli transaction build-raw \
+            --alonzo-era \
+            --fee $FEE \
+            --tx-in $UTXO#$UTXO_TXIX \
+            --tx-out "$PAYMENT_ADDR+$CHANGE" \
+            --certificate-file stake.cert \
+            --invalid-hereafter $(expr "${SLOT_TIP}" + 1000) \
+            --out-file tx.raw
+
+cardano-cli transaction sign \
+    --tx-body-file tx.raw \
+    --signing-key-file payment.skey \
+    --signing-key-file stake.skey \
+    $NETWORK_ID \
+    --out-file tx.signed
+
+cardano-cli transaction submit \
+    --tx-file tx.signed \
+    $NETWORK_ID
+#+END_SRC
+
+Notice that we pay not only a transaction fee, but a deposit for registering the stake address.
+
+The deposit amount is listed in the protocol parameters under "stakeAddressDeposit".
+
+** Register Voting Key
+
+We must generate a voting key to use on the Catalyst side-chain:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+jcli key generate \
+    --type ed25519extended \
+    > vote.skey
+jcli key to-public \
+    < vote.skey \
+    > vote.pub
+#+END_SRC
+
+And then generate metadata associating that voting key with our stake address:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+voter-registration \
+    --rewards-address $(cat stake.addr) \
+    --vote-public-key-file vote.pub \
+    --stake-signing-key-file stake.skey \
+    --slot-no $SLOT_TIP \
+    --json > metadata.json
+#+END_SRC
+
+The voting power on the Catalyst side-chain is derived from the value associated with this stake address (via our [[https://docs.cardano.org/core-concepts/cardano-addresses#baseaddresses][base address]]).
+
+Submit the generated metadata to the blockchain in a transaction:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+export AMT=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $3;}')
+export UTXO=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $1;}')
+export UTXO_TXIX=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $2;}')
+echo "UTxO: $UTXO#$UTXO_TXIX"
+
+cardano-cli transaction build  \
+	$NETWORK_ID \
+	--tx-in $UTXO#$UTXO_TXIX \
+	--change-address $PAYMENT_ADDR \
+	--metadata-json-file metadata.json \
+	--protocol-params-file protocol.json  \
+	--out-file tx.raw
+
+cardano-cli transaction sign \
+    --tx-body-file tx.raw \
+    --signing-key-file payment.skey \
+    $NETWORK_ID \
+    --out-file tx.signed
+
+cardano-cli transaction submit \
+    --tx-file tx.signed \
+    $NETWORK_ID
+#+END_SRC
+
+** Confirm Vote Power
+
+The voting power associated with a stake address can be confirmed using the snapshot tool:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+export REWARDS_ADDRESS=$(cardano-cli address info --address $(cat stake.addr) | jq .base16)
+
+voting-tools \
+    $NETWORK_ID \
+    --db $DB \
+    --db-user $DB_USER \
+    --db-pass $DB_PASS \
+    --db-host localhost \
+    --out-file voting-snaphot.json
+
+cat voting-snapshot.json | jq .filter $REWARDS_ADDRESS
+#+END_SRC
+
+** Return Funds to Faucet
+
+It is polite to return funds used in the testnet to the faucet:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+export ADA_LEFT=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $3;}')
+export UTXO=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $1;}')
+export UTXO_TXIX=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $2;}')
+export FAUCET_ADDR="addr_test1qqr585tvlc7ylnqvz8pyqwauzrdu0mxag3m7q56grgmgu7sxu2hyfhlkwuxupa9d5085eunq2qywy7hvmvej456flknswgndm3"
+
+echo
+echo "Building faucet refund transaction..."
+
+cardano-cli transaction build-raw \
+  --alonzo-era \
+  --fee 0 \
+  --tx-in $UTXO#$UTXO_TXIX \
+  --tx-out "$FAUCET_ADDR+$ADA_LEFT" \
+  --out-file return.raw
+
+export FEE=$(cardano-cli transaction calculate-min-fee \
+            $NETWORK_ID \
+            --tx-body-file return.raw \
+            --tx-in-count 1 \
+            --tx-out-count 1 \
+            --witness-count 1 \
+            --protocol-params-file protocol.json | awk '{print $1;}')
+export AMT_OUT=$(expr $ADA_LEFT - $FEE)
+
+cardano-cli transaction build-raw \
+            --alonzo-era \
+            --fee $FEE \
+            --tx-in $UTXO#$UTXO_TXIX \
+            --tx-out "$FAUCET_ADDR+$AMT_OUT" \
+            --out-file return.raw
+
+cat return.raw
+
+cardano-cli transaction sign \
+	    --signing-key-file payment.skey \
+	    --tx-body-file return.raw \
+            --out-file return.signed
+
+cardano-cli transaction submit \
+            $NETWORK_ID \
+            --tx-file return.signed
+
+echo
+echo "Awaiting refund..."
+sleep 60
+cardano-cli query utxo \
+            $NETWORK_ID \
+            --address $PAYMENT_ADDR
+#+END_SRC
