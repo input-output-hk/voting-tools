@@ -2,6 +2,13 @@
 
 ** Preamble
 
+This manual requires:
+  - ~cardano-cli~ executable from the [[https://github.com/input-output-hk/cardano-node][cardano-node]] project
+  - ~jcli~ executable from the [[https://github.com/input-output-hk/jormungandr][jormungandr]] project
+  - ~voter-registration~ executable from this project
+  - ~voting-tools~ executable from this project
+  - running [[https://github.com/input-output-hk/cardano-db-sync][cardano-db-sync]]
+
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
 #!/usr/bin/env bash
 
@@ -26,8 +33,8 @@ Generate a stake address from a stake key:
 
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
 cardano-cli stake-address key-gen \
-  --verification-key-file stake.vkey \
-  --signing-key-file stake.skey
+    --verification-key-file stake.vkey \
+    --signing-key-file stake.skey
 cardano-cli stake-address build \
     --stake-verification-key-file stake.vkey \
     $NETWORK_ID \
@@ -40,8 +47,8 @@ Generate a [[https://docs.cardano.org/core-concepts/cardano-addresses#baseaddres
 
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
 cardano-cli address key-gen \
-  --verification-key-file payment.vkey \
-  --signing-key-file payment.skey
+    --verification-key-file payment.vkey \
+    --signing-key-file payment.skey
 cardano-cli address build \
     $NETWORK_ID \
     --payment-verification-key-file payment.vkey \
@@ -78,43 +85,22 @@ cardano-cli stake-address registration-certificate \
 Then submit the registration certificate in a transaction:
 
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
-export ADA_LEFT=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $3;}')
 export UTXO=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $1;}')
 export UTXO_TXIX=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $2;}')
-
-export SLOT_TIP=$(cardano-cli query tip $NETWORK_ID | jq .slot)
+echo "UTxO: $UTXO#$UTXO_TXIX"
 
 cardano-cli query protocol-parameters \
-            $NETWORK_ID \
-            --out-file protocol.json
+    $NETWORK_ID \
+    --out-file protocol.json
 
-cardano-cli transaction build-raw \
-  --alonzo-era \
-  --fee 0 \
-  --tx-in $UTXO#$UTXO_TXIX \
-  --tx-out "$PAYMENT_ADDR+$ADA_LEFT" \
-  --certificate-file stake.cert \
-  --invalid-hereafter $(expr $SLOT_TIP + 1000) \
-  --out-file tx.raw
-
-export FEE=$(cardano-cli transaction calculate-min-fee \
-            $NETWORK_ID \
-            --tx-body-file tx.raw \
-            --tx-in-count 1 \
-            --tx-out-count 1 \
-            --witness-count 2 \
-            --protocol-params-file protocol.json | awk '{print $1;}')
-export DEPOSIT=$(cardano-cli query protocol-parameters $NETWORK_ID | jq .stakeAddressDeposit)
-export CHANGE=$(expr $ADA_LEFT - $FEE - $DEPOSIT)
-
-cardano-cli transaction build-raw \
-            --alonzo-era \
-            --fee $FEE \
-            --tx-in $UTXO#$UTXO_TXIX \
-            --tx-out "$PAYMENT_ADDR+$CHANGE" \
-            --certificate-file stake.cert \
-            --invalid-hereafter $(expr "${SLOT_TIP}" + 1000) \
-            --out-file tx.raw
+cardano-cli transaction build  \
+    $NETWORK_ID \
+    --tx-in $UTXO#$UTXO_TXIX \
+    --change-address $PAYMENT_ADDR \
+    --certificate-file stake.cert \
+    --protocol-params-file protocol.json  \
+    --out-file tx.raw \
+    --witness-override 2
 
 cardano-cli transaction sign \
     --tx-body-file tx.raw \
@@ -148,6 +134,8 @@ jcli key to-public \
 And then generate metadata associating that voting key with our stake address:
 
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+export SLOT_TIP=$(cardano-cli query tip $NETWORK_ID | jq '.slot')
+
 voter-registration \
     --rewards-address $(cat stake.addr) \
     --vote-public-key-file vote.pub \
@@ -158,10 +146,23 @@ voter-registration \
 
 The voting power on the Catalyst side-chain is derived from the value associated with this stake address (via our [[https://docs.cardano.org/core-concepts/cardano-addresses#baseaddresses][base address]]).
 
+It is also possible to delegate your voting power between voting keys.
+
+For example to split your voting power 1/3 to `vote1.pub` and 2/3 to `vote2.pub`, you could use the following invocation:
+
+#+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
+voter-registration \
+    --rewards-address $(cat stake.addr) \
+    --delegate vote1.pub,1 \
+    --delegate vote2.pub,2 \
+    --stake-signing-key-file stake.skey \
+    --slot-no $SLOT_TIP \
+    --json > metadata.json
+#+END_SRC
+
 Submit the generated metadata to the blockchain in a transaction:
 
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
-export AMT=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $3;}')
 export UTXO=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $1;}')
 export UTXO_TXIX=$(cardano-cli query utxo $NETWORK_ID --address $PAYMENT_ADDR | tail -n1 | awk '{print $2;}')
 echo "UTxO: $UTXO#$UTXO_TXIX"
@@ -175,22 +176,32 @@ cardano-cli transaction build  \
 	--out-file tx.raw
 
 cardano-cli transaction sign \
-    --tx-body-file tx.raw \
-    --signing-key-file payment.skey \
-    $NETWORK_ID \
-    --out-file tx.signed
+  --tx-body-file tx.raw \
+  --signing-key-file payment.skey \
+  $NETWORK_ID \
+  --out-file tx.signed
 
 cardano-cli transaction submit \
-    --tx-file tx.signed \
-    $NETWORK_ID
+  --tx-file tx.signed \
+  $NETWORK_ID
+
+cardano-cli transaction txid --tx-file tx.signed
 #+END_SRC
 
 ** Confirm Vote Power
 
-The voting power associated with a stake address can be confirmed using the snapshot tool:
+The voting power associated with a stake address can be confirmed using the snapshot tool.
+
+We also need to have a ~cardano-db-sync~ instance synced with the blockchain in order to be able to retrieve voting data from there.
+There are few ways to build and start ~cardano-db-sync~. You can refer to [[https://github.com/input-output-hk/cardano-db-sync][cardano-db-sync]] for details. In this example we assume it is started using [[https://github.com/input-output-hk/cardano-db-sync/blob/master/docker-compose.yml][docker-compose.yaml]] as described in this [[https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/docker.md][Docker]] section.
+
+Once ~cardano-db-sync~ is running and synced with the blockchain we can retrieve our voting data using ~voting-tools~ as follows:
 
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
 export REWARDS_ADDRESS=$(cardano-cli address info --address $(cat stake.addr) | jq .base16)
+export DB=$(cat ../cardano-db-sync/config/secrets/postgres_db)
+export DB_USER=$(cat ../cardano-db-sync/config/secrets/postgres_user)
+export DB_PASS=$(cat ../cardano-db-sync/config/secrets/postgres_password)
 
 voting-tools \
     $NETWORK_ID \
@@ -238,8 +249,6 @@ cardano-cli transaction build-raw \
             --tx-in $UTXO#$UTXO_TXIX \
             --tx-out "$FAUCET_ADDR+$AMT_OUT" \
             --out-file return.raw
-
-cat return.raw
 
 cardano-cli transaction sign \
 	    --signing-key-file payment.skey \
