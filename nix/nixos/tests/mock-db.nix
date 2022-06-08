@@ -31,6 +31,10 @@ in
         inputs.cardano-db-sync.nixosModules.cardano-db-sync
       ];
 
+      environment.systemPackages = (with pkgs; [
+        jq
+      ]);
+
       # Ensure we have a postgres instance running with a db_sync database.
       services.postgresql = {
         enable = true;
@@ -92,8 +96,10 @@ in
     # Add a newline to the end of the JSON file if it doesn't already exist
     machine.succeed("sed -i -e '$a\\' out.json")
 
-    # Ensure generated file matches golden file
     # Ensure sorted for comparison purposes
-    machine.succeed("diff <(jq -c 'sort_by(.stake_public_key)' ${mock-data}/out.json) <(jq -c 'sort_by(.stake_public_key)' out.json)")
+    machine.succeed("jq 'sort_by(.stake_public_key)' ${mock-data}/out.json > out-expect.json")
+    machine.succeed("jq 'sort_by(.stake_public_key)' out.json > out-actual.json")
+    # Ensure generated file matches golden file
+    machine.succeed("diff out-expect.json out-actual.json")
   '';
 }
