@@ -8,7 +8,6 @@ where
 import           Cardano.Catalyst.Registration (Delegations (..), Vote, delegations)
 import           Cardano.Catalyst.VotePower
 import qualified Data.Aeson as Aeson
-import           Data.List.NonEmpty (NonEmpty)
 import           Hedgehog (Property, annotate, cover, property, tripping, (===))
 import           Hedgehog.Internal.Property (forAllT)
 import           Test.Tasty (TestTree, testGroup)
@@ -145,11 +144,11 @@ prop_registration_value_conserved = property $ do
   power <- forAllT $ fromIntegral <$> Gen.int64 (Range.linearBounded)
 
   let
-    votingPower :: NonEmpty VotingPower
+    votingPower :: VotingPower
     votingPower = votingPowerFromRegoValue rego power
 
     votingPowerSum :: Integer
-    votingPowerSum = sum $ fmap (_powerVotingPower) votingPower
+    votingPowerSum = _powerVotingPower votingPower
 
   annotate $ "votingPower: " <> show votingPower
 

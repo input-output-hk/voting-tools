@@ -39,7 +39,6 @@ import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Catalyst.Test.DSL.Gen as Gen
 import qualified Cardano.Crypto.DSIGN.Class as Crypto
 import qualified Control.Monad.State.Strict as State
-import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as M
 import qualified Data.Set as Set
 import qualified Database.Persist.Class as Sql
@@ -67,7 +66,7 @@ nw = Cardano.Mainnet
 toVotePower :: Vote -> Integer -> VotingPower
 toVotePower rego power =
   VotingPower {
-    _powerVotingKey = fst $ NE.head $ delegations $ voteRegistrationDelegations rego,
+    _powerDelegations = voteRegistrationDelegations rego,
     _powerStakePublicKey = voteRegistrationVerificationKey rego,
     _powerRewardsAddress = voteRegistrationRewardsAddress rego,
     _powerVotingPower = power
@@ -102,7 +101,7 @@ prop_insert intf getConnPool =
         Just vote -> do
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote, amt)
-          funds === nub (NE.toList (votingPowerFromRegoValue vote amt))
+          funds === [votingPowerFromRegoValue vote amt]
 
 -- Nonce respected. A newer registration will apply over an older one iff the
 -- nonce of the new registration is greater than the old.
@@ -142,7 +141,7 @@ prop_nonceRespected intf getConnPool =
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote1, 0 :: Integer)
           -- Vote 1 is respected
-          funds === nub (NE.toList (votingPowerFromRegoValue vote1 0))
+          funds === [votingPowerFromRegoValue vote1 0]
 
 
 -- Unsigned registrations are never considered valid.
@@ -204,7 +203,7 @@ prop_registerDuplicates intf getConnPool =
           let expectedValue = getSum $ foldMap (Sum . utxoValue) utxos
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote2, expectedValue)
-          funds === nub (NE.toList (votingPowerFromRegoValue vote2 expectedValue))
+          funds === [votingPowerFromRegoValue vote2 expectedValue]
 
 -- Only take registrations before the given slot number.
 prop_restrictSlotNo :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
@@ -254,7 +253,7 @@ prop_restrictSlotNo intf getConnPool =
       sort funds ===
         sort (nub (
           foldMap
-            (\rego -> NE.toList $ votingPowerFromRegoValue rego 0)
+            (\rego -> [votingPowerFromRegoValue rego 0])
             validRegosBefore
           ))
 
@@ -340,7 +339,7 @@ prop_ignoreDateUTxOStakeRego intf getConnPool =
         Just vote -> do
           annotate $ "funds: " <> show funds
           annotate $ "expect: " <> show (vote, 0 :: Integer)
-          funds === nub (NE.toList (votingPowerFromRegoValue vote 0))
+          funds === [votingPowerFromRegoValue vote 0]
 
 -- Malformed signatures are never considered valid.
 prop_signatureMalformed :: Ord t => Query (ReaderT SqlBackend IO) t -> IO (Pool SqlBackend) -> Property
@@ -547,5 +546,4 @@ prop_delegated intf getConnPool =
       -- Ensure sum of voting power == sum of UTxO value
       sum (_powerVotingPower <$> funds) === sum (utxoValue <$> utxos)
       -- Ensure each delegated voting key is present in the funds
-      let delegatedVotingKeys = NE.toList $ fmap fst $ delegations delegs
-      sort (_powerVotingKey <$> funds) === sort delegatedVotingKeys
+      sort (_powerDelegations <$> funds) === sort [delegs]
