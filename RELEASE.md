@@ -31,7 +31,7 @@
 
 ## Manual ad-hoc verifications
 
-- Follow [Manual](https://github.com/input-output-hk/voting-tools/blob/master/MANUAL.org) using the binaries to be released.
+- Follow [Manual](https://github.com/input-output-hk/voting-tools/blob/master/MANUAL.md) using the binaries to be released.
 
 ## Publication
 

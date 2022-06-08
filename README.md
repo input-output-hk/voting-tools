@@ -39,7 +39,7 @@ nix build .#voting-tools -o voting-tools
 
 ## How to Register to Vote from Scratch
 
-See [Manual](https://github.com/input-output-hk/voting-tools/blob/master/MANUAL.org).
+See [Manual](https://github.com/input-output-hk/voting-tools/blob/master/MANUAL.md).
 
 ## Development
 
