@@ -21,12 +21,14 @@ import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Catalyst.Crypto (StakeVerificationKey)
 import           Cardano.Catalyst.Query.Types (Query (..))
 import           Cardano.Catalyst.Registration (Delegations (..), RewardsAddress, Vote,
-                   filterLatestRegistrations, parseRegistration, voteRegistrationDelegations,
+                   catalystPurpose, filterLatestRegistrations, parseRegistration, purposeNumber,
+                   voteRegistrationDelegations, voteRegistrationPurpose,
                    voteRegistrationRewardsAddress, voteRegistrationStakeAddress,
                    voteRegistrationVerificationKey)
 import           Data.Aeson (FromJSON, ToJSON)
 import           Data.Char (toLower)
 import           Data.List.NonEmpty (NonEmpty)
+import           Data.Maybe (fromMaybe)
 import           Data.Ratio (Ratio, (%))
 import           GHC.Generics (Generic)
 
@@ -39,6 +41,7 @@ data VotingPower
                 , _powerStakePublicKey :: StakeVerificationKey
                 , _powerRewardsAddress :: RewardsAddress
                 , _powerVotingPower    :: Integer
+                , _powerVotingPurpose  :: Integer
                 }
   deriving (Eq, Ord, Show, Generic)
 
@@ -100,8 +103,10 @@ votingPowerFromRegoValue rego power =
 
     stakeKey    = voteRegistrationVerificationKey rego
     rewardsAddr = voteRegistrationRewardsAddress rego
+    purpose     =
+      purposeNumber $ fromMaybe catalystPurpose $ voteRegistrationPurpose rego
   in
-    VotingPower ds stakeKey rewardsAddr (max power 0)
+    VotingPower ds stakeKey rewardsAddr (max power 0) purpose
 
 delegateVotingPower
   :: forall key

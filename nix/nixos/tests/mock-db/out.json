@@ -3,48 +3,56 @@
         "delegations": "0xbfc319875c70565d1820cab2f3934585a7519b94a86dc0e434311eeb73f489c5",
         "rewards_address": "0xe1e6bc893eba164e519791f28b36d22c654165fd56123cf4edbdd78bfe",
         "stake_public_key": "0xd8045127d6fa979ae2415d588b3a19c2aee6e1a09826ab5648e97eeac778612f",
-        "voting_power": 3090202175829
+        "voting_power": 3090202175829,
+        "voting_purpose": 0
     },
     {
         "delegations": "0xbfc319875c70565d1820cab2f3934585a7519b94a86dc0e434311eeb73f489c5",
         "rewards_address": "0xe1e6bc893eba164e519791f28b36d22c654165fd56123cf4edbdd78bfe",
         "stake_public_key": "0xe8b6c7656bd110a840fcabcdbe5c50c73783cfcb82f9792211a92acb2fa135e6ec38a7a65589490b6b87ed92b0d0408e89197ba7f8fb0a40b4afeb184f144f30",
-        "voting_power": 5084038105139
+        "voting_power": 5084038105139,
+        "voting_purpose": 0
     },
     {
         "delegations": "0xbfc319875c70565d1820cab2f3934585a7519b94a86dc0e434311eeb73f489c5",
         "rewards_address": "0xe1e6bc893eba164e519791f28b36d22c654165fd56123cf4edbdd78bfe",
         "stake_public_key": "0x1146568c1813126bbbd0d9b8364bbdeb18a4ba942b1a27a6cd4529827c2756eb",
-        "voting_power": 3225355813036
+        "voting_power": 3225355813036,
+        "voting_purpose": 0
     },
     {
         "delegations": "0xbfc319875c70565d1820cab2f3934585a7519b94a86dc0e434311eeb73f489c5",
         "rewards_address": "0xe1e6bc893eba164e519791f28b36d22c654165fd56123cf4edbdd78bfe",
         "stake_public_key": "0xb44812861600f8dae3ba8a7a422f9c28549bee6ad97f0cccc940783ba4d863ce",
-        "voting_power": 500009775147
+        "voting_power": 500009775147,
+        "voting_purpose": 0
     },
     {
         "delegations": "0xbfc319875c70565d1820cab2f3934585a7519b94a86dc0e434311eeb73f489c5",
         "rewards_address": "0xe1e6bc893eba164e519791f28b36d22c654165fd56123cf4edbdd78bfe",
         "stake_public_key": "0xe62fec161be911a68371e6e3114d60b9fcc4ec45967793cf105e77b816baea90",
-        "voting_power": 328603096768
+        "voting_power": 328603096768,
+        "voting_purpose": 0
     },
     {
         "delegations": "0xbfc319875c70565d1820cab2f3934585a7519b94a86dc0e434311eeb73f489c5",
         "rewards_address": "0xe1e6bc893eba164e519791f28b36d22c654165fd56123cf4edbdd78bfe",
         "stake_public_key": "0xb046fb6c353df8ef1d9c36ccae4e47e67cbdbba2d62b1f97fcc76b98749f6067",
-        "voting_power": 328586706706
+        "voting_power": 328586706706,
+        "voting_purpose": 0
     },
     {
         "delegations": "0xbfc319875c70565d1820cab2f3934585a7519b94a86dc0e434311eeb73f489c5",
         "rewards_address": "0xe1e6bc893eba164e519791f28b36d22c654165fd56123cf4edbdd78bfe",
         "stake_public_key": "0xb6228cf378434ad9896e058a40ca0632f8284b3d6a9bcbf1b3618a808df51b2de97c3f1925f08cd68b16cf2fd0c823c3dc50b4276f2eeddeee2f141d0e4e5c8b",
-        "voting_power": 915979291111
+        "voting_power": 915979291111,
+        "voting_purpose": 0
     },
     {
         "delegations": "0xbfc319875c70565d1820cab2f3934585a7519b94a86dc0e434311eeb73f489c5",
         "rewards_address": "0xe1e6bc893eba164e519791f28b36d22c654165fd56123cf4edbdd78bfe",
         "stake_public_key": "0x274042dd7cfcb84ef8750afefae74021146f4fa173e08e0702d67fdc334ff6f9",
-        "voting_power": 500010000000
+        "voting_power": 500010000000,
+        "voting_purpose": 0
     }
 ]

@@ -10,9 +10,9 @@ module Test.Cardano.Catalyst.Db where
 import           Cardano.Catalyst.Crypto (getStakeVerificationKey, sign)
 import           Cardano.Catalyst.Query.Types
 import           Cardano.Catalyst.Registration (Vote, catalystPurpose, delegations, mkPurpose,
-                   mkVotePayload, signatureMetaKey, votePayloadToTxMetadata,
-                   voteRegistrationDelegations, voteRegistrationRewardsAddress,
-                   voteRegistrationVerificationKey)
+                   mkVotePayload, purposeNumber, signatureMetaKey, votePayloadToTxMetadata,
+                   voteRegistrationDelegations, voteRegistrationPurpose,
+                   voteRegistrationRewardsAddress, voteRegistrationVerificationKey)
 import           Cardano.Catalyst.Test.DSL (apiToDbMetadata, contributionAmount, genGraph,
                    genStakeAddressRegistration, genTransaction, genUInteger, genUTxO,
                    genVoteRegistration, getGraphVote, getRegistrationVote, getStakeRegoKey,
@@ -24,7 +24,7 @@ import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Reader (ReaderT)
 import           Data.Foldable (traverse_)
 import           Data.List (nub, sort)
-import           Data.Maybe (catMaybes, isJust)
+import           Data.Maybe (catMaybes, fromMaybe, isJust)
 import           Data.Monoid (Sum (..))
 import           Data.Pool (Pool)
 import           Database.Persist.Postgresql (SqlBackend)
@@ -69,7 +69,9 @@ toVotePower rego power =
     _powerDelegations = voteRegistrationDelegations rego,
     _powerStakePublicKey = voteRegistrationVerificationKey rego,
     _powerRewardsAddress = voteRegistrationRewardsAddress rego,
-    _powerVotingPower = power
+    _powerVotingPower = power,
+    _powerVotingPurpose =
+      purposeNumber $ fromMaybe catalystPurpose $ voteRegistrationPurpose rego
   }
 
 -- If we register a key, then make a set of contributions against that

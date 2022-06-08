@@ -1,7 +1,8 @@
 
 module Cardano.Catalyst.Test.VotePower.Gen where
 
-import           Cardano.Catalyst.Test.DSL.Gen (genDelegations, genRewardsAddress,
+import           Cardano.Catalyst.Registration (purposeNumber)
+import           Cardano.Catalyst.Test.DSL.Gen (genDelegations, genPurpose, genRewardsAddress,
                    genStakeVerificationKey)
 import           Cardano.Catalyst.VotePower (VotingPower (..))
 import           Control.Monad.IO.Class (MonadIO)
@@ -17,3 +18,4 @@ votingPower =
   <*> genStakeVerificationKey
   <*> genRewardsAddress
   <*> (fromIntegral <$> Gen.word64 Range.constantBounded)
+  <*> (purposeNumber <$> genPurpose)
