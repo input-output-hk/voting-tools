@@ -20,11 +20,15 @@ module Cardano.Catalyst.VotePower where
 import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Catalyst.Crypto (StakeVerificationKey)
 import           Cardano.Catalyst.Query.Types (Query (..))
-import           Cardano.Catalyst.Registration
+import           Cardano.Catalyst.Registration (Delegations (..), RewardsAddress, Vote,
+                   catalystPurpose, filterLatestRegistrations, parseRegistration, purposeNumber,
+                   voteRegistrationDelegations, voteRegistrationPurpose,
+                   voteRegistrationRewardsAddress, voteRegistrationStakeAddress,
+                   voteRegistrationVerificationKey)
 import           Data.Aeson (FromJSON, ToJSON)
 import           Data.Char (toLower)
-import           Data.List (nub)
 import           Data.List.NonEmpty (NonEmpty)
+import           Data.Maybe (fromMaybe)
 import           Data.Ratio (Ratio, (%))
 import           GHC.Generics (Generic)
 
@@ -33,10 +37,11 @@ import qualified Data.Aeson as Aeson
 import qualified Data.List.NonEmpty as NE
 
 data VotingPower
-  = VotingPower { _powerVotingKey      :: VotingKeyPublic
+  = VotingPower { _powerDelegations    :: Delegations VotingKeyPublic
                 , _powerStakePublicKey :: StakeVerificationKey
                 , _powerRewardsAddress :: RewardsAddress
                 , _powerVotingPower    :: Integer
+                , _powerVotingPurpose  :: Integer
                 }
   deriving (Eq, Ord, Show, Generic)
 
@@ -88,9 +93,9 @@ getVoteRegistrationADA q nw slotNo = do
 
 votingPowerFromRegoValues :: [(Vote, Integer)] -> [VotingPower]
 votingPowerFromRegoValues regoValues =
-  nub $ foldMap (NE.toList . uncurry votingPowerFromRegoValue) regoValues
+  fmap (uncurry votingPowerFromRegoValue) regoValues
 
-votingPowerFromRegoValue :: Vote -> Integer -> NonEmpty VotingPower
+votingPowerFromRegoValue :: Vote -> Integer -> VotingPower
 votingPowerFromRegoValue rego power =
   let
     ds :: Delegations VotingKeyPublic
@@ -98,11 +103,10 @@ votingPowerFromRegoValue rego power =
 
     stakeKey    = voteRegistrationVerificationKey rego
     rewardsAddr = voteRegistrationRewardsAddress rego
-
-    toVotePower votePub votePower =
-      VotingPower votePub stakeKey rewardsAddr votePower
+    purpose     =
+      purposeNumber $ fromMaybe catalystPurpose $ voteRegistrationPurpose rego
   in
-    (uncurry toVotePower) <$> delegateVotingPower ds power
+    VotingPower ds stakeKey rewardsAddr (max power 0) purpose
 
 delegateVotingPower
   :: forall key
