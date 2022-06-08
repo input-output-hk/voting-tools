@@ -31,9 +31,7 @@
 
 ## Manual ad-hoc verifications
 
-- Execute the following manual scenarios on the binaries to be released:
-  - https://github.com/input-output-hk/voting-tools#registering-to-vote
-  - https://github.com/input-output-hk/voting-tools#getting-snapshot-of-the-voting-power-of-registrations
+- Follow [Manual](https://github.com/input-output-hk/voting-tools/blob/master/MANUAL.md) using the binaries to be released.
 
 ## Publication
 
