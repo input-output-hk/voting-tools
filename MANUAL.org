@@ -7,7 +7,7 @@ This manual requires:
   - ~jcli~ executable from the [[https://github.com/input-output-hk/jormungandr][jormungandr]] project
   - ~voter-registration~ executable from this project
   - ~voting-tools~ executable from this project
-  - running [[https://github.com/input-output-hk/cardano-db-sync][cardano-db-sync]]
+  - A running [[https://github.com/input-output-hk/cardano-db-sync][cardano-db-sync]] instance, fully synced
 
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
 #!/usr/bin/env bash
@@ -59,6 +59,7 @@ export PAYMENT_ADDR=$(cat payment.addr)
 #+END_SRC
 
 We will use the base address to:
+
   - Pay transaction fees
   - Pay stake address registration fees
   - Hold value for the associated stake key (that is later translated into voting power)
@@ -114,7 +115,7 @@ cardano-cli transaction submit \
     $NETWORK_ID
 #+END_SRC
 
-Notice that we pay not only a transaction fee, but a deposit for registering the stake address.
+Note that we pay not only a transaction fee, but a deposit for registering the stake address.
 
 The deposit amount is listed in the protocol parameters under "stakeAddressDeposit".
 
@@ -192,13 +193,12 @@ cardano-cli transaction txid --tx-file tx.signed
 
 The voting power associated with a stake address can be confirmed using the snapshot tool.
 
-We also need to have a ~cardano-db-sync~ instance synced with the blockchain in order to be able to retrieve voting data from there.
-There are few ways to build and start ~cardano-db-sync~. You can refer to [[https://github.com/input-output-hk/cardano-db-sync][cardano-db-sync]] for details. In this example we assume it is started using [[https://github.com/input-output-hk/cardano-db-sync/blob/master/docker-compose.yml][docker-compose.yaml]] as described in this [[https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/docker.md][Docker]] section.
+The snapshot tool requires a fully synced ~cardano-db-sync~ database to retrieve voting power.
 
-Once ~cardano-db-sync~ is running and synced with the blockchain we can retrieve our voting data using ~voting-tools~ as follows:
+Refer to [[https://github.com/input-output-hk/cardano-db-sync][cardano-db-sync]] for instructions on starting and building ~cardano-db-sync~. In this example we assume it has been started using [[https://github.com/input-output-hk/cardano-db-sync/blob/master/docker-compose.yml][docker-compose.yaml]] (as described in the [[https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/docker.md][Docker]] section).
 
 #+BEGIN_SRC shell :tangle register.sh :tangle-mode (identity #o755)
-export REWARDS_ADDRESS=$(cardano-cli address info --address $(cat stake.addr) | jq .base16)
+export REWARDS_ADDRESS=$(cardano-cli address info --address $(cat stake.addr) | jq -r .base16)
 export DB=$(cat ../cardano-db-sync/config/secrets/postgres_db)
 export DB_USER=$(cat ../cardano-db-sync/config/secrets/postgres_user)
 export DB_PASS=$(cat ../cardano-db-sync/config/secrets/postgres_password)
