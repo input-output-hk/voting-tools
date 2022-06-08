@@ -211,7 +211,7 @@ voting-tools \
     --db-host localhost \
     --out-file voting-snaphot.json
 
-cat voting-snapshot.json | jq .filter $REWARDS_ADDRESS
+cat voting-snaphot.json | jq --arg REWARDS_ADDRESS "$REWARDS_ADDRESS" '.[] | select(.rewards_address | contains($REWARDS_ADDRESS))'
 #+END_SRC
 
 ** Return Funds to Faucet
