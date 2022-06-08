@@ -204,9 +204,9 @@ voting-tools \
     --db-user $DB_USER \
     --db-pass $DB_PASS \
     --db-host localhost \
-    --out-file voting-snaphot.json
+    --out-file voting-snapshot.json
 
-cat voting-snaphot.json | jq --arg REWARDS_ADDRESS "$REWARDS_ADDRESS" '.[] | select(.rewards_address | contains($REWARDS_ADDRESS))'
+cat voting-snapshot.json | jq --arg REWARDS_ADDRESS "$REWARDS_ADDRESS" '.[] | select(.rewards_address | contains($REWARDS_ADDRESS))'
 ```
 
 ## Return Funds to Faucet
