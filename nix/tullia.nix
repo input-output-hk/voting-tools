@@ -34,7 +34,12 @@ in {
     };
 
     memory = 1024 * 8;
-    nomad.resources.cpu = 10000;
+
+    nomad = {
+      resources.cpu = 10000;
+
+      driver = "exec";
+    };
   };
 
   actions."voting-tools/ci" = {
