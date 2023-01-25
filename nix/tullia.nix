@@ -1,5 +1,5 @@
 let
-  ciInputName = "GitHub event";
+  ciInputName = "GitHub push";
   repository = "input-output-hk/voting-tools";
 in {
   tasks.ci = {
@@ -18,6 +18,7 @@ in {
         # source from GitHub and we don't want to report a GitHub status.
         enable = config.actionRun.facts != {};
         repository = "input-output-hk/voting-tools";
+        remote = config.preset.github.lib.readRepository ciInputName null;
         revision = config.preset.github.lib.readRevision ciInputName null;
       };
     };
@@ -33,7 +34,12 @@ in {
     };
 
     memory = 1024 * 8;
-    nomad.resources.cpu = 10000;
+
+    nomad = {
+      resources.cpu = 10000;
+
+      driver = "exec";
+    };
   };
 
   actions."voting-tools/ci" = {
@@ -42,16 +48,9 @@ in {
       // This is a CUE expression that defines what events trigger a new run of this action.
       // There is no documentation for this yet. Ask SRE if you have trouble changing this.
 
-      let github = {
-        #input: "${ciInputName}"
-        #repo: "${repository}"
-      }
-
-      #lib.merge
-      #ios: [
-        #lib.io.github_push & github,
-        { #lib.io.github_pr, github, #target_default: false },
-      ]
+      #lib.io.github_push
+      #input: "${ciInputName}"
+      #repo: "${repository}"
     '';
   };
 }
