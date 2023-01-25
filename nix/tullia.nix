@@ -18,6 +18,7 @@ in {
         # source from GitHub and we don't want to report a GitHub status.
         enable = config.actionRun.facts != {};
         repository = "input-output-hk/voting-tools";
+        remote = config.preset.github.lib.readRepository ciInputName null;
         revision = config.preset.github.lib.readRevision ciInputName null;
       };
     };
