@@ -50,7 +50,7 @@ import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    parseStakeAddress, readerFromAttoParser)
 
 data Config = Config
-    { cfgRewardsAddress  :: StakeAddress
+    { cfgRewardsAddress  :: Api.Address Api.ShelleyAddr
     , cfgStakeSigningKey :: StakeSigningKey
     , cfgDelegations     :: Delegations VotingKeyPublic
     , cfgSlotNo          :: Api.SlotNo

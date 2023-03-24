@@ -51,6 +51,7 @@ library
                      , aeson
                      , aeson-pretty
                      , attoparsec
+                     , base16-bytestring == 1.0.1.0
                      , bech32
                      , binary
                      , bytestring
@@ -82,6 +83,7 @@ executable voting-tools
                      , aeson
                      , aeson-pretty
                      , attoparsec
+                     , base16-bytestring
                      , bech32
                      , bytestring
                      , cardano-api
