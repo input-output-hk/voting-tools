@@ -20,7 +20,7 @@ module Cardano.Catalyst.VotePower where
 import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Catalyst.Crypto (StakeVerificationKey)
 import           Cardano.Catalyst.Query.Types (Query (..))
-import           Cardano.Catalyst.Registration (Delegations (..), VoteRewardsAddress, Vote,
+import           Cardano.Catalyst.Registration (Delegations (..), VoteRewardsAddress (..), Vote,
                    catalystPurpose, filterLatestRegistrations, parseRegistration, purposeNumber,
                    voteRegistrationDelegations, voteRegistrationPurpose,
                    voteRegistrationRewardsAddress, voteRegistrationStakeAddress,
@@ -87,6 +87,7 @@ getVoteRegistrationADA q nw slotNo = do
           Right rego -> Right (t, rego)
   logInfoN $ "Managed to succesfully parse " <> textShowLength regos <> " votes"
   logDebugN $ "These parsing failures occured: " <> T.pack (show voteParseFails)
+
   let
     latestRegos :: [Vote]
     latestRegos = filterLatestRegistrations regos
@@ -99,7 +100,19 @@ getVoteRegistrationADA q nw slotNo = do
     regoValues :: [(Vote, Integer)]
     regoValues = (zip latestRegos . fmap snd) regoStakes
 
+  let
+    (legacy, new) = partitionEithers $ flip fmap regoValues $ \(vote, _) ->
+      case voteRegistrationRewardsAddress vote of
+        RewardsAddress addr -> Left addr
+        Address addr -> Right addr
+
   logInfoN $ "Found " <> textShowLength regoValues <> " distinct stake keys"
+  logInfoN $ T.concat
+    [ "Found ", textShowLength new
+    , " of them with valid Shelley address payment credentials, while "
+    , textShowLength legacy, " use legacy stake reward addresses"
+    ]
+
   pure $ votingPowerFromRegoValues regoValues
 
 votingPowerFromRegoValues :: [(Vote, Integer)] -> [VotingPower]
