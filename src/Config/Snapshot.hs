@@ -19,7 +19,7 @@ module Config.Snapshot
 
 import           Control.Lens.TH (makeClassyPrisms)
 import           Control.Monad.Except (ExceptT)
-import           Options.Applicative (Parser, ParserInfo, auto, fullDesc, header, help, helper,
+import           Options.Applicative (Parser, ParserInfo, auto, flag, fullDesc, header, help, helper,
                    info, long, metavar, option, optional, progDesc, showDefault, strOption, value,
                    (<**>))
 
@@ -39,6 +39,8 @@ data Config = Config
     -- ^ Slot to view state of, defaults to tip of chain. Queries registrations placed before or equal to (<=) this slotNo.
     , cfgOutFile           :: FilePath
     -- ^ File to output snapshot to
+    , cfgVerbose           :: Bool
+    -- ^ Enable verbose logging
     }
   deriving (Eq, Show)
 
@@ -50,8 +52,8 @@ makeClassyPrisms ''ConfigError
 mkConfig
   :: Opts
   -> ExceptT ConfigError IO Config
-mkConfig (Opts networkId dbName dbUser dbHost dbPass mSlotNo scale outfile) = do
-  pure $ Config networkId scale (DatabaseConfig dbName dbUser dbHost dbPass) mSlotNo outfile
+mkConfig (Opts networkId dbName dbUser dbHost dbPass mSlotNo scale outfile verbose) = do
+  pure $ Config networkId scale (DatabaseConfig dbName dbUser dbHost dbPass) mSlotNo outfile verbose
 
 data Opts = Opts
     { optNetworkId      :: NetworkId
@@ -62,6 +64,7 @@ data Opts = Opts
     , optSlotNo         :: Maybe SlotNo
     , optScale          :: Int
     , optOutFile        :: FilePath
+    , optVerbose        :: Bool
     }
     deriving (Eq, Show)
 
@@ -75,6 +78,7 @@ parseOpts = Opts
   <*> optional pSlotNo
   <*> fmap fromIntegral (option auto (long "scale" <> metavar "DOUBLE" <> showDefault <> value (1 :: Integer) <> help "Scale the voting funds by this amount to arrive at the voting power"))
   <*> strOption (long "out-file" <> metavar "FILE" <> help "File to output the signed transaction to")
+  <*> flag False True (long "verbose" <> help "Adds more verbose logs.")
 
 opts :: ParserInfo Opts
 opts =
