@@ -36,7 +36,7 @@ module Cardano.Catalyst.Registration.Types
   , voteSignature
   , voteFromTxMetadata
   , voteToTxMetadata
-  , RewardsAddress(..)
+  , VoteRewardsAddress(..)
   , metadataMetaKey
   , signatureMetaKey
   , componentPath
@@ -64,6 +64,7 @@ import           Control.Monad.Except (throwError)
 import           Data.Aeson (FromJSON, ToJSON)
 import           Data.Bifunctor (first)
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Base16 as B16
 import           Data.List (find)
 import           Data.List.NonEmpty (NonEmpty)
 import           Data.Maybe (fromMaybe)
@@ -150,27 +151,32 @@ prettyPrintMetadataParsingError MetadataInvalidSignature =
 
 makeClassyPrisms ''MetadataParsingError
 
-newtype RewardsAddress = RewardsAddress Api.StakeAddress
+data VoteRewardsAddress =
+    Address (Api.Address Api.ShelleyAddr)
+  | RewardsAddress Api.StakeAddress -- This is the legacy Address type.
   deriving (Eq, Ord, Show)
 
-instance Api.SerialiseAsRawBytes RewardsAddress where
+instance Api.SerialiseAsRawBytes VoteRewardsAddress where
+  serialiseToRawBytes (Address addr) =
+    Api.serialiseToRawBytes addr
   serialiseToRawBytes (RewardsAddress stakeAddr) =
     Api.serialiseToRawBytes stakeAddr
-  deserialiseFromRawBytes AsRewardsAddress =
-    fmap RewardsAddress . Api.deserialiseFromRawBytes Api.AsStakeAddress
+  deserialiseFromRawBytes AsVoteRewardsAddress bs =
+    fmap RewardsAddress (Api.deserialiseFromRawBytes Api.AsStakeAddress bs) <|>
+    fmap Address (Api.deserialiseFromRawBytes (Api.AsAddress Api.AsShelleyAddr) bs)
 
-instance HasTypeProxy RewardsAddress where
-  data AsType RewardsAddress = AsRewardsAddress
-  proxyToAsType _ = AsRewardsAddress
+instance HasTypeProxy VoteRewardsAddress where
+  data AsType VoteRewardsAddress = AsVoteRewardsAddress
+  proxyToAsType _ = AsVoteRewardsAddress
 
-instance ToJSON RewardsAddress where
+instance ToJSON VoteRewardsAddress where
   toJSON = Aeson.String . ("0x" <>) . T.decodeUtf8 . Api.serialiseToRawBytesHex
 
-instance FromJSON RewardsAddress where
-  parseJSON = Aeson.withText "RewardsAddress" $ \str -> case T.stripPrefix "0x" str of
+instance FromJSON VoteRewardsAddress where
+  parseJSON = Aeson.withText "VoteRewardsAddress" $ \str -> case T.stripPrefix "0x" str of
     Nothing  -> fail "Missing hex identifier '0x'."
     Just hex ->
-      case Api.deserialiseFromRawBytesHex AsRewardsAddress $ T.encodeUtf8 hex of
+      case Api.deserialiseFromRawBytesHex AsVoteRewardsAddress $ T.encodeUtf8 hex of
         Nothing -> fail "Failed to decode rewards address."
         Just votePub -> pure votePub
 
@@ -286,7 +292,7 @@ delegationsFromTxMetadataValue _ =
 data VotePayload = VotePayload
   { _votePayloadDelegations     :: Delegations VotingKeyPublic
   , _votePayloadVerificationKey :: StakeVerificationKey
-  , _votePayloadRewardsAddr     :: RewardsAddress
+  , _votePayloadRewardsAddr     :: VoteRewardsAddress
   , _votePayloadSlot            :: Integer
   , _votePayloadPurpose         :: Maybe Purpose
   }
@@ -313,7 +319,7 @@ voteRegistrationDelegations = _votePayloadDelegations . _voteMeta
 voteRegistrationVerificationKey :: Vote -> StakeVerificationKey
 voteRegistrationVerificationKey = _votePayloadVerificationKey . _voteMeta
 
-voteRegistrationRewardsAddress :: Vote -> RewardsAddress
+voteRegistrationRewardsAddress :: Vote -> VoteRewardsAddress
 voteRegistrationRewardsAddress = _votePayloadRewardsAddr . _voteMeta
 
 voteRegistrationSlot :: Vote -> Integer
@@ -349,7 +355,7 @@ mkVotePayload
   -- ^ Vote power delegations
   -> StakeVerificationKey
   -- ^ Vote verification key
-  -> RewardsAddress
+  -> VoteRewardsAddress
   -- ^ Address used to pay for the vote registration
   -> Integer
   -- ^ Slot registration created at
@@ -403,7 +409,7 @@ votePayloadFromTxMetadata meta = do
   stkVerifyRaw   <- metaValue RegoStakeVerificationKey meta >>= asBytes RegoStakeVerificationKey
   -- DECISION #09C:
   --   the rewards address under '61284' > '3'
-  rewardsAddrRaw <- metaValue RegoRewardsAddress meta >>= asBytes RegoRewardsAddress
+  voteRewardsAddrRaw <- metaValue RegoRewardsAddress meta >>= asBytes RegoRewardsAddress
   -- DECISION #09D:
   --   the slot number under '61284' > '4'
   slot           <- metaValue RegoSlotNum meta >>= asInt RegoSlotNum
@@ -433,12 +439,12 @@ votePayloadFromTxMetadata meta = do
     Just x   -> pure x
   -- DECISION #10A:
   --   deserialise the rewards address
-  rewardsAddr <- case Api.deserialiseFromRawBytes Api.AsStakeAddress rewardsAddrRaw of
-    Nothing -> throwError (_MetadataParseFailure # (RegoRewardsAddress, "Failed to deserialise."))
+  voteRewardsAddr <- case Api.deserialiseFromRawBytes AsVoteRewardsAddress voteRewardsAddrRaw of
+    Nothing -> throwError (_MetadataParseFailure # (RegoRewardsAddress, "Failed to deserialise. " <>  T.pack (show $ B16.encode voteRewardsAddrRaw)))
     Just x  -> pure x
 
   pure
-    $ mkVotePayload ds stkVerify (RewardsAddress rewardsAddr) slot votingPurpose
+    $ mkVotePayload ds stkVerify voteRewardsAddr slot votingPurpose
 
 voteToTxMetadata :: Vote -> TxMetadata
 voteToTxMetadata (Vote payload sig) =
@@ -516,7 +522,7 @@ signatureMetaKey = 61285
 createVoteRegistration
   :: StakeSigningKey
   -> Delegations VotingKeyPublic
-  -> RewardsAddress
+  -> VoteRewardsAddress
   -> Integer
   -> Vote
 createVoteRegistration skey ds rewardsAddr slot =

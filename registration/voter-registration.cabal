@@ -28,6 +28,7 @@ library
   exposed-modules: Config.Registration
   build-depends:       base
                      , aeson
+                     , base16-bytestring
                      , bytestring
                      , cardano-api
                      , mtl

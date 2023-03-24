@@ -20,7 +20,7 @@ module Cardano.Catalyst.VotePower where
 import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Catalyst.Crypto (StakeVerificationKey)
 import           Cardano.Catalyst.Query.Types (Query (..))
-import           Cardano.Catalyst.Registration (Delegations (..), RewardsAddress, Vote,
+import           Cardano.Catalyst.Registration (Delegations (..), VoteRewardsAddress, Vote,
                    catalystPurpose, filterLatestRegistrations, parseRegistration, purposeNumber,
                    voteRegistrationDelegations, voteRegistrationPurpose,
                    voteRegistrationRewardsAddress, voteRegistrationStakeAddress,
@@ -39,7 +39,7 @@ import qualified Data.List.NonEmpty as NE
 data VotingPower
   = VotingPower { _powerDelegations    :: Delegations VotingKeyPublic
                 , _powerStakePublicKey :: StakeVerificationKey
-                , _powerRewardsAddress :: RewardsAddress
+                , _powerRewardsAddress :: VoteRewardsAddress
                 , _powerVotingPower    :: Integer
                 , _powerVotingPurpose  :: Integer
                 }
