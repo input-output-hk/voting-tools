@@ -25,11 +25,15 @@ import           Cardano.Catalyst.Registration (Delegations (..), VoteRewardsAdd
                    voteRegistrationDelegations, voteRegistrationPurpose,
                    voteRegistrationRewardsAddress, voteRegistrationStakeAddress,
                    voteRegistrationVerificationKey)
+import           Control.Monad.IO.Class
+import           Control.Monad.Logger (MonadLogger, logDebugN, logInfoN)
 import           Data.Aeson (FromJSON, ToJSON)
 import           Data.Char (toLower)
+import           Data.Either (partitionEithers)
 import           Data.List.NonEmpty (NonEmpty)
 import           Data.Maybe (fromMaybe)
 import           Data.Ratio (Ratio, (%))
+import qualified Data.Text as T
 import           GHC.Generics (Generic)
 
 import qualified Cardano.Api as Api
@@ -61,6 +65,9 @@ jsonParserOptions = Aeson.defaultOptions { Aeson.fieldLabelModifier = (fmap toLo
 getVoteRegistrationADA
   :: ( Monad m
      , Ord t
+     , MonadIO m
+     , MonadLogger m
+     , Show t
      )
   => Query m t
   -> Api.NetworkId
@@ -68,15 +75,18 @@ getVoteRegistrationADA
   -> m [VotingPower]
 getVoteRegistrationADA q nw slotNo = do
   (regosRaw :: [(t, Aeson.Value)]) <- (queryVoteRegistrations q) slotNo
+  logInfoN $ "Found " <> textShowLength regosRaw <> " votes"
+  logDebugN $ T.pack $ show regosRaw
 
   let
     regos :: [(t, Vote)]
-    regos =
-      flip foldMap regosRaw $ \(t, regoRaw) -> do
+    (voteParseFails, regos) =
+      partitionEithers $ flip fmap regosRaw $ \(t, regoRaw) -> do
         case parseRegistration regoRaw of
-          Left _e    -> []
-          Right rego -> [(t, rego)]
-
+          Left e -> Left (e, t, regoRaw)
+          Right rego -> Right (t, rego)
+  logInfoN $ "Managed to succesfully parse " <> textShowLength regos <> " votes"
+  logDebugN $ "These parsing failures occured: " <> T.pack (show voteParseFails)
   let
     latestRegos :: [Vote]
     latestRegos = filterLatestRegistrations regos
@@ -89,6 +99,7 @@ getVoteRegistrationADA q nw slotNo = do
     regoValues :: [(Vote, Integer)]
     regoValues = (zip latestRegos . fmap snd) regoStakes
 
+  logInfoN $ "Found " <> textShowLength regoValues <> " distinct stake keys"
   pure $ votingPowerFromRegoValues regoValues
 
 votingPowerFromRegoValues :: [(Vote, Integer)] -> [VotingPower]
@@ -153,3 +164,6 @@ delegateVotingPower (Delegations keyWeights)   power =
         (initial, (lastVotePub, lastPower)) ->
           NE.fromList $
             initial <> [(lastVotePub, lastPower + remainingVotePower)]
+
+textShowLength :: [a] -> T.Text
+textShowLength = T.pack . show . length
