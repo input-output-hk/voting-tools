@@ -4,8 +4,7 @@ module Main where
 
 import           Cardano.Catalyst.VotePower (getVoteRegistrationADA)
 import           Control.Monad.Except (runExceptT)
-import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Logger (logInfoN, runNoLoggingT)
+import           Control.Monad.Logger (LoggingT, logInfoN, runStdoutLoggingT)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Encode.Pretty as Aeson
 import qualified Data.ByteString.Lazy.Char8 as BLC
@@ -35,8 +34,8 @@ main = do
 toJSON :: Aeson.ToJSON a => Aeson.NumberFormat -> a -> BLC.ByteString
 toJSON numFormat = Aeson.encodePretty' (Aeson.defConfig { Aeson.confCompare = Aeson.compare, Aeson.confNumFormat = numFormat })
 
-runQuery :: DatabaseConfig -> SqlPersistT IO a -> IO a
-runQuery dbConfig q = runNoLoggingT $ do
+runQuery :: DatabaseConfig -> SqlPersistT (LoggingT IO) a -> IO a
+runQuery dbConfig q = runStdoutLoggingT $ do
   logInfoN $ T.pack $ "Connecting to database at " <> _dbHost dbConfig
   withPostgresqlConn (pgConnectionString dbConfig) $ \backend -> do
-    liftIO $ runSqlConnWithIsolation q backend Serializable
+    runSqlConnWithIsolation q backend Serializable
