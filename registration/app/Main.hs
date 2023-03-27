@@ -13,7 +13,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Options.Applicative as Opt
 import           Ouroboros.Network.Block (unSlotNo)
 
-import           Cardano.Catalyst.Registration (RewardsAddress (..), createVoteRegistration,
+import           Cardano.Catalyst.Registration (VoteRewardsAddress (..), createVoteRegistration,
                    voteToTxMetadata)
 import qualified Config.Registration as Register
 
@@ -28,7 +28,7 @@ main = do
       -- Create a vote registration, encoding our registration
       -- as transaction metadata.
       let
-        vote = createVoteRegistration voteSign votePub (RewardsAddress rewardsAddr) (toInteger $ unSlotNo slotNo)
+        vote = createVoteRegistration voteSign votePub (Address rewardsAddr) (toInteger $ unSlotNo slotNo)
         meta = voteToTxMetadata vote
 
       case outFormat of

@@ -100,7 +100,7 @@ module Cardano.Catalyst.Test.DSL.Internal.Types
 import           Cardano.API.Extended (VotingKeyPublic)
 import           Cardano.Catalyst.Crypto (StakeSigningKey, getStakeVerificationKey,
                    stakeAddressFromVerificationKey)
-import           Cardano.Catalyst.Registration (Delegations, RewardsAddress, Vote, VotePayload (..),
+import           Cardano.Catalyst.Registration (Delegations, VoteRewardsAddress, Vote, VotePayload (..),
                    catalystPurpose, createVoteRegistration, voteRegistrationSlot)
 import           Cardano.Db.Extended ()
 import           Data.Kind (Type)
@@ -296,7 +296,7 @@ getStakeAddressId = Db.txOutStakeAddressId . utxoTxOut
 data Registration (state :: PersistState) = Registration
   { registrationDelegations    :: Delegations VotingKeyPublic
   -- ^ Vote power delegations.
-  , registrationRewardsAddress :: RewardsAddress
+  , registrationRewardsAddress :: VoteRewardsAddress
   -- ^ The main-chain address voter rewards should be sent to.
   , registrationSlotNo         :: SlotNo
   -- ^ The nonce used in the registration transaction (usually a slot number).

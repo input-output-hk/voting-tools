@@ -65,6 +65,7 @@ library
                      , containers
                      , hedgehog
                      , lens
+                     , monad-logger
                      , mtl
                      , optparse-applicative
                      , ouroboros-network
