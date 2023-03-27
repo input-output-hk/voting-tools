@@ -19,6 +19,7 @@ module Cardano.API.Extended ( readSigningKeyFileAnyOf
                             , AsInputDecodeError(..)
                             , Extended.readerFromAttoParser
                             , Extended.parseStakeAddress
+                            , Extended.parseShelleyAddress
                             , Extended.pNetworkId
                             , AsBech32DecodeError(..)
                             , AsBech32HumanReadablePartError(..)

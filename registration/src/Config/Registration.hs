@@ -37,7 +37,7 @@ import           Data.Word (Word32)
 
 import           Options.Applicative
 
-import           Cardano.Api (Bech32DecodeError, StakeAddress)
+import           Cardano.Api (AddressAny (..), Bech32DecodeError, StakeAddress)
 import qualified Cardano.Api as Api
 import           Cardano.CLI.Shelley.Key (InputDecodeError)
 import           Cardano.CLI.Types (SigningKeyFile (..))
@@ -47,7 +47,7 @@ import           Config.Common (versionOption)
 import           Cardano.API.Extended (AsBech32DecodeError (_Bech32DecodeError),
                    AsFileError (_FileIOError, __FileError), AsInputDecodeError (_InputDecodeError),
                    AsType (AsVotingKeyPublic), VotingKeyPublic, deserialiseFromBech32',
-                   parseStakeAddress, readerFromAttoParser)
+                   parseShelleyAddress, readerFromAttoParser)
 
 data Config = Config
     { cfgRewardsAddress  :: Api.Address Api.ShelleyAddr
@@ -100,7 +100,7 @@ mkConfig (Opts rewardsAddr delegations vskf slotNo outFormat) = do
   pure $ Config rewardsAddr stkSign delegations' slotNo outFormat
 
 data Opts = Opts
-    { optRewardsAddress      :: StakeAddress
+    { optRewardsAddress      :: Api.Address Api.ShelleyAddr
     , optVotePublicKeyFile   :: DelegationsCLI
     , optStakeSigningKeyFile :: FilePath
     , optSlotNo              :: Api.SlotNo
@@ -110,7 +110,7 @@ data Opts = Opts
 
 parseOpts :: Parser Opts
 parseOpts = Opts
-  <$> option (readerFromAttoParser parseStakeAddress) (long "rewards-address" <> metavar "STRING" <> help "address associated with rewards (Must be a stake address for MIR Certificate)")
+  <$> option (readerFromAttoParser parseShelleyAddress) (long "rewards-address" <> metavar "STRING" <> help "address associated with rewards (Must be a Shelley Address)")
   <*> pDelegationsCLI
   <*> strOption (long "stake-signing-key-file" <> metavar "FILE" <> help "stake authorizing vote key")
   <*> pSlotNo

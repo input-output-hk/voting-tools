@@ -24,6 +24,7 @@ export CARDANO_NODE_SOCKET_PATH="/run/cardano-node/node.socket"
 
 ## Generate Stake Address
 
+TODO: This is outdated since a regular shelley address is now used for the rewards
 Generate a stake address from a stake key:
 
 ``` shell

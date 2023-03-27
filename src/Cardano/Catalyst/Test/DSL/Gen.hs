@@ -84,7 +84,7 @@ import           Cardano.Catalyst.Crypto (StakeSigningKey, StakeVerificationKey,
                    stakeAddressFromKeyHash, stakeAddressFromVerificationKey,
                    stakeVerificationKeyHash)
 import           Cardano.Catalyst.Registration (DelegationWeight, Delegations (..),
-                   RewardsAddress (..), Vote, VotePayload, createVoteRegistration, mkVotePayload)
+                   VoteRewardsAddress (..), Vote, VotePayload, createVoteRegistration, mkVotePayload)
 import           Cardano.Catalyst.Registration.Types.Purpose (Purpose, catalystPurpose, mkPurpose)
 import           Cardano.Catalyst.Test.DSL.Internal.Types (Graph (..), PersistState (..),
                    Registration (..), StakeRegistration (..), Transaction (..), UTxO (..),
@@ -507,7 +507,7 @@ genStakeVerificationKey :: (MonadGen m, MonadIO m) => m StakeVerificationKey
 genStakeVerificationKey =
   getStakeVerificationKey <$> genVoteSigningKey
 
-genRewardsAddress :: (MonadGen m, MonadIO m) => m RewardsAddress
+genRewardsAddress :: (MonadGen m, MonadIO m) => m VoteRewardsAddress
 genRewardsAddress = do
   signingKey <- liftIO $ generateSigningKey AsStakeKey
   let hashStakeKey = verificationKeyHash . getVerificationKey $ signingKey

@@ -19,10 +19,17 @@ import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import qualified Options.Applicative as Opt
 
-import           Cardano.Api (AddressAny, AsType (AsAddressAny, AsStakeAddress), HasTextEnvelope,
-                   NetworkId (Mainnet, Testnet), NetworkMagic (..), StakeAddress, TextEnvelopeDescr,
-                   deserialiseAddress, serialiseToTextEnvelope)
-import           Cardano.Api.Shelley ()
+import           Cardano.Api (AddressAny, AsType (AsAddressAny, AsShelleyAddress, AsStakeAddress),
+                   HasTextEnvelope, NetworkId (Mainnet, Testnet), NetworkMagic (..), StakeAddress,
+                   TextEnvelopeDescr, deserialiseAddress, serialiseToTextEnvelope)
+import           Cardano.Api.Shelley (Address, ShelleyAddr)
+
+parseShelleyAddress :: Atto.Parser (Address ShelleyAddr)
+parseShelleyAddress = do
+    str <- lexPlausibleAddressString
+    case deserialiseAddress AsShelleyAddress str of
+      Nothing   -> fail "invalid shelley address"
+      Just addr -> pure addr
 
 parseAddressAny :: Atto.Parser AddressAny
 parseAddressAny = do
