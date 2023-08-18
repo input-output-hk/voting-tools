@@ -1,123 +1,201 @@
 {
-  description = "Voting Tools";
+  description = "voting-tools";
 
   inputs = {
-    nixpkgs.follows = "haskellNix/nixpkgs-2111";
-    haskellNix = {
-      url = "github:input-output-hk/haskell.nix";
-    };
-    utils.url = "github:numtide/flake-utils";
-    iohkNix = {
-      url = "github:input-output-hk/iohk-nix";
-    };
-    cardano-node = {
-      url = "github:input-output-hk/cardano-node?ref=refs/tags/1.31.0";
-    };
-    cardano-db-sync = {
-      url = "github:input-output-hk/cardano-db-sync?ref=refs/tags/12.0.2";
-    };
-    tullia.url = "github:input-output-hk/tullia";
+    haskellNix.url = "github:input-output-hk/haskell.nix";
+    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+    iohkNix.url = "github:input-output-hk/iohk-nix";
+    incl.url = "github:divnix/incl";
+    flake-utils.url = "github:hamishmack/flake-utils/hkm/nested-hydraJobs";
+
+    CHaP.url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+    CHaP.flake = false;
   };
 
-  outputs = { self, nixpkgs, utils, haskellNix, iohkNix, cardano-db-sync, tullia, ... } @ inputs:
-    let
-      inherit (nixpkgs) lib;
-      inherit (lib) head systems mapAttrs recursiveUpdate mkDefault
-        getAttrs optionalAttrs nameValuePair attrNames;
-      inherit (utils.lib) eachSystem mkApp flattenTree;
-      inherit (iohkNix.lib) prefixNamesWith collectExes;
-
-      supportedSystems = import ./supported-systems.nix;
-      defaultSystem = head supportedSystems;
-
-      overlays = [
-        haskellNix.overlay
-        iohkNix.overlays.haskell-nix-extra
-        iohkNix.overlays.crypto
-        iohkNix.overlays.cardano-lib
-        iohkNix.overlays.utils
-        (final: prev: {
-          gitrev = self.rev or "dirty";
-          commonLib = lib // iohkNix.lib;
-        })
-        (import ./nix/pkgs.nix)
-      ];
-
-      mkHydraJobs = system: let
-        jobs = recursiveUpdate self.packages.${system} self.checks.${system} // {
-          nixosTests = import ./nix/nixos/tests/default.nix {
-            inherit system inputs;
-            pkgs = self.legacyPackages.${system};
-          };
+  outputs = inputs: let
+    supportedSystems = [
+      "x86_64-linux"
+      # disabling to reduce CI time initially. Uncomment later
+      #"x86_64-darwin"
+      #"aarch64-linux"
+      #"aarch64-darwin"
+    ];
+    #jormungandr-src = pkgs.fetchurl {
+    #   url =
+    #     "https://github.com/input-output-hk/jormungandr/releases/download/v0.9.3/jormungandr-0.9.3-x86_64-unknown-linux-musl-generic.tar.gz";
+    #   sha256 = "sha256:14giz9yz94mdjrdr96rz5xsj21aacdw8mqrfdz031czh4qgnmnzh";
+    #};
+    #jormungandr =
+    #  pkgs.runCommand "jormungandr" { buildInputs = [ pkgs.gnutar ]; } ''
+    #    mkdir -p $out/bin
+    #    cd $out/bin
+    #    tar -zxvf ${jormungandr-src}
+    #  '';
+  in
+    {inherit (inputs) incl;}
+    // inputs.flake-utils.lib.eachSystem supportedSystems (
+      system: let
+        # setup our nixpkgs with the haskell.nix overlays, and the iohk-nix
+        # overlays...
+        nixpkgs = import inputs.nixpkgs {
+          overlays = [
+            # iohkNix.overlays.crypto provide libsodium-vrf, libblst and libsecp256k1.
+            inputs.iohkNix.overlays.crypto
+            # haskellNix.overlay can be configured by later overlays, so need to come before them.
+            inputs.haskellNix.overlay
+            # configure haskell.nix to use iohk-nix crypto librairies.
+            inputs.iohkNix.overlays.haskell-nix-crypto
+          ];
+          inherit system;
+          inherit (inputs.haskellNix) config;
         };
+        inherit (nixpkgs) lib;
+
+        # see flake `variants` below for alternative compilers
+        defaultCompiler = "ghc8107";
+        # We use cabalProject' to ensure we don't build the plan for
+        # all systems.
+        cabalProject = nixpkgs.haskell-nix.cabalProject' ({config, ...}: {
+          src = ./.;
+          name = "voting-tools";
+          compiler-nix-name = lib.mkDefault defaultCompiler;
+
+          # we also want cross compilation to windows on linux (and only with default compiler).
+          # CHaP input map, so we can find CHaP packages (needs to be more
+          # recent than the index-state we set!). Can be updated with
+          #
+          #  nix flake lock --update-input CHaP
+          #
+          inputMap = {
+            "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.CHaP;
+          };
+          # tools we want in our shell, from hackage
+          shell.tools = {};
+            #{
+            #  cabal = "3.10.1.0";
+            #  ghcid = "0.8.8";
+            #}
+            #// lib.optionalAttrs (config.compiler-nix-name == defaultCompiler) {
+            #  # tools that work only with default compiler
+            #  stylish-haskell = "0.14.4.0";
+            #  hlint = "3.5";
+            #  haskell-language-server = "2.0.0.0";
+            #};
+          # and from nixpkgs or other inputs
+          shell.nativeBuildInputs = with nixpkgs; [ gh jq yq-go ];
+          # disable Hoogle until someone request it
+          shell.withHoogle = false;
+          # Skip cross compilers for the shell
+          shell.crossPlatforms = _: [];
+
+          # package customizations as needed. Where cabal.project is not
+          # specific enough, or doesn't allow setting these.
+          modules = [
+            ({pkgs, ...}: {
+              packages.voting-tools.configureFlags = ["--ghc-option=-Werror"];
+              packages.voting-tools.components.tests.voting-tools-test.build-tools =
+                with pkgs.buildPackages; [ jq coreutils shellcheck ];
+              packages.voting-tools.components.tests.voting-tools-golden.build-tools =
+                with pkgs.buildPackages; [ jq coreutils shellcheck ];
+            })
+            ({
+              pkgs,
+              config,
+              ...
+            }: let
+              exportCliPath = "export CARDANO_CLI=${config.hsPkgs.voting-tools.components.exes.voting-tools}/bin/voting-tools${pkgs.stdenv.hostPlatform.extensions.executable}";
+              mainnetConfigFiles = [
+                "configuration/cardano/mainnet-config.yaml"
+                "configuration/cardano/mainnet-config.json"
+                "configuration/cardano/mainnet-byron-genesis.json"
+                "configuration/cardano/mainnet-shelley-genesis.json"
+                "configuration/cardano/mainnet-alonzo-genesis.json"
+                "configuration/cardano/mainnet-conway-genesis.json"
+              ];
+            in {
+              # voting-tools tests depend on voting-tools and some config files:
+              packages.voting-tools.components.tests.voting-tools-golden.preCheck = let
+                # This define files included in the directory that will be passed to `H.getProjectBase` for this test:
+                filteredProjectBase = inputs.incl ./. [
+                  "cabal.project"
+                  "scripts/plutus/scripts/v1/custom-guess-42-datum-42.plutus"
+                ];
+              in ''
+                ${exportCliPath}
+                cp -r ${filteredProjectBase}/* ..
+              '';
+              packages.voting-tools.components.tests.voting-tools-test.preCheck = let
+                # This define files included in the directory that will be passed to `H.getProjectBase` for this test:
+                filteredProjectBase = inputs.incl ./. mainnetConfigFiles;
+              in ''
+                ${exportCliPath}
+                cp -r ${filteredProjectBase}/* ..
+              '';
+            })
+            {
+               packages.crypton-x509-system.postPatch = ''
+                  substituteInPlace crypton-x509-system.cabal --replace 'Crypt32' 'crypt32'
+               '';
+            }
+          ];
+        });
+        # ... and construct a flake from the cabal project
+        flake = cabalProject.flake (
+          lib.optionalAttrs (system == "x86_64-linux") {
+            # on linux, build/test other supported compilers
+            variants = lib.genAttrs ["ghc8107"] (compiler-nix-name: {
+              inherit compiler-nix-name;
+            });
+          }
+        );
       in
-        jobs // {
-          required = with nixpkgs.legacyPackages.${system}; releaseTools.aggregate {
-            name = "github-required";
-            meta.description = "All jobs required to pass CI";
-            constituents = lib.collect lib.isDerivation jobs ++ lib.singleton
-              (writeText "forceNewEval" self.rev or "dirty");
+        lib.recursiveUpdate flake rec {
+          project = cabalProject;
+          # add a required job, that's basically all hydraJobs.
+          hydraJobs =
+            nixpkgs.callPackages inputs.iohkNix.utils.ciJobsAggregates
+            {
+              ciJobs =
+                flake.hydraJobs
+                // {
+                  # This ensure hydra send a status for the required job (even if no change other than commit hash)
+                  revision = nixpkgs.writeText "revision" (inputs.self.rev or "dirty");
+                };
+            };
+          legacyPackages = rec {
+            inherit cabalProject nixpkgs;
+            # also provide hydraJobs through legacyPackages to allow building without system prefix:
+            inherit hydraJobs;
+            # expose voting-tools binary at top-level
+            voting-tools = cabalProject.hsPkgs.voting-tools.components.exes.voting-tools;
+            voter-registration = cabalProject.hsPkgs.voter-registration.components.exes.voter-registration;
           };
-        };
-    in
-      eachSystem supportedSystems (system:
-        let
-          pkgs = import nixpkgs {
-            inherit system overlays;
-            inherit (haskellNix) config;
+          devShells = let
+            profillingShell = p: {
+              # `nix develop .#profiling` (or `.#ghc927.profiling): a shell with profiling enabled
+              profiling = (p.appendModule {modules = [{enableLibraryProfiling = true;}];}).shell;
+            };
+          in rec {
+            dev = profillingShell cabalProject
+            # Additional shells for every GHC version supported by haskell.nix, eg. `nix develop .#ghc927`
+            // lib.mapAttrs (compiler-nix-name: _: let
+              p = cabalProject.appendModule {inherit compiler-nix-name;};
+            in
+              p.shell // (profillingShell p))
+            nixpkgs.haskell-nix.compiler;
+          # formatter used by nix fmt
+          default = dev;
           };
+        }
+    );
 
-          flake = pkgs.votingToolsHaskellProject.flake {
-            crossPlatforms = p: with p; [
-              musl64
-            ];
-          };
-          packages = collectExes flake.packages // {
-            voterRegistrationTarball = pkgs.runCommandNoCC "voter-registration-tarball" { buildInputs = [ pkgs.gnutar pkgs.gzip ]; } ''
-              cp ${flake.packages."x86_64-unknown-linux-musl:voter-registration:exe:voter-registration"}/bin/voter-registration ./
-              mkdir -p $out/nix-support
-              tar -czvf $out/voter-registration.tar.gz voter-registration
-              echo "file binary-dist $out/voter-registration.tar.gz" > $out/nix-support/hydra-build-products
-            '';
-
-            votingToolsTarball = pkgs.runCommandNoCC "voting-tools-tarball" { buildInputs = [ pkgs.gnutar pkgs.gzip ]; } ''
-              cp ${flake.packages."x86_64-unknown-linux-musl:voting-tools:exe:voting-tools"}/bin/voting-tools ./
-              mkdir -p $out/nix-support
-              tar -czvf $out/voting-tools.tar.gz voting-tools
-              echo "file binary-dist $out/voting-tools.tar.gz" > $out/nix-support/hydra-build-products
-            '';
-          };
-
-        in recursiveUpdate flake {
-
-          inherit packages;
-
-          legacyPackages = pkgs;
-
-          devShells.stylish = pkgs.mkShell { packages = with pkgs; [ stylish-haskell git ]; };
-
-          # Built by `nix build .`
-          defaultPackage = flake.packages."voting-tools:exe:voting-tools";
-
-          # Run by `nix run .`
-          defaultApp = flake.apps."voting-tools:exe:voting-tools";
-
-          inherit (flake) apps;
-        } //
-          tullia.fromSimple system (import nix/tullia.nix)
-      ) // {
-        # We can't use flake-utils' eachSystem for this
-        # because, unexpectedly, it outputs a different structure for hydraJobs.
-        hydraJobs = let
-          perSystem = lib.genAttrs supportedSystems mkHydraJobs;
-        in perSystem // {
-          required = with nixpkgs.legacyPackages.${defaultSystem}; releaseTools.aggregate {
-            name = "github-required";
-            meta.description = "All jobs required to pass CI";
-            constituents =
-              map (s: s.required) (__attrValues perSystem) ++
-              lib.singleton (writeText "forceNewEval" self.rev or "dirty");
-          };
-        };
-      };
+  nixConfig = {
+    extra-substituters = [
+      "https://cache.iog.io"
+    ];
+    extra-trusted-public-keys = [
+      "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+    ];
+    allow-import-from-derivation = true;
+  };
 }
